@@ -1,0 +1,124 @@
+package excel
+
+import (
+	"fmt"
+
+	"github.com/xuri/excelize/v2"
+
+	"github.com/HZamzami/kidana-qa/internal/domain"
+)
+
+// woColumns of the work order import template, in order.
+var woColumns = []struct {
+	Title    string
+	Required bool
+	Width    float64
+}{
+	{"رقم أمر العمل", true, 18},
+	{"النوع", true, 14},
+	{"الموقع", true, 16},
+	{"الموقع التفصيلي", false, 22},
+	{"النظام", true, 18},
+	{"الأصل / المعدة", false, 20},
+	{"المقاول", false, 20},
+	{"الفني", false, 16},
+	{"الأولوية", false, 11},
+	{"التاريخ المجدول / استحقاق SLA", false, 18},
+	{"تاريخ التنفيذ الفعلي", false, 16},
+	{"وصف العمل", false, 40},
+}
+
+// WorkOrderTemplate builds the bulk work order import template with
+// drop-down lists for the reference values.
+func WorkOrderTemplate(sites, systems, contractors []string) (*excelize.File, error) {
+	f := excelize.NewFile()
+	st, err := newStyles(f)
+	if err != nil {
+		return nil, err
+	}
+	sh := SheetWorkOrders
+	if err := f.SetSheetName("Sheet1", sh); err != nil {
+		return nil, err
+	}
+	rtl := true
+	_ = f.SetSheetView(sh, 0, &excelize.ViewOptions{RightToLeft: &rtl})
+	for i, c := range woColumns {
+		a := axis(i+1, 1)
+		title := c.Title
+		if c.Required {
+			title += " *"
+		}
+		_ = f.SetCellValue(sh, a, title)
+		_ = f.SetCellStyle(sh, a, a, st.head)
+		col := axisCol(i + 1)
+		_ = f.SetColWidth(sh, col, col, c.Width)
+	}
+	_ = f.SetRowHeight(sh, 1, 34)
+	_ = f.SetPanes(sh, &excelize.Panes{Freeze: true, YSplit: 1, TopLeftCell: "A2", ActivePane: "bottomLeft"})
+
+	// Hidden sheet with the lists referenced by data validation.
+	const lists = "_lists"
+	if _, err := f.NewSheet(lists); err != nil {
+		return nil, err
+	}
+	columns := map[string][]string{
+		"A": {domain.WOTypeLabels["PM"], domain.WOTypeLabels["WO"]},
+		"B": sites, "C": systems, "D": contractors,
+		"E": {domain.PriorityLabels["emergency"], domain.PriorityLabels["high"], domain.PriorityLabels["medium"], domain.PriorityLabels["low"]},
+	}
+	for col, vals := range columns {
+		for i, v := range vals {
+			_ = f.SetCellValue(lists, fmt.Sprintf("%s%d", col, i+1), v)
+		}
+	}
+	_ = f.SetSheetVisible(lists, false)
+
+	const last = 2000
+	addList := func(col, listCol string, n int, strict bool) {
+		if n == 0 {
+			return
+		}
+		dv := excelize.NewDataValidation(true)
+		dv.Sqref = fmt.Sprintf("%s2:%s%d", col, col, last)
+		dv.SetSqrefDropList(fmt.Sprintf("%s!$%s$1:$%s$%d", lists, listCol, listCol, n))
+		if strict {
+			dv.SetError(excelize.DataValidationErrorStyleStop, "قيمة غير صحيحة", "اختر من القائمة")
+		} else {
+			// sites/systems/contractors accept new names (they are created on import)
+			dv.SetError(excelize.DataValidationErrorStyleInformation, "قيمة جديدة", "سيُضاف الاسم الجديد عند الاستيراد")
+		}
+		_ = f.AddDataValidation(sh, dv)
+	}
+	addList("B", "A", 2, true)
+	addList("C", "B", len(sites), false)
+	addList("E", "C", len(systems), false)
+	addList("G", "D", len(contractors), false)
+	addList("I", "E", 4, true)
+
+	// Text format: what is typed stays literal (dd/mm/yyyy), so Excel's locale
+	// cannot silently swap day and month. ParseDate reads it.
+	dateStyle, _ := f.NewStyle(&excelize.Style{NumFmt: 49})
+	_ = f.SetColStyle(sh, "J:K", dateStyle)
+
+	// Instructions
+	const help = "التعليمات"
+	if _, err := f.NewSheet(help); err != nil {
+		return nil, err
+	}
+	_ = f.SetSheetView(help, 0, &excelize.ViewOptions{RightToLeft: &rtl})
+	_ = f.SetColWidth(help, "A", "A", 110)
+	lines := []string{
+		"استيراد أوامر العمل — نظام جودة الصيانة",
+		"1) صف لكل أمر عمل في ورقة «أوامر العمل» بدءاً من الصف الثاني. الأعمدة المعلّمة بـ * إلزامية.",
+		"2) لا تغيّر عناوين الأعمدة — الاستيراد يعتمد عليها.",
+		"3) التواريخ ميلادية بصيغة dd/mm/yyyy (مثال 18/11/2026). تُقبل أيضاً yyyy-mm-dd. التاريخ الهجري يُعرض في النظام تلقائياً ولا يُدخل هنا.",
+		"4) أوامر العمل الموجودة مسبقاً (بنفس الرقم) تُتجاهل ولا تُعدَّل.",
+		"5) المواقع والأنظمة والمقاولون غير المسجلين يُضافون تلقائياً — راجعهم بعد الاستيراد من الإعدادات.",
+	}
+	for i, l := range lines {
+		_ = f.SetCellValue(help, fmt.Sprintf("A%d", i+1), l)
+	}
+	_ = f.SetCellStyle(help, "A1", "A1", st.title)
+	f.SetActiveSheet(0)
+	return f, nil
+}
