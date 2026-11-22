@@ -99,6 +99,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /work-orders/{id}/edit", edit(s.workOrderEdit))
 	mux.HandleFunc("POST /work-orders/{id}", edit(s.workOrderUpdate))
 	mux.HandleFunc("POST /work-orders/{id}/inspections", edit(s.inspectionStart))
+	mux.HandleFunc("POST /work-orders/{id}/delete", admin(s.workOrderDelete))
 
 	// inspections
 	mux.HandleFunc("GET /inspections/{id}", s.inspectionShow)

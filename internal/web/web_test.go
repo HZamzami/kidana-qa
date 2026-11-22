@@ -179,6 +179,30 @@ func TestInspectionFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// "save and add another" keeps the context, copy prefills the rest
+	res = e.post(c, "/work-orders", url.Values{"type": {"PM"}, "ref": {"WO-1002"}, "site_id": {idStr(sites[0].ID)}, "system_id": {idStr(systems[0].ID)}, "asset": {"GEN-1"}, "next": {"new"}})
+	if loc := res.Header.Get("Location"); res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(loc, "/work-orders/new?keep=ctx&from=") {
+		t.Fatalf("save and add another: %d %s", res.StatusCode, loc)
+	}
+	if _, body := e.get(c, res.Header.Get("Location")); strings.Contains(body, "GEN-1") {
+		t.Fatal("keep=ctx must not copy the asset")
+	}
+	wo2, _ := e.q.GetWorkOrderByRef(ctx, "WO-1002")
+	if _, body := e.get(c, "/work-orders/new?from="+idStr(wo2.ID)); !strings.Contains(body, "GEN-1") || strings.Contains(body, "WO-1002") {
+		t.Fatal("copy must prefill the asset but not the number")
+	}
+	// admin-only delete; refused once an inspection is submitted (checked below)
+	if res := e.post(c, "/work-orders/"+idStr(wo2.ID)+"/delete", nil); res.StatusCode != http.StatusForbidden {
+		t.Fatalf("inspector delete: %d", res.StatusCode)
+	}
+	admin := e.login("admin@test.local")
+	if res := e.post(admin, "/work-orders/"+idStr(wo2.ID)+"/delete", nil); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("admin delete: %d", res.StatusCode)
+	}
+	if _, err := e.q.GetWorkOrder(ctx, wo2.ID); err == nil {
+		t.Fatal("work order not deleted")
+	}
+
 	// duplicate ref is rejected
 	if res := e.post(c, "/work-orders", url.Values{"type": {"WO"}, "ref": {"wo-1001"}, "site_id": {idStr(sites[0].ID)}, "system_id": {idStr(systems[0].ID)}}); res.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("duplicate ref: %d", res.StatusCode)
@@ -260,6 +284,10 @@ func TestInspectionFlow(t *testing.T) {
 	}
 	if st := must(e.q.GetWorkOrder(ctx, wo.ID)).Status; st != gen.WoStatusAccepted {
 		t.Fatalf("after closing finding: status %s", st)
+	}
+
+	if res := e.post(admin, "/work-orders/"+idStr(wo.ID)+"/delete", nil); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("delete with submitted inspections must be refused: %d", res.StatusCode)
 	}
 
 	// Pages render with data.

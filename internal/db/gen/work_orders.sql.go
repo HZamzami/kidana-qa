@@ -110,6 +110,16 @@ func (q *Queries) CreateWorkOrder(ctx context.Context, arg CreateWorkOrderParams
 	return i, err
 }
 
+const deleteWorkOrder = `-- name: DeleteWorkOrder :exec
+DELETE FROM work_orders WHERE id = $1
+`
+
+// Deletes a work order with its inspections, findings and attachments (cascade).
+func (q *Queries) DeleteWorkOrder(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteWorkOrder, id)
+	return err
+}
+
 const getWorkOrder = `-- name: GetWorkOrder :one
 SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, s.name AS site_name, sy.name AS system_name,
        COALESCE(c.name, '')::text AS contractor_name,

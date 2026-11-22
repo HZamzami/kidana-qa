@@ -174,6 +174,22 @@ with sync_playwright() as p:
         shot(page, "work-order-after-edit", full=False)
     s_wo_edit()
 
+    @step("work order: copy, save and add another, admin delete")
+    def s_wo_extras():
+        page.goto(state["wo_url"])
+        page.click("text=نسخ كأمر جديد"); page.wait_for_load_state("networkidle")
+        shot(page, "work-order-copy-prefilled")
+        page.fill("#f_ref", f"COPY-{TAG}")
+        page.click("main button:has-text('حفظ وإضافة آخر')"); page.wait_for_load_state("networkidle")
+        shot(page, "work-order-save-and-add-next")
+        page.goto(BASE + f"/work-orders?q=COPY-{TAG}")
+        page.locator(f"a:has-text('COPY-{TAG}')").click(); page.wait_for_load_state("networkidle")
+        page.click("text=حذف أمر العمل"); page.wait_for_timeout(300)
+        shot(page, "work-order-delete-confirm", full=False)
+        page.click("main button:has-text('نعم، احذف')"); page.wait_for_load_state("networkidle")
+        shot(page, "work-order-deleted", full=False)
+    s_wo_extras()
+
     @step("QA inspection on phone (critical fail, finding, photo)")
     def s_qa():
         page.goto(state["wo_url"])
@@ -276,6 +292,7 @@ with sync_playwright() as p:
         page.goto(BASE + "/"); shot(page, "dashboard")
         page.select_option("#flt_stage", "qc"); page.wait_for_timeout(1000)
         shot(page, "dashboard-qc-only")
+        page.goto(BASE + "/?result=fail"); shot(page, "dashboard-fail-only")
         pp.goto(BASE + "/"); shot(pp, "phone-dashboard")
     s_dash()
 
@@ -331,6 +348,12 @@ with sync_playwright() as p:
         ins = xw["الفحوصات"]
         hdr = [c.value for c in ins[1]]
         print("EXPORT sheets:", sheets, "| inspections rows:", ins.max_row - 1, "| first headers:", hdr[:14])
+        import zipfile  # openpyxl drops images without Pillow, so look inside the file
+        media = [n for n in zipfile.ZipFile(xp).namelist() if n.startswith("xl/media/")]
+        print("EXPORT embedded images:", media, "| criteria sheet rows:", xw["المعايير"].max_row if "المعايير" in sheets else "MISSING")
+        fs = xw["الملاحظات"]
+        due_types = {type(fs.cell(row=r, column=11).value).__name__ for r in range(2, fs.max_row + 1) if fs.cell(row=r, column=11).value not in (None, "")}
+        print("EXPORT non-empty due date cell types:", due_types or "none")
         print("EXPORT first data row:", [c.value for c in ins[2]][:16])
     s_data()
 

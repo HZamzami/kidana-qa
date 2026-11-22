@@ -198,6 +198,9 @@ templ WorkOrderForm(d WOFormData) {
 			}
 			<div class="mt-6 flex gap-2">
 				<button type="submit" class="btn btn-primary">حفظ</button>
+				if d.ID == 0 {
+					<button type="submit" name="next" value="new" class="btn btn-outline">حفظ وإضافة آخر</button>
+				}
 				<a href={ templ.SafeURL(tern(d.ID == 0, "/work-orders", path("/work-orders/%d", d.ID))) } class="btn btn-ghost">إلغاء</a>
 			</div>
 		</form>
@@ -211,6 +214,16 @@ type WOShowData struct {
 	Inspections []gen.ListInspectionsByWorkOrderRow
 	Findings    []gen.ListFindingsByWorkOrderRow
 	Today       string
+}
+
+// deletable: no submitted inspection yet (a mistaken entry, not a quality record).
+func (d WOShowData) deletable() bool {
+	for _, i := range d.Inspections {
+		if i.Status == gen.InspectionStatusSubmitted {
+			return false
+		}
+	}
+	return true
 }
 
 func (d WOShowData) hasDraft(stage string) int64 {
@@ -245,7 +258,10 @@ templ WorkOrderShow(d WOShowData) {
 					}
 				</div>
 				if appctx.CanEdit(ctx) {
-					<a href={ u("/work-orders/%d/edit", d.WO.ID) } class="btn btn-outline ms-auto">تعديل</a>
+					<div class="ms-auto flex flex-wrap gap-2">
+						<a href={ u("/work-orders/new?from=%d", d.WO.ID) } class="btn btn-ghost">نسخ كأمر جديد</a>
+						<a href={ u("/work-orders/%d/edit", d.WO.ID) } class="btn btn-outline">تعديل</a>
+					</div>
 				}
 			</div>
 			<dl class="mt-5 grid gap-x-6 gap-y-4 grid-cols-2 md:grid-cols-4">
@@ -283,6 +299,16 @@ templ WorkOrderShow(d WOShowData) {
 					}
 				}
 			</dl>
+			if appctx.IsAdmin(ctx) && d.deletable() {
+				<div class="mt-5 border-t border-ink-10 pt-3" x-data="confirmAction">
+					<button type="button" class="btn btn-ghost text-fail px-2" x-on:click="ask" x-show="!asking">حذف أمر العمل</button>
+					<form method="post" action={ u("/work-orders/%d/delete", d.WO.ID) } x-show="asking" x-cloak class="flex flex-wrap items-center gap-2">
+						<span class="text-sm">حذف أمر العمل نهائياً مع مسوداته وملاحظاته وصوره؟ استخدمه فقط لما أُدخل بالخطأ.</span>
+						<button type="submit" class="btn btn-danger">نعم، احذف</button>
+						<button type="button" class="btn btn-ghost" x-on:click="cancel">تراجع</button>
+					</form>
+				</div>
+			}
 		</section>
 		<div class="mt-5 grid gap-5 lg:grid-cols-5">
 			<section class="lg:col-span-3">

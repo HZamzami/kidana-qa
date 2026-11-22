@@ -153,3 +153,41 @@ func (q *Queries) ListAttachmentsByInspection(ctx context.Context, inspectionID 
 	}
 	return items, nil
 }
+
+const listAttachmentsByWorkOrder = `-- name: ListAttachmentsByWorkOrder :many
+SELECT a.id, a.inspection_id, a.criterion_id, a.finding_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.uploaded_by, a.created_at FROM attachments a
+LEFT JOIN inspections i ON i.id = a.inspection_id
+LEFT JOIN findings f ON f.id = a.finding_id
+WHERE i.work_order_id = $1 OR f.work_order_id = $1
+`
+
+func (q *Queries) ListAttachmentsByWorkOrder(ctx context.Context, workOrderID int64) ([]Attachment, error) {
+	rows, err := q.db.Query(ctx, listAttachmentsByWorkOrder, workOrderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Attachment{}
+	for rows.Next() {
+		var i Attachment
+		if err := rows.Scan(
+			&i.ID,
+			&i.InspectionID,
+			&i.CriterionID,
+			&i.FindingID,
+			&i.StorageKey,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.UploadedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

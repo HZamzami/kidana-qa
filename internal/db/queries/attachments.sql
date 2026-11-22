@@ -14,3 +14,9 @@ SELECT * FROM attachments WHERE finding_id = $1 ORDER BY created_at;
 
 -- name: DeleteAttachment :exec
 DELETE FROM attachments WHERE id = $1;
+
+-- name: ListAttachmentsByWorkOrder :many
+SELECT a.* FROM attachments a
+LEFT JOIN inspections i ON i.id = a.inspection_id
+LEFT JOIN findings f ON f.id = a.finding_id
+WHERE i.work_order_id = $1 OR f.work_order_id = $1;

@@ -72,8 +72,30 @@ func (s *Server) woFormData(r *http.Request, id int64, v views.WOFormValues, err
 	}, nil
 }
 
+// workOrderNew shows an empty form, or one prefilled from another work order:
+//
+//	?from=ID            copy: everything except the number and dates
+//	?from=ID&keep=ctx   "save and add another": only the shared context
 func (s *Server) workOrderNew(w http.ResponseWriter, r *http.Request) {
-	d, err := s.woFormData(r, 0, views.WOFormValues{Type: "WO"}, nil)
+	v := views.WOFormValues{Type: "WO"}
+	if from := queryID(r, "from"); from != nil {
+		wo, err := s.q.GetWorkOrder(r.Context(), *from)
+		if err != nil {
+			s.dbError(w, r, err)
+			return
+		}
+		v = views.WOFormValues{Type: string(wo.Type), SiteID: idStr(wo.SiteID), SystemID: idStr(wo.SystemID)}
+		if wo.ContractorID != nil {
+			v.ContractorID = idStr(*wo.ContractorID)
+		}
+		if r.URL.Query().Get("keep") != "ctx" {
+			v.Location, v.Asset, v.Technician, v.Description = wo.Location, wo.Asset, wo.Technician, wo.Description
+			if wo.Priority != nil {
+				v.Priority = string(*wo.Priority)
+			}
+		}
+	}
+	d, err := s.woFormData(r, 0, v, nil)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -171,6 +193,11 @@ func (s *Server) workOrderCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(ctx, s.q, "work_order", wo.ID, "created", map[string]any{"ref": wo.Ref})
 	s.flash(ctx, "تم إنشاء أمر العمل "+wo.Ref, "ok")
+	if r.PostFormValue("next") == "new" {
+		// "save and add another": keep type, site, system and contractor
+		http.Redirect(w, r, "/work-orders/new?keep=ctx&from="+idStr(wo.ID), http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/work-orders/"+idStr(wo.ID), http.StatusSeeOther)
 }
 
@@ -284,4 +311,52 @@ func fmtDate(t *time.Time) string {
 		return ""
 	}
 	return t.Format(time.DateOnly)
+}
+
+// workOrderDelete removes a work order entered by mistake (admin only). It is
+// refused once any inspection was submitted: that is a quality record and the
+// work order should be cancelled instead.
+func (s *Server) workOrderDelete(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id, ok := pathID(r, "id")
+	if !ok {
+		s.notFound(w, r)
+		return
+	}
+	wo, err := s.q.GetWorkOrder(ctx, id)
+	if err != nil {
+		s.dbError(w, r, err)
+		return
+	}
+	facts, err := s.q.AcceptanceFacts(ctx, id)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if facts.HasSubmitted {
+		s.badRequest(w, r, "لا يمكن حذف أمر عمل عليه فحص مرسل. غيّر حالته إلى «ملغى» بدلاً من ذلك.")
+		return
+	}
+	photos, err := s.q.ListAttachmentsByWorkOrder(ctx, id)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	err = db.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		if err := q.DeleteWorkOrder(ctx, id); err != nil {
+			return err
+		}
+		s.audit(ctx, q, "work_order", id, "deleted", map[string]any{"ref": wo.Ref})
+		return nil
+	})
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	for _, p := range photos {
+		_ = s.store.Delete(ctx, p.StorageKey)
+	}
+	s.flash(ctx, "تم حذف أمر العمل "+wo.Ref, "")
+	http.Redirect(w, r, "/work-orders", http.StatusSeeOther)
 }

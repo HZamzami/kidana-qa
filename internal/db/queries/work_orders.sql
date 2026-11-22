@@ -83,3 +83,7 @@ WHERE (sqlc.narg(site_id)::bigint IS NULL OR w.site_id = sqlc.narg(site_id))
        OR w.asset ILIKE '%' || sqlc.narg(q) || '%'
        OR w.location ILIKE '%' || sqlc.narg(q) || '%'
        OR w.technician ILIKE '%' || sqlc.narg(q) || '%');
+
+-- Deletes a work order with its inspections, findings and attachments (cascade).
+-- name: DeleteWorkOrder :exec
+DELETE FROM work_orders WHERE id = $1;
