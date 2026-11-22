@@ -1,0 +1,6 @@
+.git
+tmp
+bin
+.env
+.devcontainer
+web/static/css/app.css

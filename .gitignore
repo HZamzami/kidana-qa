@@ -1,0 +1,14 @@
+# build output
+/tmp/
+/bin/
+/web/static/css/app.css
+
+# local config
+.env
+*.local
+
+# editors / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store

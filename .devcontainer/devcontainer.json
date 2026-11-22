@@ -1,0 +1,28 @@
+{
+  "name": "Kidana QA",
+  "dockerComposeFile": ["../compose.yaml"],
+  "service": "app",
+  "runServices": ["db", "app"],
+  "workspaceFolder": "/app",
+  "overrideCommand": true,
+  "remoteEnv": { "HOME": "/tmp" },
+  "forwardPorts": [8080],
+  "postStartCommand": "templ generate && sqlc generate",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "a-h.templ",
+        "bradlc.vscode-tailwindcss",
+        "otovo-oss.htmx-tags",
+        "skellock.just",
+        "editorconfig.editorconfig"
+      ],
+      "settings": {
+        "go.toolsManagement.autoUpdate": false,
+        "tailwindCSS.includeLanguages": { "templ": "html" },
+        "tailwindCSS.experimental.configFile": "web/styles/input.css"
+      }
+    }
+  }
+}

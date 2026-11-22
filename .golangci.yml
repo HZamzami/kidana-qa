@@ -1,0 +1,40 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gosec
+    - misspell
+    - noctx
+    - revive
+    - sqlclosecheck
+    - unconvert
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+    gosec:
+      excludes:
+        - G104 # handled by errcheck
+  exclusions:
+    generated: lax
+    rules:
+      # Test helpers close bodies themselves and only talk to the local httptest server.
+      - path: _test\.go
+        linters: [bodyclose, gosec, noctx]
+    paths:
+      - internal/db/gen
+      - ".*_templ\\.go$"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

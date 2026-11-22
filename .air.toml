@@ -1,0 +1,20 @@
+# Hot reload for local development (runs inside the dev container).
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "templ generate && tailwindcss -i web/styles/input.css -o web/static/css/app.css && go build -o ./tmp/server ./cmd/server"
+  entrypoint = ["./tmp/server"]
+  include_ext = ["go", "templ", "sql", "css", "js"]
+  exclude_dir = ["tmp", "node_modules", ".git", "web/static/css", "docker"]
+  exclude_regex = ["_templ\\.go$", "_test\\.go$"]
+  delay = 300
+  kill_delay = "1s"
+  send_interrupt = true
+  stop_on_error = true
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true
