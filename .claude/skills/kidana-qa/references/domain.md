@@ -64,6 +64,8 @@ Grades (`domain.Grades`): ممتاز ≥ 90, جيد جداً ≥ 80, جيد ≥ 
 | inspector | مدقق | create/edit work orders, run inspections, record and close findings, import/export |
 | viewer | مشاهد | read only |
 
+**Deleting**: only admins can delete a work order, and only before any inspection is submitted (a mistaken entry). After that it is a quality record: set it to `cancelled` instead. Draft inspections and findings can be deleted by editors; findings on submitted inspections must be closed, not deleted. There is no "clear all".
+
 Check roles in the UI with `appctx.CanEdit(ctx)` / `appctx.IsAdmin(ctx)`, and enforce them on routes with `s.requireRole(...)` (see `web/server.go`).
 
 ## Glossary (use these exact Arabic terms)

@@ -36,6 +36,7 @@ The JS libraries are vendored, not loaded from a CDN, because site networks may 
 - **Test DB**: `kidana_qa_test` is created by `docker/postgres/init/01-test-db.sql`, but only when the volume is first created. After `just nuke` it comes back automatically.
 - **Templ + Alpine**: write `x-on:click` / `x-bind:class`, not `@click` / `:class`. Conditional boolean attributes use `checked?={ cond }`.
 - **Alpine CSP**: the expression parser handles simple expressions and object literals, but no arbitrary JS. If something doesn't react, move it into a getter.
+- **excelize pictures need `_ "image/png"`** registered (done in `excel/export.go`), otherwise `AddPicture` fails with "image: unknown format".
 - **HTTP headers are Latin-1**: any Arabic in `HX-Trigger` etc. must be `\uXXXX`-escaped (`asciiJSON` in `web/helpers.go`, covered by a test).
 - **`templ fmt` can crash** on this codebase (templ v0.3.1118 imports bug). `templ generate` is what matters; format Go with `gofmt`.
 - **htmx config** is set in a `<meta name="htmx-config">`: `includeIndicatorStyles:false` (inline styles), `allowEval:false`, `allowScriptTags:false`.

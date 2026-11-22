@@ -76,10 +76,13 @@ inspections keep the criteria and weights they were scored with.
 
 ## Data in and out
 
-* **Export**: Excel (summary, inspections with every rating, findings), with
-  the current dashboard filters. There is also a print-optimised A4 report
-  (save as PDF from the browser).
-* **Import**: the work-order template, for bulk loading from the CMMS.
+* **Export**: Excel (summary with logo, inspections with every rating,
+  findings, and the active checklists with the scoring rules), with the
+  current dashboard filters, including pass/fail. There is also a
+  print-optimised A4 report with charts and the open findings (save as PDF
+  from the browser).
+* **Import**: the work-order template, for bulk loading from the CMMS. Its
+  date columns are real dd/mm/yyyy date cells, validated like the drop-downs.
 
 ## Production
 

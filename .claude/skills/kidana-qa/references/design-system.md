@@ -108,7 +108,7 @@ Use `domain.Count(n, domain.NounX)`, never `fmt.Sprintf("%d فحص")`. Nouns ava
 
 **Charts**: server-rendered and scaled to 0–100%. Bars are `barRow` (track `bg-ink-10 h-2 rounded-full`, fill green ≥ 80 else gold, the value in `.num` at the end); the donut is SVG circles with `stroke-dasharray`. No chart JS library.
 
-**Print report** (`/reports/print`): A4, white, gold rule under the header, a 3-column KPI grid, compact tables with an ink header row, and signature lines (أعدّه / راجعه / اعتمده). Use `.no-print` and `.print-avoid-break`.
+**Print report** (`/reports/print`): A4, white, gold rule under the header, a 3-column KPI grid, the four dashboard charts (same components as the screen, in `reportChart` tiles), insights, site/contractor and criteria tables, the **open findings** table, the inspection log, and signature lines (أعدّه / راجعه / اعتمده). Use `.no-print` and `.print-avoid-break`. Print CSS sets `print-color-adjust: exact` so bars and pills keep their colours.
 
 ## RTL rules
 

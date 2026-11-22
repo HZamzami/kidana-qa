@@ -97,7 +97,7 @@ Alpine.data("thingPicker", () => ({
 
 ## 8. Add an Excel export column or import format
 
-- Export: add the field to `excel.InspectionExport` (or `FindingExport`), append to `headers` and `vals` in the sheet builder, and fill it in `web/data_handlers.go` `exportExcel`.
+- Export: `excel.Report(excel.ReportInput{...})` builds summary (with logo), inspections, findings and criteria sheets. Add the field to `excel.InspectionExport` (or `FindingExport`), append to `headers` and `vals` in the sheet builder, and fill it in `web/data_handlers.go` `exportExcel`. Write dates as `time.Time` with `st.date` (dd/mm/yyyy), never as text.
 - Import: `excel.Parse` finds the header row by its titles in the first 10 rows. For a new import format, add a detector, a `parseX` function and a `KindX`, then handle the new kind in `web.importExcel`. Normalise text with `excel.Norm`, and parse values with `ParseDate`, `ParseRating`, `ParseType` and `ParsePriority`. Imports run in one transaction and report `Created`, `Skipped` and `Warnings` (with row numbers, in Arabic).
 
 ## 9. Tests
