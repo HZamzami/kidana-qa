@@ -72,9 +72,17 @@ func (s *Server) reportPrint(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	findings, err := s.q.ListOpenFindingsScoped(ctx, gen.ListOpenFindingsScopedParams{
+		SiteID: sc.Params.SiteID, SystemID: sc.Params.SystemID, ContractorID: sc.Params.ContractorID, Type: sc.Params.Type,
+	})
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	d := views.ReportData{
 		Generated: dates.Both(time.Now().In(dates.Riyadh)), Scope: s.describeScope(ctx, sc),
 		S: rep.Summary, Insights: domain.Insights(rep.Summary),
+		Findings: findings, Today: time.Now().In(dates.Riyadh).Format(time.DateOnly),
 	}
 	for _, row := range rep.Rows {
 		rr := views.ReportRow{

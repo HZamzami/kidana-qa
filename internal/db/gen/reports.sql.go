@@ -175,6 +175,88 @@ func (q *Queries) ListItemsForInspections(ctx context.Context, ids []int64) ([]L
 	return items, nil
 }
 
+const listOpenFindingsScoped = `-- name: ListOpenFindingsScoped :many
+SELECT f.id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status,
+       w.ref AS wo_ref, s.name AS site_name, COALESCE(ct.name, '')::text AS contractor_name,
+       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label,
+       COALESCE(i.stage::text, '')::text AS inspection_stage
+FROM findings f
+JOIN work_orders w ON w.id = f.work_order_id
+JOIN sites s ON s.id = w.site_id
+LEFT JOIN contractors ct ON ct.id = w.contractor_id
+LEFT JOIN template_criteria c ON c.id = f.criterion_id
+LEFT JOIN inspections i ON i.id = f.inspection_id
+WHERE f.status <> 'closed'
+  AND ($1::bigint IS NULL OR w.site_id = $1)
+  AND ($2::bigint IS NULL OR w.system_id = $2)
+  AND ($3::bigint IS NULL OR w.contractor_id = $3)
+  AND ($4::wo_type IS NULL OR w.type = $4)
+ORDER BY (f.severity = 'critical') DESC, f.due_date NULLS LAST, f.created_at
+`
+
+type ListOpenFindingsScopedParams struct {
+	SiteID       *int64
+	SystemID     *int64
+	ContractorID *int64
+	Type         *WoType
+}
+
+type ListOpenFindingsScopedRow struct {
+	ID               int64
+	Severity         FindingSeverity
+	Description      string
+	CorrectiveAction string
+	Owner            string
+	DueDate          *time.Time
+	Status           FindingStatus
+	WoRef            string
+	SiteName         string
+	ContractorName   string
+	CriterionCode    string
+	CriterionLabel   string
+	InspectionStage  string
+}
+
+// Open findings in the report scope (same work-order filters as FindingStats).
+func (q *Queries) ListOpenFindingsScoped(ctx context.Context, arg ListOpenFindingsScopedParams) ([]ListOpenFindingsScopedRow, error) {
+	rows, err := q.db.Query(ctx, listOpenFindingsScoped,
+		arg.SiteID,
+		arg.SystemID,
+		arg.ContractorID,
+		arg.Type,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOpenFindingsScopedRow{}
+	for rows.Next() {
+		var i ListOpenFindingsScopedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Severity,
+			&i.Description,
+			&i.CorrectiveAction,
+			&i.Owner,
+			&i.DueDate,
+			&i.Status,
+			&i.WoRef,
+			&i.SiteName,
+			&i.ContractorName,
+			&i.CriterionCode,
+			&i.CriterionLabel,
+			&i.InspectionStage,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSubmittedInspections = `-- name: ListSubmittedInspections :many
 SELECT i.id, i.stage, i.attempt, i.inspected_on, i.score, i.passed, i.critical_failed, i.notes,
        u.name AS inspector_name, t.name AS template_name,

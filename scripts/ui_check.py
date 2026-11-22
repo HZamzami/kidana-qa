@@ -281,6 +281,18 @@ with sync_playwright() as p:
 
     @step("print report")
     def s_print():
+        # leave one open finding (on a QA draft) so the report's findings table has a row
+        page.goto(state["wo_url"])
+        page.click("text=بدء رقابة أثناء التنفيذ"); page.wait_for_load_state("networkidle")
+        page.click("nav[aria-label='البنود'] >> text=مراجعة"); page.wait_for_timeout(1200)
+        box = page.locator("#finding-box-general")
+        box.locator("text=＋ تسجيل ملاحظة / عدم مطابقة").click()
+        box.locator("textarea[name=description]").fill("سلم الوصول للوحدة الخارجية غير مثبت")
+        box.locator("textarea[name=corrective_action]").fill("تثبيت السلم وتوفير حزام أمان")
+        box.locator("input[name=owner]").fill("مشرف السلامة")
+        box.locator("input[name=due_date]").fill("2026-11-01")
+        box.locator("input[name=critical]").check()
+        box.locator("text=حفظ الملاحظة").click(); page.wait_for_timeout(800)
         page.goto(BASE + "/reports/print"); shot(page, "print-report")
         page.emulate_media(media="print"); shot(page, "print-report-print-media"); page.emulate_media(media="screen")
     s_print()

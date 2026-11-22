@@ -3,6 +3,8 @@ package views
 import (
 	"fmt"
 
+	"github.com/HZamzami/kidana-qa/internal/db/gen"
+
 	"github.com/HZamzami/kidana-qa/internal/appctx"
 
 	"github.com/HZamzami/kidana-qa/internal/domain"
@@ -91,6 +93,8 @@ type ReportData struct {
 	S         domain.Summary
 	Insights  []domain.Insight
 	Rows      []ReportRow
+	Findings  []gen.ListOpenFindingsScopedRow
+	Today     string // yyyy-mm-dd, for overdue checks
 }
 
 templ ReportPrint(d ReportData) {
@@ -116,6 +120,28 @@ templ ReportPrint(d ReportData) {
 				@reportKPI("ملاحظات مفتوحة", itoa(d.S.Findings.Open), fmt.Sprintf("متأخرة %d", d.S.Findings.Overdue))
 				@reportKPI("الالتزام بالموعد", domain.Pct(d.S.OnTimeRate), "متوسط التأخير "+avgDelay(d.S.AvgDelay)+" يوم")
 			</div>
+			<div class="mt-5 grid grid-cols-2 gap-3">
+				@reportChart("متوسط النتيجة حسب الموقع") {
+					@groupBars(d.S.BySite)
+				}
+				@reportChart("نسبة المطابقة لكل معيار") {
+					if len(d.S.Criteria) == 0 {
+						@EmptyState("لا توجد بيانات", "")
+					} else {
+						<div class="space-y-2">
+							for _, c := range d.S.Criteria {
+								@barRow(c.Code+" · "+c.Label, c.Compliance, "", c.Critical)
+							}
+						</div>
+					}
+				}
+				@reportChart("توزيع التقديرات") {
+					@gradeDonut(d.S.Grades)
+				}
+				@reportChart("متوسط النتيجة حسب المقاول") {
+					@groupBars(topN(d.S.ByContractor, 8))
+				}
+			</div>
 			<h2 class="mt-5 mb-2 font-semibold text-sm">الأنماط والمخاطر والتوصيات</h2>
 			<ul class="space-y-1">
 				for _, in := range d.Insights {
@@ -140,6 +166,53 @@ templ ReportPrint(d ReportData) {
 					}
 				</tbody>
 			</table>
+			<h2 class="mt-5 mb-2 font-semibold text-sm">{ "الملاحظات المفتوحة — " + domain.Count(len(d.Findings), domain.NounFinding) }</h2>
+			if len(d.Findings) == 0 {
+				<p class="text-ink-80">لا توجد ملاحظات مفتوحة ضمن النطاق.</p>
+			} else {
+				<table class="w-full border-collapse">
+					<thead>
+						<tr class="bg-ink text-white">
+							<th class="p-1.5 text-start">أمر العمل</th><th class="p-1.5 text-start">الموقع</th><th class="p-1.5 text-start">المعيار</th>
+							<th class="p-1.5 text-start">الملاحظة</th><th class="p-1.5 text-start">الإجراء التصحيحي</th><th class="p-1.5 text-start">المسؤول</th>
+							<th class="p-1.5">الإغلاق المستهدف</th><th class="p-1.5">الحالة</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, f := range d.Findings {
+							<tr class="border-b border-ink-10 align-top print-avoid-break">
+								<td class="p-1.5 num whitespace-nowrap">{ f.WoRef }</td>
+								<td class="p-1.5">
+									{ f.SiteName }
+									if f.ContractorName != "" {
+										<span class="block text-[10px] text-ink-60">{ f.ContractorName }</span>
+									}
+								</td>
+								<td class="p-1.5">
+									if f.CriterionCode != "" {
+										<span class="num">{ f.CriterionCode }</span>
+									} else {
+										{ "—" }
+									}
+									if f.InspectionStage != "" {
+										<span class="block text-[10px] text-ink-60">{ domain.Stage(f.InspectionStage).Short() }</span>
+									}
+								</td>
+								<td class="p-1.5">{ f.Description }</td>
+								<td class="p-1.5">{ f.CorrectiveAction }</td>
+								<td class="p-1.5">{ orDash(f.Owner) }</td>
+								<td class="p-1.5 text-center whitespace-nowrap">
+									@DateText(f.DueDate)
+								</td>
+								<td class="p-1.5 text-center whitespace-nowrap">
+									@FindingStatusPill(string(f.Status), f.DueDate != nil && isoDate(f.DueDate) < d.Today)
+									@SeverityPill(string(f.Severity))
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
 			<h2 class="mt-5 mb-2 font-semibold text-sm">سجل الفحوصات</h2>
 			<table class="w-full border-collapse">
 				<thead>
@@ -210,5 +283,13 @@ templ reportGroup(title string, gs []domain.Group) {
 				}
 			</tbody>
 		</table>
+	</div>
+}
+
+// reportChart is one bordered chart tile in the printed report.
+templ reportChart(title string) {
+	<div class="border border-ink-10 rounded-lg p-3 print-avoid-break">
+		<div class="font-semibold mb-2">{ title }</div>
+		{ children... }
 	</div>
 }
