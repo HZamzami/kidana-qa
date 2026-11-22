@@ -87,7 +87,9 @@ To add a nav tab, edit the `nav` slice in `layout.templ`. Set `admin: true` to h
 |---|---|
 | `@kpi(label, value, sub, tone)` | KPI tile. tone: `""`, `"sky"`, `"gold"`, `"green"` or `"fail"` (the dot colour). |
 | `@barRow(label, value, sub, critical)` | One 0–100 bar row (green ≥ 80, gold below). |
-| `@groupBars([]domain.Group)` | A list of barRows for a site/contractor/system grouping. |
+| `@groupBars([]domain.Group, max int)` | barRows for a site/contractor/system grouping, capped at `max` with an "و N أخرى" line. |
+| `@criteriaCard(stage, []domain.CriterionStat, wide)` | One stage's criterion compliance (use `S.CriteriaFor(stage)`). `wide` = full width with two columns. |
+| `@compactBarRow(domain.CriterionStat)` | One-line criterion row (stacks on phones); tooltip has counts. |
 | `@gradeDonut([]domain.GradeCount)` | SVG donut with legend. |
 
 Option lists for filters and forms: `views.StageOptions` (qa/qc), `views.TypeOptions` (PM/WO), `views.ResultOptions` (pass/fail).
@@ -98,7 +100,8 @@ Option lists for filters and forms: `views.StageOptions` (qa/qc), `views.TypeOpt
 |---|---|
 | `@ReportPrint(ReportData)` | The A4 page: KPIs, charts, insights, groups, criteria, open findings, inspection log, signatures. |
 | `@reportKPI(label, value, sub)` | Compact bordered KPI tile. |
-| `@reportChart(title) { … }` | Bordered tile wrapping any dashboard chart component (`groupBars`, `barRow`, `gradeDonut`). Use it so print and screen charts stay identical. |
+| `@reportChart(title) { … }` | Bordered tile wrapping any dashboard chart component (`groupBars`, `criteriaRows`, `gradeDonut`). Use it so print and screen charts stay identical. |
+| `@criteriaRows([]domain.CriterionStat)` | Compact criteria list for a report tile. |
 | `@reportGroup(title, []domain.Group)` | Site/contractor table with pass/fail-tinted averages. |
 
 ## Work order actions (`workorders.templ`)

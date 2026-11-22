@@ -104,7 +104,14 @@ Use `domain.Count(n, domain.NounX)`, never `fmt.Sprintf("%d فحص")`. Nouns ava
 - The last step is the server-rendered review: result, the list of ratings, date and notes, general photos and findings, errors, a gold full-width submit button, and a delete-draft action behind an in-page confirm.
 - Autosave on `change` via htmx (`hx-swap="none"`) means there is no save button per item.
 
-**Bento dashboard**: a KPI row (`grid-cols-2 md:grid-cols-3 xl:grid-cols-6`, each a `kpi` tile with a coloured dot, label, value and sub-line). Below it, `grid md:grid-cols-2 lg:grid-cols-4`: criteria compliance spans `lg:col-span-2 lg:row-span-2`, by-site spans 2, the grade donut and by-contractor take 1 each, and insights span all 4.
+**Dashboard layout (must scale with data)**: KPI row (`grid-cols-2 md:grid-cols-3 xl:grid-cols-6`, each a `kpi` tile with a coloured dot, label, value and sub-line), then:
+1. **Criteria, one card per stage** (`criteriaCard`) in `lg:grid-cols-2`: QA and QC side by side at similar heights. When the stage filter is set, only that card shows (`lg:col-span-2`) and its rows flow into two columns.
+2. **Three equal-height cards** (`md:grid-cols-3`, stretched): by site, grade donut, by contractor. Lists are capped with `groupBars(groups, 6)` plus an "و N أخرى" line.
+3. **Insights**, full width.
+
+Never let one card's height be driven by an unbounded list next to fixed-height cards. That is what produced the empty bento gaps. Split it (by stage), cap it (top N), or make it compact. Test with realistic data volumes, not an empty database.
+
+**Compact rows** (`compactBarRow`, criteria): label, bar and value on one line from `sm` up, with counts in the `title` tooltip. On phones (no hover) the full label wraps beside the value and the bar runs full width below. In print, labels wrap instead of truncating. Copy only the "hover for details" hint at `sm:` and up.
 
 **Charts**: server-rendered and scaled to 0–100%. Bars are `barRow` (track `bg-ink-10 h-2 rounded-full`, fill green ≥ 80 else gold, the value in `.num` at the end); the donut is SVG circles with `stroke-dasharray`. No chart JS library.
 
