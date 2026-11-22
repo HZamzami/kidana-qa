@@ -1,0 +1,238 @@
+package views
+
+import (
+	"fmt"
+	"math"
+
+	"github.com/HZamzami/kidana-qa/internal/domain"
+)
+
+type DashFilters struct {
+	Stage, Type, Site, System, Contractor, From, To string
+}
+
+type DashboardData struct {
+	S           domain.Summary
+	Insights    []domain.Insight
+	F           DashFilters
+	Query       string // encoded filters, reused by print/export links
+	Sites       []Option
+	Systems     []Option
+	Contractors []Option
+}
+
+var StageOptions = []Option{{"qa", "QA · أثناء التنفيذ"}, {"qc", "QC · بعد التنفيذ"}}
+var TypeOptions = []Option{{"PM", "صيانة وقائية"}, {"WO", "أمر عمل"}}
+
+templ Dashboard(d DashboardData) {
+	@App("لوحة المؤشرات") {
+		@PageHeader("لوحة المؤشرات", "أداء الرقابة أثناء التنفيذ والفحص بعد التنفيذ") {
+			<a class="btn btn-outline" href={ templ.URL("/reports/print?" + d.Query) } target="_blank" rel="noopener">تقرير للطباعة</a>
+			<a class="btn btn-gold" href={ templ.URL("/reports/export.xlsx?" + d.Query) }>تصدير Excel</a>
+		}
+		<form
+			class="card p-3 mb-5 flex flex-wrap items-end gap-3 no-print"
+			method="get"
+			action="/"
+			hx-get="/"
+			hx-trigger="change"
+			hx-target="#dash"
+			hx-select="#dash"
+			hx-swap="outerHTML"
+			hx-push-url="true"
+		>
+			@FilterSelect("stage", "المرحلة", d.F.Stage, StageOptions)
+			@FilterSelect("type", "النوع", d.F.Type, TypeOptions)
+			@FilterSelect("site", "الموقع", d.F.Site, d.Sites)
+			@FilterSelect("system", "النظام", d.F.System, d.Systems)
+			@FilterSelect("contractor", "المقاول", d.F.Contractor, d.Contractors)
+			<div>
+				<label class="label" for="flt_from">من تاريخ</label>
+				<input class="input py-1.5" type="date" id="flt_from" name="from" value={ d.F.From }/>
+			</div>
+			<div>
+				<label class="label" for="flt_to">إلى تاريخ</label>
+				<input class="input py-1.5" type="date" id="flt_to" name="to" value={ d.F.To }/>
+			</div>
+			<a href="/" class="btn btn-ghost">إعادة ضبط</a>
+			<noscript><button class="btn btn-primary">تطبيق</button></noscript>
+		</form>
+		<div id="dash">
+			@dashKPIs(d.S)
+			<div class="mt-5 grid gap-4 lg:grid-cols-4 items-start">
+				<section class="card p-4 lg:col-span-2">
+					<h2 class="font-semibold mb-1">نسبة المطابقة لكل معيار</h2>
+					<p class="text-xs text-ink-60 mb-4">متوسط التقييم لكل بند (المطابق 100%، الجزئي 50%). «لا ينطبق» مستبعد.</p>
+					if len(d.S.Criteria) == 0 {
+						@EmptyState("لا توجد بيانات", "")
+					} else {
+						<div class="space-y-3">
+							for _, c := range d.S.Criteria {
+								@barRow(c.Code+" · "+c.Label, c.Compliance, domain.Count(c.N, domain.NounRating)+" · "+fmt.Sprintf("%d غير مطابق", c.Fails), c.Critical)
+							}
+						</div>
+					}
+				</section>
+				<div class="lg:col-span-2 flex flex-col gap-4">
+					<section class="card p-4">
+						<h2 class="font-semibold mb-4">متوسط النتيجة حسب الموقع</h2>
+						@groupBars(d.S.BySite)
+					</section>
+					<div class="grid gap-4 sm:grid-cols-2">
+						<section class="card p-4">
+							<h2 class="font-semibold mb-4">توزيع التقديرات</h2>
+							@gradeDonut(d.S.Grades)
+						</section>
+						<section class="card p-4">
+							<h2 class="font-semibold mb-4">حسب المقاول</h2>
+							@groupBars(topN(d.S.ByContractor, 6))
+						</section>
+					</div>
+				</div>
+				<section class="card p-4 lg:col-span-4">
+					<h2 class="font-semibold mb-3">أبرز الملاحظات والتوصيات</h2>
+					<ul class="grid gap-2 lg:grid-cols-2">
+						for _, in := range d.Insights {
+							<li
+								class={ "rounded-lg border px-3 py-2.5 text-sm leading-relaxed",
+									templ.KV("border-fail-20 bg-fail-10", in.Tone == "risk"),
+									templ.KV("border-green-50 bg-green-10", in.Tone == "good"),
+									templ.KV("border-ink-10 bg-ink-5", in.Tone == "info") }
+							>{ in.Text }</li>
+						}
+					</ul>
+				</section>
+			</div>
+		</div>
+	}
+}
+
+templ dashKPIs(S domain.Summary) {
+	<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+		@kpi("الفحوصات المرسلة", itoa(S.Total), fmt.Sprintf("QA %d · QC %d · %s", S.QACount, S.QCCount, domain.Count(S.WorkOrders, domain.NounWorkOrder)), "")
+		@kpi("متوسط QA", domain.Pct(S.AvgQA), "رقابة أثناء التنفيذ", "sky")
+		@kpi("متوسط QC", domain.Pct(S.AvgQC), "فحص بعد التنفيذ", "gold")
+		@kpi("نسبة المطابقة", domain.Pct(S.PassRate), fmt.Sprintf("حد المطابقة %s · %d إخفاق حرج", domain.PctVal(domain.PassThreshold), S.CriticalFails), "green")
+		@kpi("ملاحظات مفتوحة", itoa(S.Findings.Open), fmt.Sprintf("متأخرة %d · حرجة %d", S.Findings.Overdue, S.Findings.OpenCritical), tern(S.Findings.Overdue > 0, "fail", ""))
+		@kpi("الالتزام بالموعد", domain.Pct(S.OnTimeRate), "متوسط التأخير "+avgDelay(S.AvgDelay)+" يوم", "")
+	</div>
+}
+
+templ kpi(label, value, sub, tone string) {
+	<div class="card p-4">
+		<div class="flex items-center gap-2 text-xs text-ink-80">
+			<span
+				class={ "size-2 rounded-full",
+					templ.KV("bg-ink-30", tone == ""),
+					templ.KV("bg-sky", tone == "sky"),
+					templ.KV("bg-gold", tone == "gold"),
+					templ.KV("bg-green", tone == "green"),
+					templ.KV("bg-fail", tone == "fail") }
+			></span>
+			{ label }
+		</div>
+		<div class="num text-2xl font-semibold mt-1.5 text-start">{ value }</div>
+		<div class="text-[11px] text-ink-60 mt-1 leading-snug">{ sub }</div>
+	</div>
+}
+
+templ barRow(label string, value float64, sub string, critical bool) {
+	<div>
+		<div class="flex items-baseline gap-2 text-sm">
+			<span class="truncate">{ label }</span>
+			if critical {
+				<span class="pill border border-fail text-fail text-[10px] px-1.5">حرج</span>
+			}
+			<span class="num ms-auto font-medium">{ scoreVal(value) }</span>
+		</div>
+		<div class="mt-1 h-2 rounded-full bg-ink-10 overflow-hidden">
+			<div class={ "h-full rounded-full", templ.KV("bg-green", value >= domain.PassThreshold), templ.KV("bg-gold", value < domain.PassThreshold) } style={ pctWidth(value) }></div>
+		</div>
+		if sub != "" {
+			<div class="text-[11px] text-ink-60 mt-0.5">{ sub }</div>
+		}
+	</div>
+}
+
+templ groupBars(groups []domain.Group) {
+	if len(groups) == 0 {
+		@EmptyState("لا توجد بيانات", "")
+	} else {
+		<div class="space-y-3">
+			for _, g := range groups {
+				@barRow(g.Name, g.Avg, domain.Count(g.Count, domain.NounInspection)+" · مطابقة "+domain.PctVal(g.PassRate), false)
+			}
+		</div>
+	}
+}
+
+var gradeColors = []string{"#627D4C", "#93BBCA", "#B59666", "#DACBB3", "#94959A"}
+
+templ gradeDonut(grades []domain.GradeCount) {
+	if gradeTotal(grades) == 0 {
+		@EmptyState("لا توجد بيانات", "")
+	} else {
+		<div class="flex items-center gap-4">
+			<svg viewBox="0 0 42 42" class="size-28 shrink-0 -rotate-90" role="img" aria-label="توزيع التقديرات">
+				<circle cx="21" cy="21" r="15.915" fill="none" stroke="#EDEDEE" stroke-width="6"></circle>
+				for i, seg := range donutSegments(grades) {
+					if seg.len > 0 {
+						<circle cx="21" cy="21" r="15.915" fill="none" stroke={ gradeColors[i] } stroke-width="6" stroke-dasharray={ fmt.Sprintf("%.2f %.2f", seg.len, 100-seg.len) } stroke-dashoffset={ fmt.Sprintf("%.2f", -seg.offset) }></circle>
+					}
+				}
+			</svg>
+			<ul class="text-sm space-y-1 min-w-0">
+				for i, g := range grades {
+					<li class="flex items-center gap-2">
+						<span class="size-2.5 rounded-sm shrink-0" style={ "background:" + gradeColors[i] }></span>
+						<span class="truncate">{ g.Label }</span>
+						<span class="num text-ink-80 ms-auto ps-3">{ itoa(g.Count) }</span>
+					</li>
+				}
+			</ul>
+		</div>
+	}
+}
+
+type donutSeg struct{ len, offset float64 }
+
+func donutSegments(grades []domain.GradeCount) []donutSeg {
+	total := float64(gradeTotal(grades))
+	out := make([]donutSeg, len(grades))
+	var off float64
+	for i, g := range grades {
+		l := float64(g.Count) / total * 100
+		out[i] = donutSeg{len: math.Round(l*100) / 100, offset: off}
+		off += l
+	}
+	return out
+}
+
+func gradeTotal(gs []domain.GradeCount) int {
+	n := 0
+	for _, g := range gs {
+		n += g.Count
+	}
+	return n
+}
+
+func topN(gs []domain.Group, n int) []domain.Group {
+	if len(gs) > n {
+		return gs[:n]
+	}
+	return gs
+}
+
+func avgDelay(v *float64) string {
+	if v == nil {
+		return "—"
+	}
+	return domain.Fmt1(*v)
+}
+
+func tern(cond bool, a, b string) string {
+	if cond {
+		return a
+	}
+	return b
+}

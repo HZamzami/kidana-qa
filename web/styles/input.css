@@ -1,0 +1,209 @@
+@import "tailwindcss";
+
+@source "../../internal/views";
+@source "../static/js";
+
+/* Kidana brand. Primary: #4C4F53 / #B59666. Secondary: #627D4C / #93BBCA.
+   Brand rule: only lighter tints are used, never darker shades. */
+@theme {
+  --font-sans: "Avenir Next Arabic", "Segoe UI", Tahoma, Arial, sans-serif;
+
+  --color-ink: #4C4F53;
+  --color-ink-80: #707276;
+  --color-ink-60: #94959A;
+  --color-ink-30: #C9CACB;
+  --color-ink-10: #EDEDEE;
+  --color-ink-5: #F6F6F6;
+
+  --color-gold: #B59666;
+  --color-gold-80: #C4AB85;
+  --color-gold-50: #DACBB3;
+  --color-gold-20: #F0EAE0;
+  --color-gold-10: #F8F5F0;
+
+  --color-green: #627D4C;
+  --color-green-80: #819770;
+  --color-green-50: #B1BEA6;
+  --color-green-20: #E0E5DB;
+  --color-green-10: #EFF2ED;
+
+  --color-sky: #93BBCA;
+  --color-sky-60: #BED6DF;
+  --color-sky-30: #DFEBEF;
+  --color-sky-15: #EFF5F7;
+
+  /* Semantic. Kidana has no red, so "fail" uses a muted brick that sits with the palette. */
+  --color-fail: #A65A4E;
+  --color-fail-20: #F2E1DD;
+  --color-fail-10: #F9F0EE;
+
+  --radius-card: 0.625rem;
+}
+
+@font-face {
+  font-family: "Avenir Next Arabic";
+  src: url("/static/fonts/avenir-next-arabic-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Avenir Next Arabic";
+  src: url("/static/fonts/avenir-next-arabic-500.woff2") format("woff2");
+  font-weight: 500 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Avenir Next Arabic";
+  src: url("/static/fonts/avenir-next-arabic-700.woff2") format("woff2");
+  font-weight: 700 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  html {
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply bg-ink-5 text-ink text-sm leading-relaxed;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-sky;
+  }
+  [x-cloak] {
+    display: none !important;
+  }
+  /* Number fields here hold short values (weights, sort order). Native spinners
+     overlap the digits in RTL, so hide them and centre the number LTR. */
+  input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+    direction: ltr;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+/* A small set of component classes keeps templates readable.
+   Everything else is plain utilities in the templ files. */
+@layer components {
+  .card {
+    @apply bg-white border border-ink-10 rounded-card;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-[13.5px] font-medium whitespace-nowrap
+      border border-transparent transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply bg-ink text-white hover:bg-ink-80;
+  }
+  .btn-gold {
+    @apply bg-gold text-white hover:bg-gold-80;
+  }
+  .btn-outline {
+    @apply bg-white border-ink-30 text-ink hover:bg-ink-5;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-ink-80 hover:bg-ink-5 hover:text-ink;
+  }
+  .btn-danger {
+    @apply bg-white border-fail-20 text-fail hover:bg-fail-10;
+  }
+  .btn-lg {
+    @apply px-5 py-3 text-base rounded-xl;
+  }
+  .label {
+    @apply block text-xs font-medium text-ink-80 mb-1;
+  }
+  .input {
+    @apply block w-full rounded-lg border border-ink-30 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-60
+      focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold-20;
+  }
+  .input[aria-invalid="true"] {
+    @apply border-fail ring-2 ring-fail-10;
+  }
+  .field-error {
+    @apply mt-1 text-xs text-fail;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap;
+  }
+  .table {
+    @apply w-full text-sm;
+  }
+  .table th {
+    @apply bg-ink-5 text-ink-80 text-xs font-medium text-start px-3 py-2.5 border-b border-ink-10 whitespace-nowrap;
+  }
+  .table td {
+    @apply px-3 py-2.5 border-b border-ink-10 align-middle;
+  }
+  .table tbody tr:hover td {
+    @apply bg-gold-10;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+}
+
+/* htmx request indicator */
+.htmx-indicator {
+  opacity: 0;
+  transition: opacity 150ms;
+}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  opacity: 1;
+}
+
+/* Rating segmented control: radio inputs styled as large tap targets. */
+.rate input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.rate span {
+  @apply flex items-center justify-center gap-2 rounded-xl border-2 border-ink-10 bg-white px-3 py-3 font-medium text-ink-80
+    transition-colors cursor-pointer select-none min-h-12;
+}
+.rate input:focus-visible + span {
+  @apply outline-2 outline-offset-2 outline-sky;
+}
+.rate input:checked + span[data-k="C"] {
+  @apply border-green bg-green-10 text-green;
+}
+.rate input:checked + span[data-k="P"] {
+  @apply border-gold bg-gold-10 text-ink;
+}
+.rate input:checked + span[data-k="N"] {
+  @apply border-fail bg-fail-10 text-fail;
+}
+.rate input:checked + span[data-k="NA"] {
+  @apply border-ink-60 bg-ink-5 text-ink;
+}
+
+/* Print report */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body {
+    background: white;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+}

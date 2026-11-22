@@ -1,0 +1,412 @@
+package views
+
+import (
+	"fmt"
+	"net/url"
+
+	"github.com/HZamzami/kidana-qa/internal/appctx"
+	"github.com/HZamzami/kidana-qa/internal/db/gen"
+	"github.com/HZamzami/kidana-qa/internal/domain"
+)
+
+// ---------------------------------------------------------------- list
+
+type WOListData struct {
+	Rows        []gen.ListWorkOrdersRow
+	Total       int64
+	Page        int
+	PageSize    int
+	Query       url.Values
+	Sites       []Option
+	Systems     []Option
+	Contractors []Option
+	Statuses    []Option
+}
+
+func (d WOListData) val(k string) string { return d.Query.Get(k) }
+
+func (d WOListData) Pages() int {
+	if d.Total == 0 {
+		return 1
+	}
+	return int((d.Total + int64(d.PageSize) - 1) / int64(d.PageSize))
+}
+
+templ WorkOrdersPage(d WOListData) {
+	@App("أوامر العمل") {
+		@PageHeader("أوامر العمل", "كل أمر عمل يجمع الرقابة أثناء التنفيذ (QA) والفحص بعد التنفيذ (QC) والملاحظات") {
+			if appctx.CanEdit(ctx) {
+				<a href="/work-orders/new" class="btn btn-primary">＋ أمر عمل جديد</a>
+			}
+		}
+		<form
+			class="card p-3 mb-4 flex flex-wrap items-end gap-3"
+			method="get"
+			action="/work-orders"
+			hx-get="/work-orders"
+			hx-trigger="change, input from:#flt_q delay:350ms"
+			hx-target="#wo-results"
+			hx-select="#wo-results"
+			hx-swap="outerHTML"
+			hx-push-url="true"
+		>
+			<div class="flex-1 min-w-48">
+				<label class="label" for="flt_q">بحث</label>
+				<input class="input py-1.5" type="search" id="flt_q" name="q" value={ d.val("q") } placeholder="رقم أمر العمل، الأصل، الموقع التفصيلي، الفني…"/>
+			</div>
+			@FilterSelect("type", "النوع", d.val("type"), TypeOptions)
+			@FilterSelect("status", "الحالة", d.val("status"), d.Statuses)
+			@FilterSelect("site", "الموقع", d.val("site"), d.Sites)
+			@FilterSelect("system", "النظام", d.val("system"), d.Systems)
+			@FilterSelect("contractor", "المقاول", d.val("contractor"), d.Contractors)
+			<a href="/work-orders" class="btn btn-ghost">إعادة ضبط</a>
+			<noscript><button class="btn btn-primary">تطبيق</button></noscript>
+		</form>
+		@WorkOrdersResults(d)
+	}
+}
+
+templ WorkOrdersResults(d WOListData) {
+	<div id="wo-results" class="card overflow-hidden">
+		if len(d.Rows) == 0 {
+			@EmptyState("لا توجد أوامر عمل مطابقة", "غيّر الفلاتر أو أضف أمر عمل جديداً.")
+		} else {
+			<div class="overflow-x-auto">
+				<table class="table">
+					<thead>
+						<tr>
+							<th>رقم أمر العمل</th>
+							<th>النوع</th>
+							<th>الموقع</th>
+							<th>النظام</th>
+							<th>الأصل</th>
+							<th>المقاول</th>
+							<th>QA</th>
+							<th>QC</th>
+							<th>ملاحظات مفتوحة</th>
+							<th>الحالة</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, w := range d.Rows {
+							<tr>
+								<td class="whitespace-nowrap">
+									<a class="font-medium text-ink underline decoration-gold-50 underline-offset-4 hover:decoration-gold" href={ u("/work-orders/%d", w.ID) }>{ w.Ref }</a>
+									if w.DraftInspections > 0 {
+										<span class="pill bg-sky-15 text-ink-80 ms-1">مسودة</span>
+									}
+								</td>
+								<td>
+									@TypePill(string(w.Type))
+								</td>
+								<td class="whitespace-nowrap">{ w.SiteName }</td>
+								<td class="whitespace-nowrap">{ w.SystemName }</td>
+								<td class="max-w-40 truncate" title={ w.Asset }>{ orDash(w.Asset) }</td>
+								<td class="max-w-40 truncate" title={ w.ContractorName }>{ orDash(w.ContractorName) }</td>
+								<td>
+									@ScoreBar(w.QaScore, w.QaScore >= domain.PassThreshold)
+								</td>
+								<td>
+									@ScoreBar(w.QcScore, w.QcPassed)
+								</td>
+								<td class="num text-center">
+									if w.OpenFindings > 0 {
+										<span class="pill bg-fail-10 text-fail">{ itoa(int(w.OpenFindings)) }</span>
+									} else {
+										<span class="text-ink-60">0</span>
+									}
+								</td>
+								<td>
+									@WOStatusPill(string(w.Status))
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<div class="flex items-center gap-3 px-3 py-2.5 text-xs text-ink-80 border-t border-ink-10">
+				<span>{ domain.Count(int(d.Total), domain.NounWorkOrder) }</span>
+				if d.Pages() > 1 {
+					<span class="ms-auto flex items-center gap-1">
+						if d.Page > 1 {
+							<a class="btn btn-ghost px-2 py-1" href={ templ.URL(withQuery("/work-orders", d.Query, "page", itoa(d.Page-1))) }>السابق</a>
+						}
+						<span class="num">{ fmt.Sprintf("%d / %d", d.Page, d.Pages()) }</span>
+						if d.Page < d.Pages() {
+							<a class="btn btn-ghost px-2 py-1" href={ templ.URL(withQuery("/work-orders", d.Query, "page", itoa(d.Page+1))) }>التالي</a>
+						}
+					</span>
+				}
+			</div>
+		}
+	</div>
+}
+
+// ---------------------------------------------------------------- form
+
+type WOFormValues struct {
+	Ref, Type, SiteID, Location, SystemID, Asset, ContractorID, Technician string
+	Priority, Description, PlannedDate, ActualDate, Status                  string
+}
+
+type WOFormData struct {
+	ID          int64 // 0 = new
+	V           WOFormValues
+	Errors      map[string]string
+	Sites       []Option
+	Systems     []Option
+	Contractors []Option
+	Priorities  []Option
+	Statuses    []Option
+}
+
+templ WorkOrderForm(d WOFormData) {
+	@App(tern(d.ID == 0, "أمر عمل جديد", "تعديل أمر العمل")) {
+		if d.ID == 0 {
+			@PageHeader("أمر عمل جديد", "سجّل أمر العمل أو الصيانة الوقائية كما هو في نظام إدارة الصيانة")
+		} else {
+			@PageHeader("تعديل أمر العمل "+d.V.Ref, "") {
+				<a href={ u("/work-orders/%d", d.ID) } class="btn btn-ghost">رجوع</a>
+			}
+		}
+		<form method="post" action={ templ.SafeURL(tern(d.ID == 0, "/work-orders", path("/work-orders/%d", d.ID))) } class="card p-5 sm:p-6" novalidate>
+			if len(d.Errors) > 0 {
+				<div role="alert" class="mb-5 rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2">يرجى مراجعة الحقول المعلّمة.</div>
+			}
+			<fieldset class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+				<legend class="sr-only">بيانات العمل</legend>
+				@SelectField("type", "النوع", d.V.Type, TypeOptions, "", true, d.Errors)
+				@TextField("ref", "رقم أمر العمل / الصيانة", d.V.Ref, true, d.Errors, templ.Attributes{"maxlength": "60", "dir": "auto"})
+				@SelectField("priority", "الأولوية", d.V.Priority, d.Priorities, "—", false, d.Errors)
+				@SelectField("site_id", "الموقع", d.V.SiteID, d.Sites, "اختر الموقع", true, d.Errors)
+				@TextField("location", "الموقع التفصيلي", d.V.Location, false, d.Errors, templ.Attributes{"maxlength": "120", "placeholder": "المبنى / الدور / الغرفة"})
+				@SelectField("system_id", "النظام", d.V.SystemID, d.Systems, "اختر النظام", true, d.Errors)
+				@TextField("asset", "الأصل / المعدة", d.V.Asset, false, d.Errors, templ.Attributes{"maxlength": "120", "placeholder": "رمز أو اسم الأصل"})
+				@SelectField("contractor_id", "المقاول / الجهة المنفذة", d.V.ContractorID, d.Contractors, "—", false, d.Errors)
+				@TextField("technician", "الفني", d.V.Technician, false, d.Errors, templ.Attributes{"maxlength": "80"})
+				@TextField("planned_date", "التاريخ المجدول / استحقاق SLA", d.V.PlannedDate, false, d.Errors, templ.Attributes{"type": "date"})
+				@TextField("actual_date", "تاريخ التنفيذ الفعلي", d.V.ActualDate, false, d.Errors, templ.Attributes{"type": "date"})
+				if d.ID != 0 {
+					@SelectField("status", "الحالة", d.V.Status, d.Statuses, "", true, d.Errors)
+				}
+				<div class="sm:col-span-2 lg:col-span-3">
+					@TextArea("description", "وصف العمل", d.V.Description, 3, d.Errors)
+				</div>
+			</fieldset>
+			if d.ID != 0 {
+				<p class="mt-3 text-xs text-ink-60">«معتمد» يُحدَّد تلقائياً عندما ينجح آخر فحص بعد التنفيذ ولا توجد ملاحظات مفتوحة.</p>
+			}
+			<div class="mt-6 flex gap-2">
+				<button type="submit" class="btn btn-primary">حفظ</button>
+				<a href={ templ.SafeURL(tern(d.ID == 0, "/work-orders", path("/work-orders/%d", d.ID))) } class="btn btn-ghost">إلغاء</a>
+			</div>
+		</form>
+	}
+}
+
+// ---------------------------------------------------------------- detail
+
+type WOShowData struct {
+	WO          gen.GetWorkOrderRow
+	Inspections []gen.ListInspectionsByWorkOrderRow
+	Findings    []gen.ListFindingsByWorkOrderRow
+	Today       string
+}
+
+func (d WOShowData) hasDraft(stage string) int64 {
+	for _, i := range d.Inspections {
+		if string(i.Stage) == stage && i.Status == gen.InspectionStatusDraft {
+			return i.ID
+		}
+	}
+	return 0
+}
+
+templ WorkOrderShow(d WOShowData) {
+	@App("أمر العمل " + d.WO.Ref) {
+		<div class="mb-4 text-sm">
+			<a href="/work-orders" class="text-ink-80 hover:text-ink">أوامر العمل</a>
+			<span class="text-ink-30 mx-1">/</span>
+			<span class="num">{ d.WO.Ref }</span>
+		</div>
+		<section class="card p-5">
+			<div class="flex flex-wrap items-start gap-3">
+				<div class="min-w-0">
+					<div class="flex flex-wrap items-center gap-2">
+						<h1 class="text-xl font-semibold num">{ d.WO.Ref }</h1>
+						@TypePill(string(d.WO.Type))
+						@WOStatusPill(string(d.WO.Status))
+						if d.WO.Priority != nil {
+							<span class="pill bg-ink-5 text-ink-80">{ "الأولوية: " + domain.Label(domain.PriorityLabels, string(*d.WO.Priority)) }</span>
+						}
+					</div>
+					if d.WO.Description != "" {
+						<p class="mt-2 text-ink-80 max-w-prose">{ d.WO.Description }</p>
+					}
+				</div>
+				if appctx.CanEdit(ctx) {
+					<a href={ u("/work-orders/%d/edit", d.WO.ID) } class="btn btn-outline ms-auto">تعديل</a>
+				}
+			</div>
+			<dl class="mt-5 grid gap-x-6 gap-y-4 grid-cols-2 md:grid-cols-4">
+				@Fact("الموقع") {
+					{ d.WO.SiteName }
+					if d.WO.Location != "" {
+						<span class="block text-xs text-ink-80 font-normal">{ d.WO.Location }</span>
+					}
+				}
+				@Fact("النظام") {
+					{ d.WO.SystemName }
+				}
+				@Fact("الأصل / المعدة") {
+					{ orDash(d.WO.Asset) }
+				}
+				@Fact("المقاول") {
+					{ orDash(d.WO.ContractorName) }
+					if d.WO.Technician != "" {
+						<span class="block text-xs text-ink-80 font-normal">{ "الفني: " + d.WO.Technician }</span>
+					}
+				}
+				@Fact(tern(d.WO.Type == gen.WoTypeWO, "استحقاق SLA", "التاريخ المجدول")) {
+					@DateText(d.WO.PlannedDate)
+				}
+				@Fact("التنفيذ الفعلي") {
+					@DateText(d.WO.ActualDate)
+				}
+				@Fact("الالتزام بالموعد") {
+					{ delayText(d.WO.PlannedDate, d.WO.ActualDate) }
+				}
+				@Fact("أُنشئ") {
+					<span class="num">{ dateTime(d.WO.CreatedAt) }</span>
+					if d.WO.CreatedByName != "" {
+						<span class="block text-xs text-ink-80 font-normal">{ d.WO.CreatedByName }</span>
+					}
+				}
+			</dl>
+		</section>
+		<div class="mt-5 grid gap-5 lg:grid-cols-5">
+			<section class="lg:col-span-3">
+				<div class="flex items-center gap-2 mb-3">
+					<h2 class="font-semibold">الفحوصات</h2>
+					<span class="text-xs text-ink-60">QA أثناء التنفيذ ← QC بعد التنفيذ</span>
+				</div>
+				if appctx.CanEdit(ctx) && d.WO.Status != gen.WoStatusCancelled {
+					<div class="grid gap-3 sm:grid-cols-2 mb-4">
+						@startCard(d, "qa", "رقابة أثناء التنفيذ", "مرافقة المقاول أثناء العمل: السلامة، الإجراء، المواد، كفاءة الفني.")
+						@startCard(d, "qc", "فحص بعد التنفيذ", "التحقق من النتيجة: جودة العمل، القراءات، التوثيق، النظافة، الإغلاق.")
+					</div>
+				}
+				if len(d.Inspections) == 0 {
+					<div class="card">
+						@EmptyState("لم يُسجَّل أي فحص بعد", "ابدأ برقابة أثناء التنفيذ إن كان العمل جارياً، أو بفحص بعد التنفيذ إن انتهى.")
+					</div>
+				} else {
+					<ol class="relative border-s-2 border-ink-10 ms-3 space-y-3">
+						for _, in := range d.Inspections {
+							<li class="ps-5 relative">
+								<span
+									class={ "absolute -start-[9px] top-4 size-4 rounded-full border-2 border-white",
+										templ.KV("bg-sky", in.Stage == gen.InspectionStageQa),
+										templ.KV("bg-gold", in.Stage == gen.InspectionStageQc) }
+								></span>
+								<a href={ u("/inspections/%d", in.ID) } class="card p-4 flex flex-wrap items-center gap-x-4 gap-y-2 hover:border-gold-50 transition-colors">
+									<div class="flex items-center gap-2">
+										@StagePill(string(in.Stage))
+										if in.Attempt > 1 {
+											<span class="pill bg-ink-5 text-ink-80">{ fmt.Sprintf("محاولة %d", in.Attempt) }</span>
+										}
+									</div>
+									<div class="text-xs text-ink-80">
+										@DateInline(in.InspectedOn)
+										{ " · " + in.InspectorName }
+									</div>
+									<div class="ms-auto flex items-center gap-2">
+										if in.FindingsCount > 0 {
+											<span class="text-xs text-ink-80">{ domain.Count(int(in.FindingsCount), domain.NounFinding) }</span>
+										}
+										@ResultPill(in.Score, in.Passed, in.CriticalFailed)
+									</div>
+								</a>
+							</li>
+						}
+					</ol>
+				}
+			</section>
+			<section class="lg:col-span-2">
+				<div class="flex items-center gap-2 mb-3">
+					<h2 class="font-semibold">الملاحظات والإجراءات التصحيحية</h2>
+				</div>
+				@FindingsCards(d.Findings, d.Today)
+			</section>
+		</div>
+	}
+}
+
+templ startCard(d WOShowData, stage, title, hint string) {
+	<div class={ "card p-4 border-t-4", templ.KV("border-t-sky", stage == "qa"), templ.KV("border-t-gold", stage == "qc") }>
+		<div class="flex items-center gap-2">
+			<span class="font-semibold">{ title }</span>
+			<span class="text-xs text-ink-60">{ tern(stage == "qa", "QA", "QC") }</span>
+		</div>
+		<p class="text-xs text-ink-80 mt-1 mb-3">{ hint }</p>
+		if draft := d.hasDraft(stage); draft != 0 {
+			<a href={ u("/inspections/%d", draft) } class="btn btn-gold w-full">متابعة المسودة</a>
+		} else {
+			<form method="post" action={ u("/work-orders/%d/inspections", d.WO.ID) }>
+				<input type="hidden" name="stage" value={ stage }/>
+				<button type="submit" class={ "btn w-full", templ.KV("btn-primary", stage == "qa"), templ.KV("btn-gold", stage == "qc") }>
+					{ tern(stage == "qa", "بدء رقابة أثناء التنفيذ", "بدء فحص بعد التنفيذ") }
+				</button>
+			</form>
+		}
+	</div>
+}
+
+// FindingsCards lists findings as compact cards (work order + inspection pages).
+templ FindingsCards(items []gen.ListFindingsByWorkOrderRow, today string) {
+	if len(items) == 0 {
+		<div class="card">
+			@EmptyState("لا توجد ملاحظات", "")
+		</div>
+	} else {
+		<ul class="space-y-3">
+			for _, f := range items {
+				<li class="card p-4">
+					<div class="flex flex-wrap items-center gap-2">
+						@FindingStatusPill(string(f.Status), f.Status != gen.FindingStatusClosed && f.DueDate != nil && isoDate(f.DueDate) < today)
+						@SeverityPill(string(f.Severity))
+						if f.CriterionCode != "" {
+							<span class="text-xs text-ink-60">{ f.CriterionCode + " · " + f.CriterionLabel }</span>
+						}
+						if f.InspectionStage != "" {
+							<span class="text-xs text-ink-60 ms-auto">{ fmt.Sprintf("%s · محاولة %d", domain.Stage(f.InspectionStage).Short(), f.InspectionAttempt) }</span>
+						}
+					</div>
+					<p class="mt-2">{ f.Description }</p>
+					<p class="mt-1 text-sm text-ink-80"><span class="text-ink-60">الإجراء التصحيحي:</span> { f.CorrectiveAction }</p>
+					<div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-80">
+						if f.Owner != "" {
+							<span>{ "المسؤول: " + f.Owner }</span>
+						}
+						if f.DueDate != nil {
+							<span>
+								{ "الإغلاق المستهدف: " }
+								@DateInline(*f.DueDate)
+							</span>
+						}
+						if f.Status == gen.FindingStatusClosed && f.ClosureNote != "" {
+							<span>{ "الإغلاق: " + f.ClosureNote }</span>
+						}
+					</div>
+					if appctx.CanEdit(ctx) {
+						<div class="mt-3 flex gap-2">
+							<a href={ u("/findings/%d/edit", f.ID) } class="btn btn-outline py-1 text-xs">
+								{ tern(f.Status == gen.FindingStatusClosed, "عرض", "تحديث / إغلاق") }
+							</a>
+						</div>
+					}
+				</li>
+			}
+		</ul>
+	}
+}

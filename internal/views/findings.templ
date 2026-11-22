@@ -1,0 +1,205 @@
+package views
+
+import (
+	"net/url"
+
+	"github.com/HZamzami/kidana-qa/internal/appctx"
+	"github.com/HZamzami/kidana-qa/internal/db/gen"
+	"github.com/HZamzami/kidana-qa/internal/domain"
+)
+
+type FindingsListData struct {
+	Rows        []gen.ListFindingsRow
+	Query       url.Values
+	Sites       []Option
+	Contractors []Option
+	Today       string
+}
+
+var findingScopeOptions = []Option{
+	{"open", "المفتوحة"},
+	{"overdue", "المتأخرة عن الإغلاق"},
+	{"closed", "المغلقة"},
+	{"all", "الكل"},
+}
+
+templ FindingsPage(d FindingsListData) {
+	@App("الملاحظات") {
+		@PageHeader("الملاحظات والإجراءات التصحيحية", "متابعة عدم المطابقة حتى الإغلاق. لا يُعتمد أمر العمل وفيه ملاحظة مفتوحة.")
+		<form
+			class="card p-3 mb-4 flex flex-wrap items-end gap-3"
+			method="get"
+			action="/findings"
+			hx-get="/findings"
+			hx-trigger="change, input from:#flt_fq delay:350ms"
+			hx-target="#findings-results"
+			hx-select="#findings-results"
+			hx-swap="outerHTML"
+			hx-push-url="true"
+		>
+			<div class="flex-1 min-w-48">
+				<label class="label" for="flt_fq">بحث</label>
+				<input class="input py-1.5" type="search" id="flt_fq" name="q" value={ d.Query.Get("q") } placeholder="رقم أمر العمل، الوصف، المسؤول…"/>
+			</div>
+			<div class="min-w-40">
+				<label class="label" for="flt_scope">العرض</label>
+				<select class="input py-1.5" id="flt_scope" name="scope">
+					for _, o := range findingScopeOptions {
+						<option value={ o.Value } selected?={ o.Value == tern(d.Query.Get("scope") == "", "open", d.Query.Get("scope")) }>{ o.Label }</option>
+					}
+				</select>
+			</div>
+			@FilterSelect("site", "الموقع", d.Query.Get("site"), d.Sites)
+			@FilterSelect("contractor", "المقاول", d.Query.Get("contractor"), d.Contractors)
+			<noscript><button class="btn btn-primary">تطبيق</button></noscript>
+		</form>
+		<div id="findings-results" class="card overflow-hidden">
+			if len(d.Rows) == 0 {
+				@EmptyState("لا توجد ملاحظات ضمن هذا العرض", "")
+			} else {
+				<div class="overflow-x-auto">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>الحالة</th>
+								<th>أمر العمل</th>
+								<th>الموقع</th>
+								<th>المقاول</th>
+								<th>الملاحظة</th>
+								<th>المسؤول</th>
+								<th>الإغلاق المستهدف</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, f := range d.Rows {
+								<tr>
+									<td class="whitespace-nowrap">
+										@FindingStatusPill(string(f.Status), f.Status != gen.FindingStatusClosed && f.DueDate != nil && isoDate(f.DueDate) < d.Today)
+										@SeverityPill(string(f.Severity))
+									</td>
+									<td class="whitespace-nowrap"><a class="underline decoration-gold-50 underline-offset-4" href={ u("/work-orders/%d", f.WorkOrderID) }>{ f.WoRef }</a></td>
+									<td class="whitespace-nowrap">{ f.SiteName }</td>
+									<td class="max-w-36 truncate">{ orDash(f.ContractorName) }</td>
+									<td class="min-w-64">
+										if f.CriterionCode != "" {
+											<span class="text-xs text-ink-60">{ f.CriterionCode + " · " + f.CriterionLabel }</span>
+										}
+										<div>{ f.Description }</div>
+									</td>
+									<td>{ orDash(f.Owner) }</td>
+									<td class="whitespace-nowrap">
+										@DateText(f.DueDate)
+									</td>
+									<td>
+										<a href={ u("/findings/%d/edit", f.ID) } class="btn btn-outline py-1 text-xs">
+											{ tern(f.Status == gen.FindingStatusClosed || !appctx.CanEdit(ctx), "عرض", "تحديث") }
+										</a>
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				<div class="px-3 py-2.5 text-xs text-ink-80 border-t border-ink-10">{ domain.Count(len(d.Rows), domain.NounFinding) }</div>
+			}
+		</div>
+	}
+}
+
+type FindingFormValues struct {
+	Description, CorrectiveAction, Owner, DueDate, Severity, Status, ClosureNote string
+}
+
+type FindingEditData struct {
+	F      gen.GetFindingRow
+	V      FindingFormValues
+	Errors map[string]string
+}
+
+templ FindingEdit(d FindingEditData) {
+	@App("ملاحظة على " + d.F.WoRef) {
+		<div class="mb-4 text-sm">
+			<a href="/findings" class="text-ink-80 hover:text-ink">الملاحظات</a>
+			<span class="text-ink-30 mx-1">/</span>
+			<a href={ u("/work-orders/%d", d.F.WorkOrderID) } class="text-ink-80 hover:text-ink num">{ d.F.WoRef }</a>
+		</div>
+		<div class="grid gap-5 lg:grid-cols-3">
+			<section class="lg:col-span-2 card p-5">
+				<div class="flex flex-wrap items-center gap-2 mb-4">
+					<h1 class="text-lg font-semibold">ملاحظة #{ idStr(d.F.ID) }</h1>
+					@FindingStatusPill(string(d.F.Status), false)
+					@SeverityPill(string(d.F.Severity))
+					if d.F.CriterionCode != "" {
+						<span class="text-xs text-ink-60">{ d.F.CriterionCode + " · " + d.F.CriterionLabel }</span>
+					}
+				</div>
+				if d.F.Status == gen.FindingStatusClosed || !appctx.CanEdit(ctx) {
+					<dl class="space-y-3 text-sm">
+						@Fact("الوصف") {
+							{ d.F.Description }
+						}
+						@Fact("الإجراء التصحيحي") {
+							{ d.F.CorrectiveAction }
+						}
+						@Fact("المسؤول") {
+							{ orDash(d.F.Owner) }
+						}
+						@Fact("الإغلاق المستهدف") {
+							@DateText(d.F.DueDate)
+						}
+						if d.F.ClosedAt != nil {
+							@Fact("أُغلقت") {
+								<span class="num">{ dateTime(*d.F.ClosedAt) }</span> — { orDash(d.F.ClosureNote) }
+							}
+						}
+					</dl>
+					if d.F.Status == gen.FindingStatusClosed && appctx.CanEdit(ctx) {
+						<form method="post" action={ u("/findings/%d/reopen", d.F.ID) } class="mt-5">
+							<button class="btn btn-outline">إعادة فتح الملاحظة</button>
+						</form>
+					}
+				} else {
+					<form method="post" action={ u("/findings/%d", d.F.ID) } class="space-y-4" novalidate>
+						@TextArea("description", "وصف الملاحظة", d.V.Description, 3, d.Errors)
+						@TextArea("corrective_action", "الإجراء التصحيحي المطلوب", d.V.CorrectiveAction, 2, d.Errors)
+						<div class="grid gap-4 sm:grid-cols-2">
+							@TextField("owner", "مسؤول المعالجة", d.V.Owner, false, d.Errors, templ.Attributes{"maxlength": "80"})
+							@TextField("due_date", "تاريخ الإغلاق المستهدف", d.V.DueDate, false, d.Errors, templ.Attributes{"type": "date"})
+							@SelectField("severity", "الأهمية", d.V.Severity, []Option{{"normal", "عادية"}, {"critical", "حرجة"}}, "", true, d.Errors)
+							@SelectField("status", "الحالة", d.V.Status, []Option{{"open", "مفتوحة"}, {"in_progress", "قيد المعالجة"}}, "", true, d.Errors)
+						</div>
+						<button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+					</form>
+				}
+			</section>
+			if d.F.Status != gen.FindingStatusClosed && appctx.CanEdit(ctx) {
+				<section class="card p-5 h-fit">
+					<h2 class="font-semibold">إغلاق الملاحظة</h2>
+					<p class="text-xs text-ink-80 mt-1 mb-3">بعد التحقق من تنفيذ الإجراء التصحيحي. إن كان الإخفاق في فحص بعد التنفيذ، سجّل فحصاً جديداً ليُعتمد أمر العمل.</p>
+					<form method="post" action={ u("/findings/%d/close", d.F.ID) } class="space-y-3" novalidate>
+						@TextArea("closure_note", "كيف تمت المعالجة؟", d.V.ClosureNote, 3, d.Errors)
+						<button type="submit" class="btn btn-gold w-full">إغلاق الملاحظة</button>
+					</form>
+					<div class="mt-4 border-t border-ink-10 pt-3" x-data="confirmAction">
+						<button type="button" class="btn btn-ghost text-fail px-2" x-on:click="ask" x-show="!asking">حذف الملاحظة</button>
+						<form method="post" action={ u("/findings/%d/delete", d.F.ID) } x-show="asking" x-cloak class="space-y-2">
+							<p class="text-sm">حذف نهائي؟ استخدم الحذف فقط للملاحظات المسجلة بالخطأ.</p>
+							<div class="flex gap-2">
+								<button type="submit" class="btn btn-danger">حذف</button>
+								<button type="button" class="btn btn-ghost" x-on:click="cancel">تراجع</button>
+							</div>
+						</form>
+					</div>
+				</section>
+			}
+		</div>
+		<p class="mt-4 text-xs text-ink-60">
+			{ "سُجّلت " + dateTime(d.F.CreatedAt) }
+			if d.F.InspectionID != nil {
+				· <a class="underline" href={ u("/inspections/%d", *d.F.InspectionID) }>عرض الفحص</a>
+			}
+			{ " · " + domain.Label(domain.SeverityLabels, string(d.F.Severity)) }
+		</p>
+	}
+}

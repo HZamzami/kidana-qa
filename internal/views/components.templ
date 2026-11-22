@@ -1,0 +1,248 @@
+package views
+
+import (
+	"time"
+
+	"github.com/HZamzami/kidana-qa/internal/dates"
+	"github.com/HZamzami/kidana-qa/internal/domain"
+)
+
+// ---------------------------------------------------------------- dates
+// Gregorian is shown as dd/mm/yyyy; the Umm al-Qura Hijri date is shown with it, read-only.
+
+// HijriText renders "13/06/1448 هـ" with only the digits isolated LTR.
+templ HijriText(t time.Time) {
+	if h := dates.HijriDigits(t); h != "" {
+		<span class="whitespace-nowrap" title={ dates.HijriLong(t) }><span class="num">{ h }</span> هـ</span>
+	}
+}
+
+// DateText stacks the Gregorian date over the Hijri date (detail facts, tables).
+templ DateText(t *time.Time) {
+	if t == nil {
+		<span class="text-ink-60">—</span>
+	} else {
+		<span class="num">{ dmy(*t) }</span>
+		<span class="block text-[11px] text-ink-60 font-normal">
+			@HijriText(*t)
+		</span>
+	}
+}
+
+// DateInline shows both on one line: 22/11/2026 · 13/06/1448 هـ
+templ DateInline(t time.Time) {
+	<span class="whitespace-nowrap">
+		<span class="num">{ dmy(t) }</span>
+		<span class="text-ink-60 ms-1">
+			{ "· " }
+			@HijriText(t)
+		</span>
+	</span>
+}
+
+// ---------------------------------------------------------------- status pills
+
+templ StagePill(stage string) {
+	if stage == "qa" {
+		<span class="pill bg-sky-30 text-ink" title="رقابة أثناء التنفيذ">QA · أثناء التنفيذ</span>
+	} else {
+		<span class="pill bg-gold-20 text-ink" title="فحص بعد التنفيذ">QC · بعد التنفيذ</span>
+	}
+}
+
+templ TypePill(t string) {
+	<span class={ "pill", templ.KV("bg-green-10 text-green", t == "PM"), templ.KV("bg-ink-10 text-ink", t != "PM") }>
+		{ domain.Label(domain.WOTypeLabels, t) }
+	</span>
+}
+
+templ WOStatusPill(status string) {
+	<span
+		class={ "pill",
+			templ.KV("bg-ink-10 text-ink-80", status == "open"),
+			templ.KV("bg-sky-30 text-ink", status == "in_progress"),
+			templ.KV("bg-gold-20 text-ink", status == "completed"),
+			templ.KV("bg-green-20 text-green", status == "accepted"),
+			templ.KV("bg-ink-5 text-ink-60 line-through", status == "cancelled") }
+	>
+		{ domain.WOStatus(status).Label() }
+	</span>
+}
+
+templ FindingStatusPill(status string, overdue bool) {
+	<span
+		class={ "pill",
+			templ.KV("bg-fail-10 text-fail", status == "open"),
+			templ.KV("bg-gold-20 text-ink", status == "in_progress"),
+			templ.KV("bg-green-10 text-green", status == "closed") }
+	>
+		{ domain.Label(domain.FindingStatusLabels, status) }
+	</span>
+	if overdue {
+		<span class="pill bg-fail text-white">متأخرة</span>
+	}
+}
+
+templ SeverityPill(sev string) {
+	if sev == "critical" {
+		<span class="pill border border-fail text-fail">حرجة</span>
+	}
+}
+
+// ResultPill shows score + pass/fail for a submitted inspection.
+templ ResultPill(score *float64, passed *bool, critical bool) {
+	if score == nil || passed == nil {
+		<span class="pill bg-ink-5 text-ink-60">مسودة</span>
+	} else if *passed {
+		<span class="pill bg-green-10 text-green"><span class="num">{ domain.Pct(score) }</span> · مطابق</span>
+	} else {
+		<span class="pill bg-fail-10 text-fail">
+			<span class="num">{ domain.Pct(score) }</span> · غير مطابق
+			if critical {
+				· بند حرج
+			}
+		</span>
+	}
+}
+
+// ScoreBar is a compact score with a bar (list tables).
+templ ScoreBar(v float64, passed bool) {
+	if v < 0 {
+		<span class="text-ink-60">—</span>
+	} else {
+		<div class="flex items-center gap-2 min-w-24">
+			<span class="num text-xs w-11 text-end">{ scoreVal(v) }</span>
+			<span class="h-1.5 flex-1 rounded-full bg-ink-10 overflow-hidden">
+				<span class={ "block h-full rounded-full", templ.KV("bg-green", passed), templ.KV("bg-fail", !passed) } style={ pctWidth(v) }></span>
+			</span>
+		</div>
+	}
+}
+
+// ---------------------------------------------------------------- form fields
+
+templ FieldError(errs map[string]string, name string) {
+	if msg, ok := errs[name]; ok {
+		<p class="field-error" id={ name + "-error" }>{ msg }</p>
+	}
+}
+
+templ TextField(name, label, value string, required bool, errs map[string]string, attrs templ.Attributes) {
+	<div
+		if isDate(attrs) {
+			x-data="dateEcho"
+		}
+	>
+		<label class="label" for={ "f_" + name }>
+			{ label }
+			if required {
+				<span class="text-gold">*</span>
+			}
+		</label>
+		<input
+			class="input"
+			id={ "f_" + name }
+			name={ name }
+			value={ value }
+			required?={ required }
+			if _, bad := errs[name]; bad {
+				aria-invalid="true"
+				aria-describedby={ name + "-error" }
+			}
+			{ attrs... }
+			if isDate(attrs) {
+				x-on:change="echo"
+			}
+		/>
+		if isDate(attrs) {
+			@dateEchoLine(value)
+		}
+		@FieldError(errs, name)
+	</div>
+}
+
+func isDate(attrs templ.Attributes) bool { return attrs["type"] == "date" }
+
+templ TextArea(name, label, value string, rows int, errs map[string]string) {
+	<div>
+		<label class="label" for={ "f_" + name }>{ label }</label>
+		<textarea
+			class="input"
+			id={ "f_" + name }
+			name={ name }
+			rows={ itoa(rows) }
+			if _, bad := errs[name]; bad {
+				aria-invalid="true"
+			}
+		>{ value }</textarea>
+		@FieldError(errs, name)
+	</div>
+}
+
+templ SelectField(name, label, value string, opts []Option, placeholder string, required bool, errs map[string]string) {
+	<div>
+		<label class="label" for={ "f_" + name }>
+			{ label }
+			if required {
+				<span class="text-gold">*</span>
+			}
+		</label>
+		<select
+			class="input"
+			id={ "f_" + name }
+			name={ name }
+			required?={ required }
+			if _, bad := errs[name]; bad {
+				aria-invalid="true"
+			}
+		>
+			if placeholder != "" {
+				<option value="">{ placeholder }</option>
+			}
+			for _, o := range opts {
+				<option value={ o.Value } selected?={ o.Value == value }>{ o.Label }</option>
+			}
+		</select>
+		@FieldError(errs, name)
+	</div>
+}
+
+// FilterSelect is a compact select for filter bars.
+templ FilterSelect(name, label, value string, opts []Option) {
+	<div class="min-w-32 flex-1 sm:flex-none">
+		<label class="label" for={ "flt_" + name }>{ label }</label>
+		<select class="input py-1.5" id={ "flt_" + name } name={ name }>
+			<option value="">الكل</option>
+			for _, o := range opts {
+				<option value={ o.Value } selected?={ o.Value == value }>{ o.Label }</option>
+			}
+		</select>
+	</div>
+}
+
+templ EmptyState(title, hint string) {
+	<div class="py-12 text-center">
+		<p class="font-medium">{ title }</p>
+		if hint != "" {
+			<p class="text-ink-80 text-sm mt-1">{ hint }</p>
+		}
+		{ children... }
+	</div>
+}
+
+// Fact is a label/value pair in detail headers.
+templ Fact(label string) {
+	<div class="min-w-0">
+		<dt class="text-xs text-ink-60">{ label }</dt>
+		<dd class="mt-0.5 font-medium break-words">{ children... }</dd>
+	</div>
+}
+
+// dateEchoLine is the "dd/mm/yyyy — Hijri" reference line under a date input.
+// Server-rendered first, then kept in sync by the dateEcho Alpine component.
+templ dateEchoLine(iso string) {
+	<p class="mt-1 text-[11px] text-ink-60 min-h-4">
+		<span class="num" x-text="g">{ echoG(iso) }</span>
+		<span x-show="h" class="whitespace-nowrap">— <span class="num" x-text="h">{ echoH(iso) }</span> هـ</span>
+	</p>
+}

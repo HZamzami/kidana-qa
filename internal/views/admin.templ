@@ -1,0 +1,318 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/HZamzami/kidana-qa/internal/db/gen"
+	"github.com/HZamzami/kidana-qa/internal/domain"
+)
+
+templ adminNav(active string) {
+	<nav class="flex flex-wrap gap-2 mb-5">
+		for _, it := range []Option{{"/admin/checklists", "قوائم الفحص"}, {"/admin/lookups/sites", "المواقع"}, {"/admin/lookups/systems", "الأنظمة"}, {"/admin/lookups/contractors", "المقاولون"}, {"/admin/users", "المستخدمون"}} {
+			<a href={ templ.URL(it.Value) } class={ "btn", templ.KV("btn-primary", active == it.Value), templ.KV("btn-outline", active != it.Value) }>{ it.Label }</a>
+		}
+	</nav>
+}
+
+templ AdminHome() {
+	@App("الإعدادات") {
+		@PageHeader("الإعدادات", "إدارة قوائم الفحص والبيانات المرجعية والمستخدمين")
+		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+			@adminCard("/admin/checklists", "قوائم الفحص", "بنود الرقابة أثناء التنفيذ والفحص بعد التنفيذ وأوزانها. أي تعديل يُنشئ إصداراً جديداً ولا يغيّر نتائج سابقة.")
+			@adminCard("/admin/lookups/sites", "المواقع", "منى، عرفات، مزدلفة…")
+			@adminCard("/admin/lookups/systems", "الأنظمة", "التكييف، الكهرباء، المولدات…")
+			@adminCard("/admin/lookups/contractors", "المقاولون", "الجهات المنفذة وبيانات التواصل.")
+			@adminCard("/admin/users", "المستخدمون", "الحسابات والصلاحيات: مدير، مدقق، مشاهد.")
+		</div>
+	}
+}
+
+templ adminCard(href, title, desc string) {
+	<a href={ templ.URL(href) } class="card p-5 hover:border-gold-50 transition-colors">
+		<div class="font-semibold">{ title }</div>
+		<p class="text-sm text-ink-80 mt-1">{ desc }</p>
+	</a>
+}
+
+// ---------------------------------------------------------------- lookups
+
+type LookupRow struct {
+	ID           int64
+	Name         string
+	Sort         int32
+	Active       bool
+	ContactName  string
+	Phone        string
+}
+
+type LookupData struct {
+	Kind   string // sites | systems | contractors
+	Title  string
+	Rows   []LookupRow
+	Errors map[string]string
+	NewName string
+}
+
+func (d LookupData) isContractors() bool { return d.Kind == "contractors" }
+
+templ LookupPage(d LookupData) {
+	@App(d.Title) {
+		@PageHeader(d.Title, "")
+		@adminNav("/admin/lookups/" + d.Kind)
+		<form method="post" action={ u("/admin/lookups/%s", d.Kind) } class="card p-4 mb-4 flex flex-wrap items-end gap-3" novalidate>
+			<div class="flex-1 min-w-48">
+				@TextField("name", "إضافة جديد", d.NewName, true, d.Errors, templ.Attributes{"maxlength": "120"})
+			</div>
+			if d.isContractors() {
+				<div class="min-w-40">
+					@TextField("contact_name", "جهة الاتصال", "", false, d.Errors, nil)
+				</div>
+				<div class="min-w-36">
+					@TextField("phone", "الهاتف", "", false, d.Errors, templ.Attributes{"dir": "ltr"})
+				</div>
+			} else {
+				<div class="w-24">
+					@TextField("sort", "الترتيب", "0", false, d.Errors, templ.Attributes{"type": "number"})
+				</div>
+			}
+			<button type="submit" class="btn btn-primary">إضافة</button>
+		</form>
+		<div class="card overflow-hidden">
+			<div class="overflow-x-auto">
+				<table class="table">
+					<thead><tr><th>{ domain.Count(len(d.Rows), domain.NounEntry) + " — عدّل مباشرة ثم احفظ الصف" }</th></tr></thead>
+					<tbody>
+						for _, row := range d.Rows {
+							<tr>
+								<td class="p-0">
+									<form method="post" action={ u("/admin/lookups/%s/%d", d.Kind, row.ID) } class="flex flex-wrap items-center gap-2 px-3 py-2">
+										<input class="input py-1.5 flex-1 min-w-40" name="name" value={ row.Name } aria-label="الاسم" required maxlength="120"/>
+										if d.isContractors() {
+											<input class="input py-1.5 w-40" name="contact_name" value={ row.ContactName } aria-label="جهة الاتصال"/>
+											<input class="input py-1.5 w-36" name="phone" value={ row.Phone } aria-label="الهاتف" dir="ltr"/>
+										} else {
+											<input class="input py-1.5 w-20" type="number" name="sort" value={ itoa(int(row.Sort)) } aria-label="الترتيب"/>
+										}
+										<label class="flex items-center gap-1.5 text-sm px-2">
+											<input type="checkbox" name="active" value="on" checked?={ row.Active } class="size-4"/>
+											مفعّل
+										</label>
+										<button type="submit" class="btn btn-outline py-1.5">حفظ</button>
+									</form>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+		<p class="mt-3 text-xs text-ink-60">لا يُحذف أي عنصر مستخدم في أوامر عمل سابقة؛ ألغِ تفعيله ليختفي من النماذج الجديدة.</p>
+	}
+}
+
+// ---------------------------------------------------------------- users
+
+type UsersData struct {
+	Users  []gen.User
+	Errors map[string]string
+	New    struct{ Email, Name, Role string }
+	Info   string // e.g. a generated temporary password to hand over
+}
+
+func roleOptions() []Option {
+	out := make([]Option, 0, len(domain.RoleOrder))
+	for _, r := range domain.RoleOrder {
+		out = append(out, Option{r, domain.RoleLabels[r]})
+	}
+	return out
+}
+
+templ UsersPage(d UsersData) {
+	@App("المستخدمون") {
+		@PageHeader("المستخدمون", "المدقق يسجّل الفحوصات والملاحظات، والمشاهد يطّلع فقط، والمدير يدير الإعدادات.")
+		@adminNav("/admin/users")
+		if d.Info != "" {
+			<div role="status" class="mb-4 rounded-lg border border-gold-50 bg-gold-10 px-4 py-3 text-sm">{ d.Info }</div>
+		}
+		<form method="post" action="/admin/users" class="card p-4 mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end" novalidate>
+			@TextField("name", "الاسم", d.New.Name, true, d.Errors, templ.Attributes{"maxlength": "80"})
+			@TextField("email", "البريد الإلكتروني", d.New.Email, true, d.Errors, templ.Attributes{"type": "email", "dir": "ltr"})
+			@SelectField("role", "الصلاحية", tern(d.New.Role == "", "inspector", d.New.Role), roleOptions(), "", true, d.Errors)
+			@TextField("password", "كلمة مرور مؤقتة", "", false, d.Errors, templ.Attributes{"type": "text", "dir": "ltr", "placeholder": "اتركها فارغة لتوليدها", "autocomplete": "off"})
+			<button type="submit" class="btn btn-primary">إضافة مستخدم</button>
+		</form>
+		<div class="card overflow-hidden">
+			<div class="overflow-x-auto">
+				<table class="table">
+					<thead><tr><th>{ domain.Count(len(d.Users), domain.NounUser) }</th></tr></thead>
+					<tbody>
+						for _, usr := range d.Users {
+							<tr>
+								<td class="p-0">
+									<div class="flex flex-wrap items-center gap-2 px-3 py-2">
+										<form method="post" action={ u("/admin/users/%d", usr.ID) } class="flex flex-wrap items-center gap-2 flex-1">
+											<input class="input py-1.5 w-44" name="name" value={ usr.Name } aria-label="الاسم" required maxlength="80"/>
+											<input class="input py-1.5 w-56" name="email" value={ usr.Email } aria-label="البريد" type="email" dir="ltr" required/>
+											<select class="input py-1.5 w-36" name="role" aria-label="الصلاحية">
+												for _, o := range roleOptions() {
+													<option value={ o.Value } selected?={ o.Value == string(usr.Role) }>{ o.Label }</option>
+												}
+											</select>
+											<label class="flex items-center gap-1.5 text-sm px-2">
+												<input type="checkbox" name="active" value="on" checked?={ usr.Active } class="size-4"/>
+												مفعّل
+											</label>
+											<button type="submit" class="btn btn-outline py-1.5">حفظ</button>
+										</form>
+										<form method="post" action={ u("/admin/users/%d/password", usr.ID) }>
+											<button type="submit" class="btn btn-ghost py-1.5 text-xs">كلمة مرور مؤقتة جديدة</button>
+										</form>
+									</div>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	}
+}
+
+// ---------------------------------------------------------------- checklists
+
+templ ChecklistsPage(rows []gen.ListTemplatesRow) {
+	@App("قوائم الفحص") {
+		@PageHeader("قوائم الفحص", "قائمة واحدة مفعّلة لكل مرحلة. الفحوصات تحتفظ بالإصدار الذي استخدمته.")
+		@adminNav("/admin/checklists")
+		<div class="card overflow-hidden">
+			<div class="overflow-x-auto">
+				<table class="table">
+					<thead><tr><th>القائمة</th><th>المرحلة</th><th>الإصدار</th><th>الحالة</th><th>فحوصات</th><th></th></tr></thead>
+					<tbody>
+						for _, t := range rows {
+							<tr>
+								<td><a class="underline decoration-gold-50 underline-offset-4" href={ u("/admin/checklists/%d", t.ID) }>{ t.Name }</a></td>
+								<td>
+									@StagePill(string(t.Stage))
+								</td>
+								<td class="num">{ itoa(int(t.Version)) }</td>
+								<td>
+									if t.Active {
+										<span class="pill bg-green-10 text-green">مفعّلة</span>
+									} else {
+										<span class="pill bg-ink-5 text-ink-60">غير مفعّلة</span>
+									}
+								</td>
+								<td class="num">{ fmt.Sprint(t.InspectionsCount) }</td>
+								<td>
+									<a href={ u("/admin/checklists/%d/new-version", t.ID) } class="btn btn-outline py-1 text-xs">إصدار جديد من هذه</a>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	}
+}
+
+templ ChecklistShow(t gen.ChecklistTemplate, crits []gen.TemplateCriterion) {
+	@App(t.Name) {
+		@PageHeader(t.Name, fmt.Sprintf("%s · الإصدار %d", domain.Stage(t.Stage).Label(), t.Version)) {
+			<a href={ u("/admin/checklists/%d/new-version", t.ID) } class="btn btn-primary">إصدار جديد من هذه</a>
+		}
+		@adminNav("/admin/checklists")
+		<div class="card overflow-hidden">
+			<table class="table">
+				<thead><tr><th>الرمز</th><th>البند</th><th>الوصف / طريقة التحقق</th><th>الوزن</th></tr></thead>
+				<tbody>
+					for _, c := range crits {
+						<tr>
+							<td class="num">{ c.Code }</td>
+							<td class="font-medium">
+								{ c.Label }
+								if c.IsCritical {
+									<span class="pill border border-fail text-fail text-[10px] ms-1">حرج</span>
+								}
+							</td>
+							<td class="text-ink-80">{ c.Description }</td>
+							<td class="num">{ itoa(int(c.Weight)) }</td>
+						</tr>
+					}
+					<tr><td></td><td class="font-semibold">المجموع</td><td></td><td class="num font-semibold">{ itoa(weightSum(crits)) }</td></tr>
+				</tbody>
+			</table>
+		</div>
+		<p class="mt-3 text-xs text-ink-60">النتيجة = مجموع (الوزن × معامل التقييم) ÷ مجموع أوزان البنود المنطبقة × 100. المطابق 100%، الجزئي 50%، غير المطابق 0%، و«لا ينطبق» يُستبعد. حد المطابقة 80%، وأي بند حرج غير مطابق يُسقط الفحص.</p>
+	}
+}
+
+func weightSum(cs []gen.TemplateCriterion) int {
+	n := 0
+	for _, c := range cs {
+		n += int(c.Weight)
+	}
+	return n
+}
+
+type CriterionInput struct {
+	Code, Label, Description, Weight string
+	Critical                         bool
+}
+
+type ChecklistFormData struct {
+	Stage    string
+	Name     string
+	Activate bool
+	Rows     []CriterionInput
+	Errors   []string
+}
+
+templ ChecklistForm(d ChecklistFormData) {
+	@App("إصدار جديد لقائمة الفحص") {
+		@PageHeader("إصدار جديد — "+domain.Stage(d.Stage).Label(), "الصفوف الفارغة تُتجاهل. الفحوصات السابقة لا تتأثر.")
+		@adminNav("/admin/checklists")
+		<form method="post" action="/admin/checklists" class="card p-5 space-y-4" novalidate>
+			if len(d.Errors) > 0 {
+				<div role="alert" class="rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2">
+					<ul class="list-disc ps-5">
+						for _, e := range d.Errors {
+							<li>{ e }</li>
+						}
+					</ul>
+				</div>
+			}
+			<input type="hidden" name="stage" value={ d.Stage }/>
+			<div class="max-w-md">
+				<label class="label" for="cl_name">اسم القائمة</label>
+				<input class="input" id="cl_name" name="name" value={ d.Name } required maxlength="120"/>
+			</div>
+			<div class="overflow-x-auto">
+				<table class="table">
+					<thead><tr><th class="w-20">الرمز</th><th>البند</th><th>الوصف / طريقة التحقق</th><th class="w-20">الوزن</th><th class="w-16">حرج</th></tr></thead>
+					<tbody>
+						for i, row := range d.Rows {
+							<tr>
+								<td><input class="input py-1.5" name={ fmt.Sprintf("code_%d", i) } value={ row.Code } maxlength="10" aria-label="الرمز"/></td>
+								<td><input class="input py-1.5 min-w-48" name={ fmt.Sprintf("label_%d", i) } value={ row.Label } maxlength="120" aria-label="البند"/></td>
+								<td><textarea class="input py-1.5 min-w-64" rows="2" name={ fmt.Sprintf("desc_%d", i) } aria-label="الوصف">{ row.Description }</textarea></td>
+								<td><input class="input py-1.5" type="number" min="1" max="100" name={ fmt.Sprintf("weight_%d", i) } value={ row.Weight } aria-label="الوزن"/></td>
+								<td class="text-center"><input type="checkbox" class="size-4" name={ fmt.Sprintf("critical_%d", i) } value="on" checked?={ row.Critical } aria-label="بند حرج"/></td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<input type="hidden" name="rows" value={ itoa(len(d.Rows)) }/>
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" name="activate" value="on" checked?={ d.Activate } class="size-4"/>
+				تفعيل هذا الإصدار فوراً للفحوصات الجديدة
+			</label>
+			<div class="flex gap-2">
+				<button type="submit" class="btn btn-primary">حفظ الإصدار</button>
+				<a href="/admin/checklists" class="btn btn-ghost">إلغاء</a>
+			</div>
+		</form>
+	}
+}

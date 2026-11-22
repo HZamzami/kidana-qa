@@ -1,0 +1,214 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/HZamzami/kidana-qa/internal/appctx"
+
+	"github.com/HZamzami/kidana-qa/internal/domain"
+)
+
+type ImportOutcome struct {
+	FileName  string
+	KindLabel string
+	Created   int
+	Skipped   int
+	Extra     []string // e.g. "أُنشئ 12 فحصاً و3 ملاحظات"
+	Warnings  []string
+	Error     string
+}
+
+templ DataPage(out *ImportOutcome) {
+	@App("البيانات والتقارير") {
+		@PageHeader("البيانات والتقارير", "تصدير التقارير واستيراد أوامر العمل")
+		<div class="grid gap-4 lg:grid-cols-3">
+			<section class="card p-5">
+				<h2 class="font-semibold">تصدير</h2>
+				<p class="text-sm text-ink-80 mt-1 mb-4">لتصدير نطاق محدد استخدم الفلاتر في لوحة المؤشرات ثم «تصدير Excel» أو «تقرير للطباعة».</p>
+				<div class="flex flex-col gap-2">
+					<a href="/reports/export.xlsx" class="btn btn-gold">تصدير كل البيانات (Excel)</a>
+					<a href="/reports/print" target="_blank" rel="noopener" class="btn btn-outline">تقرير للطباعة / PDF</a>
+				</div>
+			</section>
+			if appctx.CanEdit(ctx) {
+				<section class="card p-5 lg:col-span-2">
+					<h2 class="font-semibold">استيراد من Excel</h2>
+					<p class="text-sm text-ink-80 mt-1 mb-4">أدخل أوامر العمل دفعة واحدة من نظام إدارة الصيانة: نزّل القالب، عبّئه، ثم استورده. أوامر العمل الموجودة مسبقاً تُتجاهل.</p>
+				<form method="post" action="/data/import" enctype="multipart/form-data" class="flex flex-wrap items-end gap-3">
+						<div class="flex-1 min-w-56">
+							<label class="label" for="import_file">ملف ‎.xlsx</label>
+							<input class="input py-1.5" type="file" id="import_file" name="file" accept=".xlsx" required/>
+						</div>
+						<button type="submit" class="btn btn-primary">استيراد</button>
+						<a href="/data/work-orders-template.xlsx" class="btn btn-outline">تنزيل قالب أوامر العمل</a>
+					</form>
+				</section>
+			}
+		</div>
+		if out != nil {
+			<section class="card p-5 mt-4" role="status">
+				if out.Error != "" {
+					<h2 class="font-semibold text-fail">تعذّر الاستيراد</h2>
+					<p class="mt-1 text-sm">{ out.Error }</p>
+				} else {
+					<h2 class="font-semibold">{ "نتيجة الاستيراد — " + out.KindLabel }</h2>
+					<p class="text-sm text-ink-80 mt-1">{ out.FileName }</p>
+					<div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+						<div class="rounded-lg bg-green-10 p-3"><div class="num text-2xl font-semibold text-green">{ itoa(out.Created) }</div><div class="text-xs">أُضيف</div></div>
+						<div class="rounded-lg bg-ink-5 p-3"><div class="num text-2xl font-semibold">{ itoa(out.Skipped) }</div><div class="text-xs">تُجوهل</div></div>
+					</div>
+					for _, x := range out.Extra {
+						<p class="text-sm mt-2">{ x }</p>
+					}
+				}
+				if len(out.Warnings) > 0 {
+					<details class="mt-4" open?={ out.Created == 0 }>
+						<summary class="cursor-pointer text-sm font-medium">{ fmt.Sprintf("ملاحظات على الملف (%d)", len(out.Warnings)) }</summary>
+						<ul class="mt-2 max-h-72 overflow-auto text-xs text-ink-80 space-y-1 list-disc ps-5">
+							for _, w := range out.Warnings {
+								<li>{ w }</li>
+							}
+						</ul>
+					</details>
+				}
+			</section>
+		}
+	}
+}
+
+// ---------------------------------------------------------------- printable report
+
+type ReportRow struct {
+	Ref, Stage, Date, Hijri, Site, System, Contractor, Inspector string
+	Attempt                                                      int
+	Score                                                        float64
+	Passed                                                       bool
+}
+
+type ReportData struct {
+	Generated string
+	Scope     string
+	S         domain.Summary
+	Insights  []domain.Insight
+	Rows      []ReportRow
+}
+
+templ ReportPrint(d ReportData) {
+	@Base("تقرير جودة الصيانة") {
+		<main class="mx-auto max-w-5xl px-6 py-6 bg-white text-[12px]">
+			<div class="no-print mb-4 flex items-center gap-2 rounded-lg bg-gold-10 border border-gold-50 px-3 py-2 text-sm">
+				<span>للحفظ PDF: اطبع الصفحة (Ctrl+P) واختر «حفظ بتنسيق PDF».</span>
+				<a href="/" class="btn btn-ghost ms-auto">رجوع</a>
+			</div>
+			<header class="flex items-start gap-4 border-b-2 border-gold pb-3">
+				<div>
+					<h1 class="text-xl font-semibold">تقرير جودة الصيانة</h1>
+					<p class="text-ink-80">رقابة أثناء التنفيذ وفحص بعد التنفيذ — إدارة جودة العمليات · قطاع العمليات</p>
+				</div>
+				<img src={ asset("/static/img/kidana-logo.png") } alt="كدانة" class="h-12 w-auto ms-auto"/>
+			</header>
+			<p class="mt-2 text-ink-80">تاريخ التقرير: <b>{ d.Generated }</b> · النطاق: <b>{ d.Scope }</b> · عدد الفحوصات: <b class="num">{ itoa(d.S.Total) }</b></p>
+			<div class="mt-4 grid grid-cols-3 gap-2 print-avoid-break">
+				@reportKPI("متوسط QA", domain.Pct(d.S.AvgQA), domain.Count(d.S.QACount, domain.NounInspection))
+				@reportKPI("متوسط QC", domain.Pct(d.S.AvgQC), domain.Count(d.S.QCCount, domain.NounInspection))
+				@reportKPI("نسبة المطابقة", domain.Pct(d.S.PassRate), fmt.Sprintf("%d غير مطابق · %d حرج", d.S.FailCount, d.S.CriticalFails))
+				@reportKPI("أوامر العمل", itoa(d.S.WorkOrders), "ضمن النطاق")
+				@reportKPI("ملاحظات مفتوحة", itoa(d.S.Findings.Open), fmt.Sprintf("متأخرة %d", d.S.Findings.Overdue))
+				@reportKPI("الالتزام بالموعد", domain.Pct(d.S.OnTimeRate), "متوسط التأخير "+avgDelay(d.S.AvgDelay)+" يوم")
+			</div>
+			<h2 class="mt-5 mb-2 font-semibold text-sm">الأنماط والمخاطر والتوصيات</h2>
+			<ul class="space-y-1">
+				for _, in := range d.Insights {
+					<li class={ "border-s-4 ps-2 py-0.5 print-avoid-break", templ.KV("border-fail", in.Tone == "risk"), templ.KV("border-green", in.Tone == "good"), templ.KV("border-ink-30", in.Tone == "info") }>{ in.Text }</li>
+				}
+			</ul>
+			<div class="mt-5 grid grid-cols-2 gap-4">
+				@reportGroup("الأداء حسب الموقع", d.S.BySite)
+				@reportGroup("الأداء حسب المقاول", d.S.ByContractor)
+			</div>
+			<h2 class="mt-5 mb-2 font-semibold text-sm">نسبة المطابقة لكل معيار</h2>
+			<table class="w-full border-collapse">
+				<thead><tr class="bg-ink text-white"><th class="p-1.5 text-start">المعيار</th><th class="p-1.5">التقييمات</th><th class="p-1.5">المطابقة</th><th class="p-1.5">غير مطابق</th></tr></thead>
+				<tbody>
+					for _, c := range d.S.Criteria {
+						<tr class="border-b border-ink-10">
+							<td class="p-1.5">{ c.Code + " - " + c.Label }</td>
+							<td class="p-1.5 text-center num">{ itoa(c.N) }</td>
+							<td class={ "p-1.5 text-center num", templ.KV("bg-green-20", c.Compliance >= domain.PassThreshold), templ.KV("bg-fail-20", c.Compliance < domain.PassThreshold) }>{ scoreVal(c.Compliance) }</td>
+							<td class="p-1.5 text-center num">{ itoa(c.Fails) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+			<h2 class="mt-5 mb-2 font-semibold text-sm">سجل الفحوصات</h2>
+			<table class="w-full border-collapse">
+				<thead>
+					<tr class="bg-ink text-white">
+						<th class="p-1.5 text-start">أمر العمل</th>
+						<th class="p-1.5">المرحلة</th>
+						<th class="p-1.5">التاريخ</th>
+						<th class="p-1.5">الموقع</th>
+						<th class="p-1.5">النظام</th>
+						<th class="p-1.5">المقاول</th>
+						<th class="p-1.5">المدقق</th>
+						<th class="p-1.5">النتيجة</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, r := range d.Rows {
+						<tr class="border-b border-ink-10 print-avoid-break">
+							<td class="p-1.5 num">{ r.Ref }</td>
+							<td class="p-1.5 text-center">
+								{ domain.Stage(r.Stage).Short() }
+								if r.Attempt > 1 {
+									{ fmt.Sprintf(" (%d)", r.Attempt) }
+								}
+							</td>
+							<td class="p-1.5 text-center num">
+								{ r.Date }
+								<span class="block text-[10px] text-ink-60">{ r.Hijri }</span>
+							</td>
+							<td class="p-1.5">{ r.Site }</td>
+							<td class="p-1.5">{ r.System }</td>
+							<td class="p-1.5">{ orDash(r.Contractor) }</td>
+							<td class="p-1.5">{ r.Inspector }</td>
+							<td class={ "p-1.5 text-center num", templ.KV("bg-green-20", r.Passed), templ.KV("bg-fail-20", !r.Passed) }>{ scoreVal(r.Score) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+			<div class="mt-10 grid grid-cols-3 gap-6 text-center print-avoid-break">
+				<div class="border-t border-ink-30 pt-2">أعدّه</div>
+				<div class="border-t border-ink-30 pt-2">راجعه</div>
+				<div class="border-t border-ink-30 pt-2">اعتمده — مدير إدارة جودة العمليات</div>
+			</div>
+		</main>
+	}
+}
+
+templ reportKPI(label, value, sub string) {
+	<div class="border border-ink-10 rounded-lg p-2">
+		<div class="text-ink-80 text-[11px]">{ label }</div>
+		<div class="num text-lg font-semibold text-start">{ value }</div>
+		<div class="text-[10px] text-ink-60">{ sub }</div>
+	</div>
+}
+
+templ reportGroup(title string, gs []domain.Group) {
+	<div class="print-avoid-break">
+		<h2 class="mb-2 font-semibold text-sm">{ title }</h2>
+		<table class="w-full border-collapse">
+			<thead><tr class="bg-ink text-white"><th class="p-1.5 text-start">البيان</th><th class="p-1.5">العدد</th><th class="p-1.5">المتوسط</th><th class="p-1.5">المطابقة</th></tr></thead>
+			<tbody>
+				for _, g := range gs {
+					<tr class="border-b border-ink-10">
+						<td class="p-1.5">{ g.Name }</td>
+						<td class="p-1.5 text-center num">{ itoa(g.Count) }</td>
+						<td class={ "p-1.5 text-center num", templ.KV("bg-green-20", g.Avg >= domain.PassThreshold), templ.KV("bg-fail-20", g.Avg < domain.PassThreshold) }>{ scoreVal(g.Avg) }</td>
+						<td class="p-1.5 text-center num">{ domain.Fmt1(g.PassRate) + "%" }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
