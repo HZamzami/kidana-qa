@@ -87,12 +87,12 @@ templ LookupPage(d LookupData) {
 							<tr>
 								<td class="p-0">
 									<form method="post" action={ u("/admin/lookups/%s/%d", d.Kind, row.ID) } class="flex flex-wrap items-center gap-2 px-3 py-2">
-										<input class="input py-1.5 flex-1 min-w-40" name="name" value={ row.Name } aria-label="الاسم" required maxlength="120"/>
+										<input class="input h-9 flex-1 min-w-40" name="name" value={ row.Name } aria-label="الاسم" required maxlength="120"/>
 										if d.isContractors() {
-											<input class="input py-1.5 w-40" name="contact_name" value={ row.ContactName } aria-label="جهة الاتصال"/>
-											<input class="input py-1.5 w-36" name="phone" value={ row.Phone } aria-label="الهاتف" dir="ltr"/>
+											<input class="input h-9 w-40" name="contact_name" value={ row.ContactName } aria-label="جهة الاتصال"/>
+											<input class="input h-9 w-36" name="phone" value={ row.Phone } aria-label="الهاتف" dir="ltr"/>
 										} else {
-											<input class="input py-1.5 w-20" type="number" name="sort" value={ itoa(int(row.Sort)) } aria-label="الترتيب"/>
+											<input class="input h-9 w-20" type="number" name="sort" value={ itoa(int(row.Sort)) } aria-label="الترتيب"/>
 										}
 										<label class="flex items-center gap-1.5 text-sm px-2">
 											<input type="checkbox" name="active" value="on" checked?={ row.Active } class="size-4"/>
@@ -152,9 +152,9 @@ templ UsersPage(d UsersData) {
 								<td class="p-0">
 									<div class="flex flex-wrap items-center gap-2 px-3 py-2">
 										<form method="post" action={ u("/admin/users/%d", usr.ID) } class="flex flex-wrap items-center gap-2 flex-1">
-											<input class="input py-1.5 w-44" name="name" value={ usr.Name } aria-label="الاسم" required maxlength="80"/>
-											<input class="input py-1.5 w-56" name="email" value={ usr.Email } aria-label="البريد" type="email" dir="ltr" required/>
-											<select class="input py-1.5 w-36" name="role" aria-label="الصلاحية">
+											<input class="input h-9 w-44" name="name" value={ usr.Name } aria-label="الاسم" required maxlength="80"/>
+											<input class="input h-9 w-56" name="email" value={ usr.Email } aria-label="البريد" type="email" dir="ltr" required/>
+											<select class="input h-9 w-36" name="role" aria-label="الصلاحية">
 												for _, o := range roleOptions() {
 													<option value={ o.Value } selected?={ o.Value == string(usr.Role) }>{ o.Label }</option>
 												}
@@ -294,10 +294,10 @@ templ ChecklistForm(d ChecklistFormData) {
 					<tbody>
 						for i, row := range d.Rows {
 							<tr>
-								<td><input class="input py-1.5" name={ fmt.Sprintf("code_%d", i) } value={ row.Code } maxlength="10" aria-label="الرمز"/></td>
-								<td><input class="input py-1.5 min-w-48" name={ fmt.Sprintf("label_%d", i) } value={ row.Label } maxlength="120" aria-label="البند"/></td>
+								<td><input class="input h-9" name={ fmt.Sprintf("code_%d", i) } value={ row.Code } maxlength="10" aria-label="الرمز"/></td>
+								<td><input class="input h-9 min-w-48" name={ fmt.Sprintf("label_%d", i) } value={ row.Label } maxlength="120" aria-label="البند"/></td>
 								<td><textarea class="input py-1.5 min-w-64" rows="2" name={ fmt.Sprintf("desc_%d", i) } aria-label="الوصف">{ row.Description }</textarea></td>
-								<td><input class="input py-1.5" type="number" min="1" max="100" name={ fmt.Sprintf("weight_%d", i) } value={ row.Weight } aria-label="الوزن"/></td>
+								<td><input class="input h-9" type="number" min="1" max="100" name={ fmt.Sprintf("weight_%d", i) } value={ row.Weight } aria-label="الوزن"/></td>
 								<td class="text-center"><input type="checkbox" class="size-4" name={ fmt.Sprintf("critical_%d", i) } value="on" checked?={ row.Critical } aria-label="بند حرج"/></td>
 							</tr>
 						}

@@ -127,6 +127,12 @@
     @apply block w-full rounded-lg border border-ink-30 bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-60
       focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold-20;
   }
+  /* One height for every single-line control so inputs, selects and date
+     fields line up in any row. Use h-9 in markup for compact bars. */
+  input.input:not([type="file"]),
+  select.input {
+    @apply h-10 py-0;
+  }
   .input[aria-invalid="true"] {
     @apply border-fail ring-2 ring-fail-10;
   }

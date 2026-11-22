@@ -209,9 +209,9 @@ templ SelectField(name, label, value string, opts []Option, placeholder string, 
 
 // FilterSelect is a compact select for filter bars.
 templ FilterSelect(name, label, value string, opts []Option) {
-	<div class="min-w-32 flex-1 sm:flex-none">
+	<div class="min-w-0">
 		<label class="label" for={ "flt_" + name }>{ label }</label>
-		<select class="input py-1.5" id={ "flt_" + name } name={ name }>
+		<select class="input h-9" id={ "flt_" + name } name={ name }>
 			<option value="">الكل</option>
 			for _, o := range opts {
 				<option value={ o.Value } selected?={ o.Value == value }>{ o.Label }</option>

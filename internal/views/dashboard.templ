@@ -30,11 +30,12 @@ var ResultOptions = []Option{{"pass", "مطابق"}, {"fail", "غير مطابق
 templ Dashboard(d DashboardData) {
 	@App("لوحة المؤشرات") {
 		@PageHeader("لوحة المؤشرات", "أداء الرقابة أثناء التنفيذ والفحص بعد التنفيذ") {
+			<a class="btn btn-ghost" href="/">إعادة ضبط الفلاتر</a>
 			<a class="btn btn-outline" href={ templ.URL("/reports/print?" + d.Query) } target="_blank" rel="noopener">تقرير للطباعة</a>
 			<a class="btn btn-gold" href={ templ.URL("/reports/export.xlsx?" + d.Query) }>تصدير Excel</a>
 		}
 		<form
-			class="card p-3 mb-5 flex flex-wrap items-end gap-3 no-print"
+			class="card p-3 mb-5 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 items-end gap-3 no-print"
 			method="get"
 			action="/"
 			hx-get="/"
@@ -50,15 +51,14 @@ templ Dashboard(d DashboardData) {
 			@FilterSelect("system", "النظام", d.F.System, d.Systems)
 			@FilterSelect("contractor", "المقاول", d.F.Contractor, d.Contractors)
 			@FilterSelect("result", "النتيجة", d.F.Result, ResultOptions)
-			<div>
+			<div class="min-w-0">
 				<label class="label" for="flt_from">من تاريخ</label>
-				<input class="input py-1.5" type="date" id="flt_from" name="from" value={ d.F.From }/>
+				<input class="input h-9 w-full" type="date" id="flt_from" name="from" value={ d.F.From }/>
 			</div>
-			<div>
+			<div class="min-w-0">
 				<label class="label" for="flt_to">إلى تاريخ</label>
-				<input class="input py-1.5" type="date" id="flt_to" name="to" value={ d.F.To }/>
+				<input class="input h-9 w-full" type="date" id="flt_to" name="to" value={ d.F.To }/>
 			</div>
-			<a href="/" class="btn btn-ghost">إعادة ضبط</a>
 			<noscript><button class="btn btn-primary">تطبيق</button></noscript>
 		</form>
 		<div id="dash">

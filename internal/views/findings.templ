@@ -25,9 +25,11 @@ var findingScopeOptions = []Option{
 
 templ FindingsPage(d FindingsListData) {
 	@App("الملاحظات") {
-		@PageHeader("الملاحظات والإجراءات التصحيحية", "متابعة عدم المطابقة حتى الإغلاق. لا يُعتمد أمر العمل وفيه ملاحظة مفتوحة.")
+		@PageHeader("الملاحظات والإجراءات التصحيحية", "متابعة عدم المطابقة حتى الإغلاق. لا يُعتمد أمر العمل وفيه ملاحظة مفتوحة.") {
+			<a href="/findings" class="btn btn-ghost">إعادة ضبط الفلاتر</a>
+		}
 		<form
-			class="card p-3 mb-4 flex flex-wrap items-end gap-3"
+			class="card p-3 mb-4 grid grid-cols-2 md:grid-cols-5 items-end gap-3"
 			method="get"
 			action="/findings"
 			hx-get="/findings"
@@ -37,13 +39,13 @@ templ FindingsPage(d FindingsListData) {
 			hx-swap="outerHTML"
 			hx-push-url="true"
 		>
-			<div class="flex-1 min-w-48">
+			<div class="col-span-2 min-w-0">
 				<label class="label" for="flt_fq">بحث</label>
-				<input class="input py-1.5" type="search" id="flt_fq" name="q" value={ d.Query.Get("q") } placeholder="رقم أمر العمل، الوصف، المسؤول…"/>
+				<input class="input h-9" type="search" id="flt_fq" name="q" value={ d.Query.Get("q") } placeholder="رقم أمر العمل، الوصف، المسؤول…"/>
 			</div>
-			<div class="min-w-40">
+			<div class="min-w-0">
 				<label class="label" for="flt_scope">العرض</label>
-				<select class="input py-1.5" id="flt_scope" name="scope">
+				<select class="input h-9" id="flt_scope" name="scope">
 					for _, o := range findingScopeOptions {
 						<option value={ o.Value } selected?={ o.Value == tern(d.Query.Get("scope") == "", "open", d.Query.Get("scope")) }>{ o.Label }</option>
 					}

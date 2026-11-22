@@ -35,12 +35,13 @@ func (d WOListData) Pages() int {
 templ WorkOrdersPage(d WOListData) {
 	@App("أوامر العمل") {
 		@PageHeader("أوامر العمل", "كل أمر عمل يجمع الرقابة أثناء التنفيذ (QA) والفحص بعد التنفيذ (QC) والملاحظات") {
+			<a href="/work-orders" class="btn btn-ghost">إعادة ضبط الفلاتر</a>
 			if appctx.CanEdit(ctx) {
 				<a href="/work-orders/new" class="btn btn-primary">＋ أمر عمل جديد</a>
 			}
 		}
 		<form
-			class="card p-3 mb-4 flex flex-wrap items-end gap-3"
+			class="card p-3 mb-4 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 items-end gap-3"
 			method="get"
 			action="/work-orders"
 			hx-get="/work-orders"
@@ -50,16 +51,15 @@ templ WorkOrdersPage(d WOListData) {
 			hx-swap="outerHTML"
 			hx-push-url="true"
 		>
-			<div class="flex-1 min-w-48">
+			<div class="col-span-2 min-w-0">
 				<label class="label" for="flt_q">بحث</label>
-				<input class="input py-1.5" type="search" id="flt_q" name="q" value={ d.val("q") } placeholder="رقم أمر العمل، الأصل، الموقع التفصيلي، الفني…"/>
+				<input class="input h-9" type="search" id="flt_q" name="q" value={ d.val("q") } placeholder="رقم أمر العمل، الأصل، الموقع التفصيلي، الفني…"/>
 			</div>
 			@FilterSelect("type", "النوع", d.val("type"), TypeOptions)
 			@FilterSelect("status", "الحالة", d.val("status"), d.Statuses)
 			@FilterSelect("site", "الموقع", d.val("site"), d.Sites)
 			@FilterSelect("system", "النظام", d.val("system"), d.Systems)
 			@FilterSelect("contractor", "المقاول", d.val("contractor"), d.Contractors)
-			<a href="/work-orders" class="btn btn-ghost">إعادة ضبط</a>
 			<noscript><button class="btn btn-primary">تطبيق</button></noscript>
 		</form>
 		@WorkOrdersResults(d)
