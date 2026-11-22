@@ -56,6 +56,8 @@ Grades (`domain.Grades`): ممتاز ≥ 90, جيد جداً ≥ 80, جيد ≥ 
 
 **Dashboard insights** (`domain.Insights`): observations and recommendations, including QA-vs-QC gap insights and critical-safety alerts. Risk thresholds: weakest criterion < 85%, sites or contractors below 80%, overdue findings, repeat failures on the same asset (≥ 2, which suggests a root-cause analysis), on-time rate < 90%, and a QA−QC gap ≥ 10 points.
 
+**Report scope**: the dashboard, print report and Excel export share one set of filters (stage, type, site, system, contractor, result, date range). Inspection-level filters apply to scores and charts. Finding counts and the open-findings table follow the work-order filters (site, system, contractor, type) and always show findings that are open *now*.
+
 ## Roles
 
 | Role (`user_role`) | Label | Can |

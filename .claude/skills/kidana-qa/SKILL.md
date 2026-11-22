@@ -12,6 +12,19 @@ A quality system for Kidana's maintenance contractors. Every **work order** (أ�
 
 Each failed check becomes a **finding** (ملاحظة) with a corrective action, owner and due date. A work order is **accepted** (معتمد) automatically when its latest QC passes and no findings are open. Read `references/domain.md` before changing any rule, criterion or status.
 
+## What the app does today (feature map)
+
+| Area | Route(s) | Highlights |
+|---|---|---|
+| Dashboard | `/` | KPIs (QA and QC averages, pass rate, open/overdue findings, on-time rate), bento charts, insights. Filters: stage, type, site, system, contractor, **result (pass/fail)**, date range |
+| Work orders | `/work-orders`, `/work-orders/{id}` | HTMX search and filters; detail page with facts, a QA → QC timeline and findings. **Save and add another**, **copy as new** (`/work-orders/new?from=ID`), **admin delete** (only before any inspection is submitted) |
+| Inspections | `/inspections/{id}` | Phone-first stepper: one criterion per card, autosave, live score, photos per item, inline findings, server-rendered review and submit; read-only summary after submit; admins can re-open |
+| Findings | `/findings` | Open/overdue/closed views; edit, close with a note, re-open |
+| Data & reports | `/data`, `/reports/print`, `/reports/export.xlsx` | **Print report** (A4: KPIs, the four charts, insights, tables, open findings, inspection log, signatures); **Excel export** (summary with logo, inspections, findings, criteria sheet); work order **import template** with real date cells. All follow the dashboard filters |
+| Settings (admin) | `/admin/...` | Versioned checklists, sites, systems, contractors, users (temporary passwords) |
+
+Everything shows dates as dd/mm/yyyy with the Umm al-Qura Hijri date alongside.
+
 ## The look in one paragraph
 
 Clean, quiet, data-first ("Style 1": shadcn/Linear-like minimalism) with Kidana's palette. That means white cards with hairline `ink-10` borders on an `ink-5` page, charcoal text, **gold for the primary call to action and accents**, olive green for pass, and muted brick (`fail`) for fail. The app is RTL Arabic set in Avenir Next Arabic, with tabular LTR-isolated numbers. Phone screens use the **field pattern**: one criterion per card, large 48px+ tap targets, a sticky live score. The dashboard uses a **bento** grid. Brand rule: **only lighter tints of the brand colours, never darker shades.** Full system: `references/design-system.md`.

@@ -90,6 +90,25 @@ To add a nav tab, edit the `nav` slice in `layout.templ`. Set `admin: true` to h
 | `@groupBars([]domain.Group)` | A list of barRows for a site/contractor/system grouping. |
 | `@gradeDonut([]domain.GradeCount)` | SVG donut with legend. |
 
+Option lists for filters and forms: `views.StageOptions` (qa/qc), `views.TypeOptions` (PM/WO), `views.ResultOptions` (pass/fail).
+
+## Print report pieces (`data.templ`)
+
+| Component | Use |
+|---|---|
+| `@ReportPrint(ReportData)` | The A4 page: KPIs, charts, insights, groups, criteria, open findings, inspection log, signatures. |
+| `@reportKPI(label, value, sub)` | Compact bordered KPI tile. |
+| `@reportChart(title) { … }` | Bordered tile wrapping any dashboard chart component (`groupBars`, `barRow`, `gradeDonut`). Use it so print and screen charts stay identical. |
+| `@reportGroup(title, []domain.Group)` | Site/contractor table with pass/fail-tinted averages. |
+
+## Work order actions (`workorders.templ`)
+
+| Action | How |
+|---|---|
+| Save and add another | Second submit button `name="next" value="new"` (new form only). The handler redirects to `/work-orders/new?keep=ctx&from=ID`, which keeps type, site, system and contractor. |
+| Copy as new | Link to `/work-orders/new?from=ID`; it prefills everything except the number and dates. |
+| Delete (admin) | Shown only when `appctx.IsAdmin(ctx) && d.deletable()` (no submitted inspection), behind `confirmAction`. The server re-checks and refuses otherwise. |
+
 ## Inspection flow (`inspection.templ`)
 
 | Component | Use |

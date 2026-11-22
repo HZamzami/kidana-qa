@@ -106,6 +106,27 @@ Alpine.data("thingPicker", () => ({
 - **HTTP**: `internal/web/web_test.go`. `setup(t)` resets the test schema, migrates, and creates `admin@`, `inspector@` and `viewer@test.local` (password `test-password-123`). Use `e.login(email)`, then `e.post(c, path, url.Values{…})` / `e.get(c, path)`, and assert status codes and DB state through `e.q`.
 - Run them with `just test` (all) or `just test -run TestInspectionFlow ./internal/web/`.
 
+## 11. Add a filter to the dashboard, print report and export
+
+These three share one scope (`reportScope` in `web/dashboard_handlers.go`), so one change covers all of them. The pass/fail `result` filter is the worked example.
+1. Query: add `AND (sqlc.narg(x)::type IS NULL OR … = sqlc.narg(x))` to `ListSubmittedInspections` in `queries/reports.sql` (and to `FindingStats` / `ListOpenFindingsScoped` if it is a work-order attribute). Run `just gen`.
+2. `views.DashFilters`: add the field; add an option list next to `ResultOptions` if it is a select.
+3. `parseScope`: read the query param, validate it (reset unknown values to ""), and set the sqlc param.
+4. `reportScope.query()`: include the key so print and export links carry it.
+5. `describeScope` (`web/data_handlers.go`): add a human-readable part ("النتيجة: مطابق") for the report and export header.
+6. Dashboard form: add `@FilterSelect(...)`.
+7. Test: add `/?x=…` and `/reports/print?x=…` to the "Pages render" loop in `web_test.go`.
+
+## 12. Add a guarded destructive action (delete, reset, …)
+
+The admin work order delete is the pattern:
+1. **Route** with the narrowest role: `mux.HandleFunc("POST /things/{id}/delete", admin(s.thingDelete))`. Use POST only, never GET.
+2. **Server guard**: check the business rule in the handler, even if the UI hides the button. Refuse with `s.badRequest` and an Arabic message that names the alternative ("غيّر حالته إلى «ملغى»").
+3. **Transaction**: `db.InTx`, rely on `ON DELETE CASCADE` for children, and call `s.audit(..., "deleted", details)`. Call `refreshWorkOrderStatus` if acceptance can change.
+4. **Files**: list attachments *before* deleting rows, then remove them from `s.store` after the commit.
+5. **UI**: show the control only when allowed, behind `x-data="confirmAction"` with a sentence saying exactly what will be lost, plus `btn-danger` and "تراجع". Never use `window.confirm`.
+6. **Tests**: the wrong role gets 403, a blocked case gets 400, and the allowed case removes the row.
+
 ## 10. Visual check (no browser on the host)
 
 `just ui-check` (stack must be running) runs `scripts/ui_check.py` in a Playwright container. It walks the whole system like a user: login and its failure, work order create/validate/duplicate/edit, the QA phone flow with photo upload and a bad file, a critical fail with its finding, a refused submit, QC attempts 1 and 2, the findings lifecycle, list filters, the dashboard, the print report, the Excel template, the work order import (plus an unrecognised file), export, admin lookups/users/checklist validation, password errors, 404, and the viewer role.

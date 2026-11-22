@@ -87,7 +87,7 @@ Use `domain.Count(n, domain.NounX)`, never `fmt.Sprintf("%d فحص")`. Nouns ava
 
 **Page header** (`views.PageHeader(title, subtitle)`): the title and subtitle on the start side, with actions as children on the end side (`ms-auto`).
 
-**Filter bar**: `card p-3 flex flex-wrap items-end gap-3` with `FilterSelect`s and a search box. htmx re-renders only the results:
+**Filter bar**: `card p-3 flex flex-wrap items-end gap-3` with `FilterSelect`s and a search box. Selects use "الكل" as the empty option, and the dashboard bar is stage, type, site, system, contractor, result and dates. htmx re-renders only the results:
 `hx-get=<same url> hx-trigger="change, input from:#search delay:350ms" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true"`. Always include a `<noscript>` apply button and a "إعادة ضبط" link.
 
 **List**: a `card overflow-hidden` wrapping `overflow-x-auto` wrapping `table.table`. The first column links (underline `decoration-gold-50`, hover `decoration-gold`), status pills sit in a trailing column, and a footer row shows the count and pagination. If there are no rows, show `EmptyState(title, hint)`.
