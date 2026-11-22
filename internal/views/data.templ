@@ -121,25 +121,22 @@ templ ReportPrint(d ReportData) {
 				@reportKPI("الالتزام بالموعد", domain.Pct(d.S.OnTimeRate), "متوسط التأخير "+avgDelay(d.S.AvgDelay)+" يوم")
 			</div>
 			<div class="mt-5 grid grid-cols-2 gap-3">
-				@reportChart("متوسط النتيجة حسب الموقع") {
-					@groupBars(d.S.BySite)
+				@reportChart("نسبة المطابقة لكل معيار — QA") {
+					@criteriaRows(d.S.CriteriaFor(domain.StageQA))
 				}
-				@reportChart("نسبة المطابقة لكل معيار") {
-					if len(d.S.Criteria) == 0 {
-						@EmptyState("لا توجد بيانات", "")
-					} else {
-						<div class="space-y-2">
-							for _, c := range d.S.Criteria {
-								@barRow(c.Code+" · "+c.Label, c.Compliance, "", c.Critical)
-							}
-						</div>
-					}
+				@reportChart("نسبة المطابقة لكل معيار — QC") {
+					@criteriaRows(d.S.CriteriaFor(domain.StageQC))
+				}
+			</div>
+			<div class="mt-3 grid grid-cols-3 gap-3">
+				@reportChart("متوسط النتيجة حسب الموقع") {
+					@groupBars(d.S.BySite, 6)
 				}
 				@reportChart("توزيع التقديرات") {
 					@gradeDonut(d.S.Grades)
 				}
-				@reportChart("متوسط النتيجة حسب المقاول") {
-					@groupBars(topN(d.S.ByContractor, 8))
+				@reportChart("حسب المقاول") {
+					@groupBars(d.S.ByContractor, 6)
 				}
 			</div>
 			<h2 class="mt-5 mb-2 font-semibold text-sm">الأنماط والمخاطر والتوصيات</h2>
@@ -292,4 +289,16 @@ templ reportChart(title string) {
 		<div class="font-semibold mb-2">{ title }</div>
 		{ children... }
 	</div>
+}
+
+templ criteriaRows(items []domain.CriterionStat) {
+	if len(items) == 0 {
+		<p class="text-ink-60">لا توجد بيانات</p>
+	} else {
+		<div class="space-y-2">
+			for _, c := range items {
+				@compactBarRow(c)
+			}
+		</div>
+	}
 }

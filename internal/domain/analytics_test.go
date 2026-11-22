@@ -13,9 +13,10 @@ func TestSummarize(t *testing.T) {
 		{ID: 3, WorkOrderID: 11, Stage: StageQC, Score: 70, Passed: false, CriticalFailed: true, Site: "عرفات", Contractor: "ب", Asset: "AC-1", DelayDays: &early},
 	}
 	items := []ItemRow{
-		{InspectionID: 2, Code: "C1", Label: "جودة", Rating: RatingNonCompliant},
-		{InspectionID: 3, Code: "C1", Label: "جودة", Rating: RatingPartial},
-		{InspectionID: 3, Code: "C2", Label: "قائمة", Rating: RatingNA},
+		{InspectionID: 2, Stage: StageQC, Code: "C1", Label: "جودة", Rating: RatingNonCompliant},
+		{InspectionID: 3, Stage: StageQC, Code: "C1", Label: "جودة", Rating: RatingPartial},
+		{InspectionID: 3, Stage: StageQC, Code: "C2", Label: "قائمة", Rating: RatingNA},
+		{InspectionID: 1, Stage: StageQA, Code: "Q1", Label: "سلامة", Rating: RatingCompliant},
 	}
 	S := Summarize(rows, items, FindingStats{Open: 2, Overdue: 1})
 
@@ -25,8 +26,12 @@ func TestSummarize(t *testing.T) {
 	if S.WorkOrders != 2 || S.LateCount != 1 || S.OnTimeRate == nil || *S.OnTimeRate != 50 {
 		t.Fatalf("timing wrong: wos=%d late=%d ontime=%v", S.WorkOrders, S.LateCount, S.OnTimeRate)
 	}
-	if len(S.Criteria) != 1 || S.Criteria[0].N != 2 || S.Criteria[0].Compliance != 25 || S.Criteria[0].Fails != 1 {
-		t.Fatalf("criteria wrong (NA must be excluded): %+v", S.Criteria)
+	qc := S.CriteriaFor(StageQC)
+	if len(qc) != 1 || qc[0].N != 2 || qc[0].Compliance != 25 || qc[0].Fails != 1 {
+		t.Fatalf("QC criteria wrong (NA must be excluded): %+v", qc)
+	}
+	if len(S.Criteria) != 2 || S.Criteria[0].Stage != StageQA {
+		t.Fatalf("criteria must be split by stage, QA first: %+v", S.Criteria)
 	}
 	if len(S.RepeatFailAssets) != 1 || S.RepeatFailAssets[0].Fails != 2 {
 		t.Fatalf("repeat fails wrong: %+v", S.RepeatFailAssets)

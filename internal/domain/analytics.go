@@ -25,6 +25,7 @@ type InspectionRow struct {
 // ItemRow is one rated criterion of a submitted inspection.
 type ItemRow struct {
 	InspectionID int64
+	Stage        Stage
 	Code         string
 	Label        string
 	Rating       Rating
@@ -47,6 +48,7 @@ type Group struct {
 
 // CriterionStat is the compliance of one criterion across inspections.
 type CriterionStat struct {
+	Stage      Stage
 	Code       string
 	Label      string
 	Critical   bool
@@ -220,10 +222,10 @@ func criteriaStats(items []ItemRow) []CriterionStat {
 		if !ok {
 			continue
 		}
-		k := it.Code + "|" + it.Label
+		k := string(it.Stage) + "|" + it.Code + "|" + it.Label
 		a, exists := idx[k]
 		if !exists {
-			a = &acc{CriterionStat: CriterionStat{Code: it.Code, Label: it.Label, Critical: it.Critical}}
+			a = &acc{CriterionStat: CriterionStat{Stage: it.Stage, Code: it.Code, Label: it.Label, Critical: it.Critical}}
 			idx[k] = a
 			order = append(order, k)
 		}
@@ -239,7 +241,24 @@ func criteriaStats(items []ItemRow) []CriterionStat {
 		a.Compliance = a.sum / float64(a.N)
 		out = append(out, a.CriterionStat)
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Code < out[j].Code })
+	// QA before QC, then by code.
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Stage != out[j].Stage {
+			return out[i].Stage == StageQA
+		}
+		return out[i].Code < out[j].Code
+	})
+	return out
+}
+
+// CriteriaFor returns the criterion stats of one stage.
+func (S Summary) CriteriaFor(stage Stage) []CriterionStat {
+	var out []CriterionStat
+	for _, c := range S.Criteria {
+		if c.Stage == stage {
+			out = append(out, c)
+		}
+	}
 	return out
 }
 

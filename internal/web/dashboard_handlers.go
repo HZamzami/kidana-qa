@@ -102,7 +102,7 @@ func (s *Server) loadReport(ctx context.Context, sc reportScope) (reportData, er
 			continue
 		}
 		itRows = append(itRows, domain.ItemRow{
-			InspectionID: it.InspectionID, Code: it.Code, Label: it.Label,
+			InspectionID: it.InspectionID, Stage: domain.Stage(it.Stage), Code: it.Code, Label: it.Label,
 			Rating: domain.Rating(*it.Rating), Critical: it.IsCritical,
 		})
 	}
