@@ -87,8 +87,10 @@ Use `domain.Count(n, domain.NounX)`, never `fmt.Sprintf("%d فحص")`. Nouns ava
 
 **Page header** (`views.PageHeader(title, subtitle)`): the title and subtitle on the start side, with actions as children on the end side (`ms-auto`).
 
-**Filter bar**: `card p-3 flex flex-wrap items-end gap-3` with `FilterSelect`s and a search box. Selects use "الكل" as the empty option, and the dashboard bar is stage, type, site, system, contractor, result and dates. htmx re-renders only the results:
-`hx-get=<same url> hx-trigger="change, input from:#search delay:350ms" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true"`. Always include a `<noscript>` apply button and a "إعادة ضبط" link.
+**Filter bar**: an even **grid**, never a wrapping flex row (wrapping splits groups like a date range and leaves stragglers). Pattern: `card p-3 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-<n> items-end gap-3`, where `n` is the number of cells on wide screens; a search box takes `col-span-2`. Keep related fields adjacent (from/to dates last, together). Cells are `min-w-0` divs (`FilterSelect` already is) and compact controls use `h-9`. Selects use "الكل" as the empty option. **"إعادة ضبط الفلاتر" lives in the page header actions**, not in the bar. A `<noscript>` apply button stays for no-JS. htmx re-renders only the results:
+`hx-get=<same url> hx-trigger="change, input from:#search delay:350ms" hx-target="#results" hx-select="#results" hx-swap="outerHTML" hx-push-url="true"`.
+
+**Control height**: every single-line `.input` (text, date, number, select) is `h-10` app-wide so mixed controls line up in any row; use `h-9` for compact bars and inline table edits. Textareas and file inputs are exempt. Never align controls with ad-hoc padding.
 
 **List**: a `card overflow-hidden` wrapping `overflow-x-auto` wrapping `table.table`. The first column links (underline `decoration-gold-50`, hover `decoration-gold`), status pills sit in a trailing column, and a footer row shows the count and pagination. If there are no rows, show `EmptyState(title, hint)`.
 
