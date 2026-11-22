@@ -278,6 +278,7 @@ WHERE i.status = 'submitted'
   AND ($5::wo_type IS NULL OR w.type = $5)
   AND ($6::date IS NULL OR i.inspected_on >= $6)
   AND ($7::date IS NULL OR i.inspected_on <= $7)
+  AND ($8::boolean IS NULL OR i.passed = $8)
 ORDER BY i.inspected_on DESC, i.id DESC
 `
 
@@ -289,6 +290,7 @@ type ListSubmittedInspectionsParams struct {
 	Type         *WoType
 	DateFrom     *time.Time
 	DateTo       *time.Time
+	Passed       *bool
 }
 
 type ListSubmittedInspectionsRow struct {
@@ -328,6 +330,7 @@ func (q *Queries) ListSubmittedInspections(ctx context.Context, arg ListSubmitte
 		arg.Type,
 		arg.DateFrom,
 		arg.DateTo,
+		arg.Passed,
 	)
 	if err != nil {
 		return nil, err

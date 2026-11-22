@@ -263,7 +263,7 @@ func TestInspectionFlow(t *testing.T) {
 	}
 
 	// Pages render with data.
-	for _, p := range []string{"/", "/work-orders", "/work-orders/" + idStr(wo.ID), "/inspections/" + idStr(qa), "/findings?scope=all", "/reports/print", "/data"} {
+	for _, p := range []string{"/", "/work-orders", "/work-orders/" + idStr(wo.ID), "/inspections/" + idStr(qa), "/findings?scope=all", "/reports/print", "/data", "/?result=fail", "/reports/print?result=pass&stage=qc"} {
 		if res, body := e.get(c, p); res.StatusCode != http.StatusOK || !strings.Contains(body, "</html>") {
 			t.Fatalf("GET %s: %d", p, res.StatusCode)
 		}

@@ -8,7 +8,7 @@ import (
 )
 
 type DashFilters struct {
-	Stage, Type, Site, System, Contractor, From, To string
+	Stage, Type, Site, System, Contractor, From, To, Result string
 }
 
 type DashboardData struct {
@@ -23,6 +23,7 @@ type DashboardData struct {
 
 var StageOptions = []Option{{"qa", "QA · أثناء التنفيذ"}, {"qc", "QC · بعد التنفيذ"}}
 var TypeOptions = []Option{{"PM", "صيانة وقائية"}, {"WO", "أمر عمل"}}
+var ResultOptions = []Option{{"pass", "مطابق"}, {"fail", "غير مطابق"}}
 
 templ Dashboard(d DashboardData) {
 	@App("لوحة المؤشرات") {
@@ -46,6 +47,7 @@ templ Dashboard(d DashboardData) {
 			@FilterSelect("site", "الموقع", d.F.Site, d.Sites)
 			@FilterSelect("system", "النظام", d.F.System, d.Systems)
 			@FilterSelect("contractor", "المقاول", d.F.Contractor, d.Contractors)
+			@FilterSelect("result", "النتيجة", d.F.Result, ResultOptions)
 			<div>
 				<label class="label" for="flt_from">من تاريخ</label>
 				<input class="input py-1.5" type="date" id="flt_from" name="from" value={ d.F.From }/>

@@ -49,6 +49,12 @@ func (s *Server) describeScope(ctx context.Context, sc reportScope) string {
 			parts = append(parts, "المقاول: "+find(contractors, sc.F.Contractor))
 		}
 	}
+	switch sc.F.Result {
+	case "pass":
+		parts = append(parts, "النتيجة: مطابق")
+	case "fail":
+		parts = append(parts, "النتيجة: غير مطابق")
+	}
 	if sc.F.From != "" || sc.F.To != "" {
 		parts = append(parts, fmt.Sprintf("الفترة: %s إلى %s", orEllipsis(sc.F.From), orEllipsis(sc.F.To)))
 	}

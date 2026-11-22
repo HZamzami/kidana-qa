@@ -21,6 +21,7 @@ WHERE i.status = 'submitted'
   AND (sqlc.narg(type)::wo_type IS NULL OR w.type = sqlc.narg(type))
   AND (sqlc.narg(date_from)::date IS NULL OR i.inspected_on >= sqlc.narg(date_from))
   AND (sqlc.narg(date_to)::date IS NULL OR i.inspected_on <= sqlc.narg(date_to))
+  AND (sqlc.narg(passed)::boolean IS NULL OR i.passed = sqlc.narg(passed))
 ORDER BY i.inspected_on DESC, i.id DESC;
 
 -- Ratings of the given inspections, for per-criterion compliance.

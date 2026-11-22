@@ -20,7 +20,7 @@ func parseScope(r *http.Request) reportScope {
 	q := r.URL.Query()
 	sc := reportScope{F: views.DashFilters{
 		Stage: q.Get("stage"), Type: q.Get("type"), Site: q.Get("site"), System: q.Get("system"),
-		Contractor: q.Get("contractor"), From: q.Get("from"), To: q.Get("to"),
+		Contractor: q.Get("contractor"), From: q.Get("from"), To: q.Get("to"), Result: q.Get("result"),
 	}}
 	p := gen.ListSubmittedInspectionsParams{
 		SiteID: queryID(r, "site"), SystemID: queryID(r, "system"), ContractorID: queryID(r, "contractor"),
@@ -30,6 +30,13 @@ func parseScope(r *http.Request) reportScope {
 		p.Stage = &st
 	} else {
 		sc.F.Stage = ""
+	}
+	switch sc.F.Result {
+	case "pass", "fail":
+		passed := sc.F.Result == "pass"
+		p.Passed = &passed
+	default:
+		sc.F.Result = ""
 	}
 	if t := gen.WoType(sc.F.Type); t.Valid() {
 		p.Type = &t
@@ -44,7 +51,7 @@ func (sc reportScope) query() string {
 	v := url.Values{}
 	for k, val := range map[string]string{
 		"stage": sc.F.Stage, "type": sc.F.Type, "site": sc.F.Site, "system": sc.F.System,
-		"contractor": sc.F.Contractor, "from": sc.F.From, "to": sc.F.To,
+		"contractor": sc.F.Contractor, "from": sc.F.From, "to": sc.F.To, "result": sc.F.Result,
 	} {
 		if val != "" {
 			v.Set(k, val)
