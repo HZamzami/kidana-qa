@@ -17,6 +17,7 @@ import (
 	"github.com/HZamzami/kidana-qa/internal/domain"
 	"github.com/HZamzami/kidana-qa/internal/excel"
 	"github.com/HZamzami/kidana-qa/internal/views"
+	webassets "github.com/HZamzami/kidana-qa/web"
 )
 
 // describeScope turns the filters into a human-readable line for reports.
@@ -167,12 +168,47 @@ func (s *Server) exportExcel(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	book, err := excel.Report(s.describeScope(ctx, sc), rep.Summary, domain.Insights(rep.Summary), rows, crits, findings)
+	checklists, err := s.activeChecklists(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	logo, _ := webassets.Static.ReadFile("static/img/kidana-logo.png")
+	book, err := excel.Report(excel.ReportInput{
+		Scope: s.describeScope(ctx, sc), Summary: rep.Summary, Insights: domain.Insights(rep.Summary),
+		Rows: rows, Criteria: crits, Findings: findings, Checklists: checklists, Logo: logo,
+	})
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
 	s.sendWorkbook(w, r, book, "Kidana-QA-Report_"+time.Now().Format(time.DateOnly)+".xlsx")
+}
+
+// activeChecklists returns the active QA and QC checklists for the criteria sheet.
+func (s *Server) activeChecklists(ctx context.Context) ([]excel.ChecklistExport, error) {
+	var out []excel.ChecklistExport
+	for _, stage := range []gen.InspectionStage{gen.InspectionStageQa, gen.InspectionStageQc} {
+		t, err := s.q.GetActiveTemplate(ctx, stage)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		crits, err := s.q.ListCriteria(ctx, t.ID)
+		if err != nil {
+			return nil, err
+		}
+		cl := excel.ChecklistExport{Stage: string(t.Stage), Name: t.Name, Version: int(t.Version)}
+		for _, c := range crits {
+			cl.Criteria = append(cl.Criteria, excel.CriterionExport{
+				Code: c.Code, Label: c.Label, Description: c.Description, Weight: int(c.Weight), Critical: c.IsCritical,
+			})
+		}
+		out = append(out, cl)
+	}
+	return out, nil
 }
 
 func (s *Server) sendWorkbook(w http.ResponseWriter, r *http.Request, f *excelize.File, name string) {

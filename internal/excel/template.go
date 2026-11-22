@@ -95,10 +95,18 @@ func WorkOrderTemplate(sites, systems, contractors []string) (*excelize.File, er
 	addList("G", "D", len(contractors), false)
 	addList("I", "E", 4, true)
 
-	// Text format: what is typed stays literal (dd/mm/yyyy), so Excel's locale
-	// cannot silently swap day and month. ParseDate reads it.
-	dateStyle, _ := f.NewStyle(&excelize.Style{NumFmt: 49})
+	// Date columns hold real Excel dates shown as dd/mm/yyyy and validated like
+	// the drop-down columns: anything that is not a date between 2000 and 2099
+	// is rejected. The import reads the stored date value, whatever the locale.
+	dateStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: strPtr("dd/mm/yyyy")})
 	_ = f.SetColStyle(sh, "J:K", dateStyle)
+	dv := excelize.NewDataValidation(true)
+	dv.Sqref = fmt.Sprintf("J2:K%d", last)
+	if err := dv.SetRange(36526, 73050, excelize.DataValidationTypeDate, excelize.DataValidationOperatorBetween); err == nil { // 2000-01-01 … 2099-12-31
+		dv.SetError(excelize.DataValidationErrorStyleStop, "تاريخ غير صالح", "أدخل تاريخاً صحيحاً بصيغة dd/mm/yyyy، مثال 18/11/2026")
+		dv.SetInput("التاريخ", "dd/mm/yyyy — تأكد أن التاريخ المعروض يطابق ما تقصده")
+		_ = f.AddDataValidation(sh, dv)
+	}
 
 	// Instructions
 	const help = "التعليمات"
@@ -111,7 +119,7 @@ func WorkOrderTemplate(sites, systems, contractors []string) (*excelize.File, er
 		"استيراد أوامر العمل — نظام جودة الصيانة",
 		"1) صف لكل أمر عمل في ورقة «أوامر العمل» بدءاً من الصف الثاني. الأعمدة المعلّمة بـ * إلزامية.",
 		"2) لا تغيّر عناوين الأعمدة — الاستيراد يعتمد عليها.",
-		"3) التواريخ ميلادية بصيغة dd/mm/yyyy (مثال 18/11/2026). تُقبل أيضاً yyyy-mm-dd. التاريخ الهجري يُعرض في النظام تلقائياً ولا يُدخل هنا.",
+		"3) أعمدة التاريخ خلايا تاريخ حقيقية بصيغة dd/mm/yyyy (مثال 18/11/2026)، ويرفض Excel أي قيمة ليست تاريخاً. تأكد أن التاريخ المعروض يطابق ما تقصده. التاريخ الهجري يُعرض في النظام تلقائياً ولا يُدخل هنا.",
 		"4) أوامر العمل الموجودة مسبقاً (بنفس الرقم) تُتجاهل ولا تُعدَّل.",
 		"5) المواقع والأنظمة والمقاولون غير المسجلين يُضافون تلقائياً — راجعهم بعد الاستيراد من الإعدادات.",
 	}

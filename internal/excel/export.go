@@ -2,6 +2,7 @@ package excel
 
 import (
 	"fmt"
+	_ "image/png" // excelize needs the PNG decoder registered to embed the logo
 	"sort"
 	"time"
 
@@ -103,27 +104,56 @@ func setRow(f *excelize.File, sheet string, row int, values []any, style int) {
 	}
 }
 
-// Report builds the export workbook: summary, inspections and findings.
-func Report(scope string, S domain.Summary, insights []domain.Insight, rows []InspectionExport, crits []CriterionColumn, findings []FindingExport) (*excelize.File, error) {
+// ChecklistExport is an active checklist shown on the criteria sheet.
+type ChecklistExport struct {
+	Stage, Name string
+	Version     int
+	Criteria    []CriterionExport
+}
+
+// CriterionExport is one criterion of a checklist.
+type CriterionExport struct {
+	Code, Label, Description string
+	Weight                   int
+	Critical                 bool
+}
+
+// ReportInput is everything the export workbook contains.
+type ReportInput struct {
+	Scope      string
+	Summary    domain.Summary
+	Insights   []domain.Insight
+	Rows       []InspectionExport
+	Criteria   []CriterionColumn // rating columns on the inspections sheet
+	Findings   []FindingExport
+	Checklists []ChecklistExport // active checklists for the criteria sheet
+	Logo       []byte            // PNG shown on the summary sheet (optional)
+}
+
+// Report builds the export workbook: summary, inspections, findings and criteria.
+func Report(in ReportInput) (*excelize.File, error) {
 	f := excelize.NewFile()
 	st, err := newStyles(f)
 	if err != nil {
 		return nil, err
 	}
-	if err := summarySheet(f, st, scope, S, insights); err != nil {
+	if err := summarySheet(f, st, in.Scope, in.Summary, in.Insights, in.Logo); err != nil {
 		return nil, err
 	}
-	if err := inspectionsSheet(f, st, rows, crits); err != nil {
+	if err := inspectionsSheet(f, st, in.Rows, in.Criteria); err != nil {
 		return nil, err
 	}
-	if err := findingsSheet(f, st, findings); err != nil {
+	if err := findingsSheet(f, st, in.Findings); err != nil {
+		return nil, err
+	}
+	if err := criteriaSheet(f, st, in.Checklists); err != nil {
 		return nil, err
 	}
 	f.SetActiveSheet(0)
 	return f, nil
 }
 
-func summarySheet(f *excelize.File, st styles, scope string, S domain.Summary, insights []domain.Insight) error {
+func summarySheet(f *excelize.File, st styles, scope string, S domain.Summary, insights []domain.Insight, logo []byte) error {
 	const sh = "ملخص"
 	if err := f.SetSheetName("Sheet1", sh); err != nil {
 		return err
@@ -134,6 +164,18 @@ func summarySheet(f *excelize.File, st styles, scope string, S domain.Summary, i
 	_ = f.SetColWidth(sh, "B", "E", 15)
 
 	r := 1
+	if len(logo) > 0 {
+		// 1000×163 px logo scaled to ~280 px wide across the first three rows.
+		if err := f.AddPictureFromBytes(sh, "A1", &excelize.Picture{
+			Extension: ".png", File: logo,
+			Format: &excelize.GraphicOptions{ScaleX: 0.28, ScaleY: 0.28, OffsetX: 4, OffsetY: 6, Positioning: "oneCell"},
+		}); err == nil {
+			for i := 1; i <= 3; i++ {
+				_ = f.SetRowHeight(sh, i, 18)
+			}
+			r = 4
+		}
+	}
 	_ = f.SetCellValue(sh, axis(1, r), "تقرير جودة الصيانة — رقابة أثناء التنفيذ وفحص بعد التنفيذ")
 	_ = f.SetCellStyle(sh, axis(1, r), axis(1, r), st.title)
 	r++
@@ -305,13 +347,16 @@ func findingsSheet(f *excelize.File, st styles, items []FindingExport) error {
 		row := i + 2
 		vals := []any{it.ID, it.Ref, it.Site, it.Contractor, it.Criterion, domain.Label(domain.SeverityLabels, it.Severity),
 			domain.Label(domain.FindingStatusLabels, it.Status), it.Description, it.CorrectiveAction, it.Owner,
-			datePtr(it.DueDate), hijriPtr(it.DueDate), dates.DMY(it.CreatedAt.In(dates.Riyadh)), datePtr(it.ClosedAt), it.ClosureNote}
+			datePtr(it.DueDate), hijriPtr(it.DueDate), dayOf(it.CreatedAt.In(dates.Riyadh)), datePtr(it.ClosedAt), it.ClosureNote}
 		for ci, v := range vals {
 			a := axis(ci+1, row)
 			_ = f.SetCellValue(sh, a, v)
 			style := st.text
-			if ci == 7 || ci == 8 || ci == 14 {
+			switch ci {
+			case 7, 8, 14:
 				style = st.wrap
+			case 10, 12, 13:
+				style = st.date
 			}
 			_ = f.SetCellStyle(sh, a, a, style)
 		}
@@ -319,11 +364,17 @@ func findingsSheet(f *excelize.File, st styles, items []FindingExport) error {
 	return f.AutoFilter(sh, "A1:"+axis(len(headers), max(len(items)+1, 2)), nil)
 }
 
+// datePtr returns a real date value (shown as dd/mm/yyyy by the date style), or "".
 func datePtr(t *time.Time) any {
 	if t == nil {
 		return ""
 	}
-	return dates.DMY(*t)
+	return dayOf(*t)
+}
+
+// dayOf drops the time so Excel stores a whole-day date.
+func dayOf(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 func hijriPtr(t *time.Time) any {
@@ -373,3 +424,64 @@ func SortCriteria(cs []CriterionColumn) {
 		return cs[i].Code < cs[j].Code
 	})
 }
+
+// criteriaSheet lists the active checklists and the scoring rules, so the
+// export explains how every score was computed.
+func criteriaSheet(f *excelize.File, st styles, lists []ChecklistExport) error {
+	const sh = "المعايير"
+	if _, err := f.NewSheet(sh); err != nil {
+		return err
+	}
+	rtl := true
+	_ = f.SetSheetView(sh, 0, &excelize.ViewOptions{RightToLeft: &rtl, ShowGridLines: boolPtr(false)})
+	_ = f.SetColWidth(sh, "A", "A", 8)
+	_ = f.SetColWidth(sh, "B", "B", 34)
+	_ = f.SetColWidth(sh, "C", "C", 80)
+	_ = f.SetColWidth(sh, "D", "E", 10)
+
+	r := 1
+	for _, cl := range lists {
+		_ = f.SetCellValue(sh, axis(1, r), fmt.Sprintf("%s — %s (الإصدار %d)", domain.Stage(cl.Stage).Label(), cl.Name, cl.Version))
+		_ = f.SetCellStyle(sh, axis(1, r), axis(5, r), st.sub)
+		r++
+		setRow(f, sh, r, []any{"الرمز", "البند", "الوصف / طريقة التحقق", "الوزن", "حرج"}, st.head)
+		r++
+		total := 0
+		for _, c := range cl.Criteria {
+			crit := ""
+			if c.Critical {
+				crit = "نعم"
+			}
+			setRow(f, sh, r, []any{c.Code, c.Label, c.Description}, st.wrap)
+			setRow2(f, sh, r, 4, []any{c.Weight, crit}, st.num)
+			total += c.Weight
+			r++
+		}
+		setRow(f, sh, r, []any{"", "المجموع"}, st.bold)
+		setRow2(f, sh, r, 4, []any{total}, st.bold)
+		r += 2
+	}
+
+	_ = f.SetCellValue(sh, axis(1, r), "طريقة الحساب")
+	_ = f.SetCellStyle(sh, axis(1, r), axis(5, r), st.sub)
+	r++
+	rules := [][]any{
+		{"", "النتيجة", "مجموع (الوزن × معامل التقييم) ÷ مجموع أوزان البنود المنطبقة × 100"},
+		{"", "مطابق", "100% من وزن البند"},
+		{"", "مطابق جزئياً", "50% من وزن البند"},
+		{"", "غير مطابق", "0%"},
+		{"", "لا ينطبق", "يُستبعد من الحساب"},
+		{"", "حد المطابقة", fmt.Sprintf("%s%% — وأي بند حرج غير مطابق يُسقط الفحص مهما كانت النتيجة", Fmt1(domain.PassThreshold))},
+	}
+	for _, g := range domain.Grades {
+		rules = append(rules, []any{"", "التقدير: " + g.Label, fmt.Sprintf("من %s%%", Fmt1(g.Min))})
+	}
+	for _, row := range rules {
+		setRow(f, sh, r, row, st.text)
+		r++
+	}
+	return nil
+}
+
+// Fmt1 formats a number with at most one decimal (plain text for Excel).
+func Fmt1(v float64) string { return domain.Fmt1(v) }
