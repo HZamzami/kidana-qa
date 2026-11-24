@@ -224,7 +224,7 @@ templ WorkOrderForm(d WOFormData) {
 				<a href={ u("/work-orders/%d", d.ID) } class="btn btn-ghost">{ t(ctx, "رجوع") }</a>
 			}
 		}
-		<form method="post" action={ templ.SafeURL(tern(d.ID == 0, "/work-orders", path("/work-orders/%d", d.ID))) } class="card p-5 sm:p-6" novalidate>
+		<form method="post" action={ templ.SafeURL(tern(d.ID == 0, "/work-orders", path("/work-orders/%d", d.ID))) } class="card p-5 sm:p-6" novalidate data-guard>
 			if len(d.Errors) > 0 {
 				<div role="alert" class="mb-5 rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2">{ t(ctx, "يرجى مراجعة الحقول المعلّمة.") }</div>
 			}

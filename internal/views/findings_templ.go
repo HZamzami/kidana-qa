@@ -1501,7 +1501,7 @@ func findingEditForm(d FindingEditData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 113, "\" class=\"space-y-4\" novalidate>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 113, "\" class=\"space-y-4\" novalidate data-guard>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

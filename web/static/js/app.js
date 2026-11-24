@@ -233,6 +233,31 @@ document.addEventListener("alpine:init", () => {
     },
   }));
 
+  // Live "total of 100" for weight inputs ([data-weight]) inside the
+  // component; the messages come from the weightTotal template's data-*.
+  Alpine.data("weightTotal", () => ({
+    total: 0,
+    init() { this.recount(); },
+    recount() {
+      let sum = 0;
+      this.$root.querySelectorAll("[data-weight]").forEach((el) => {
+        const n = parseInt(toASCII(el.value), 10);
+        if (!isNaN(n)) sum += n;
+      });
+      this.total = sum;
+    },
+    msg(kind) {
+      const el = this.$root.querySelector("[data-ok]");
+      return el ? el.dataset[kind] : "";
+    },
+    get totalText() {
+      const gap = 100 - this.total;
+      if (gap === 0) return this.msg("ok");
+      return this.msg(gap > 0 ? "under" : "over").replace("{sum}", this.total).replace("{gap}", Math.abs(gap));
+    },
+    get totalClass() { return this.total === 100 ? "text-green" : "text-fail"; },
+  }));
+
   // Confirmation step built into the page (no window.confirm in the flow).
   Alpine.data("confirmAction", () => ({
     asking: false,
@@ -240,6 +265,52 @@ document.addEventListener("alpine:init", () => {
     cancel() { this.asking = false; },
   }));
 });
+
+// Arabic-Indic and Persian digits → 0-9 (numbers typed on an Arabic keyboard).
+function toASCII(v) {
+  return String(v || "").replace(/[٠-٩]/g, (d) => d.charCodeAt(0) - 0x660).replace(/[۰-۹]/g, (d) => d.charCodeAt(0) - 0x6f0);
+}
+function message(key) { const t = document.getElementById("toast"); return (t && t.dataset[key]) || ""; }
+function showToast(text, tone) {
+  if (!text) return;
+  document.body.dispatchEvent(new CustomEvent("toast", { detail: { message: text, tone } }));
+}
+
+// ------------------------------------------------------------------ everyday safety nets
+// 1. A form can't be sent twice by tapping again on a slow connection.
+document.addEventListener("submit", (e) => {
+  const f = e.target;
+  if (e.defaultPrevented || f.method.toLowerCase() !== "post" || f.target === "_blank" || f.hasAttribute("hx-post")) return;
+  delete f.dataset.dirty;
+  setTimeout(() => { // after the browser has read the clicked button's value
+    f.querySelectorAll("button[type=submit], button:not([type])").forEach((b) => {
+      b.disabled = true; b.dataset.label = b.textContent; b.textContent = message("saving") || b.textContent;
+    });
+  }, 0);
+  setTimeout(() => restoreButtons(f), 15000); // e.g. a download that keeps the page
+});
+function restoreButtons(root) {
+  root.querySelectorAll("button[data-label]").forEach((b) => { b.disabled = false; b.textContent = b.dataset.label; delete b.dataset.label; });
+}
+window.addEventListener("pageshow", () => restoreButtons(document)); // back button
+
+// 2. Leaving a form with unsaved typing asks first (forms marked data-guard).
+document.addEventListener("input", (e) => {
+  const f = e.target.form;
+  if (f && f.hasAttribute("data-guard")) f.dataset.dirty = "1";
+});
+window.addEventListener("beforeunload", (e) => {
+  if (document.querySelector("form[data-dirty]")) { e.preventDefault(); e.returnValue = message("unsaved"); }
+});
+
+// 3. After a rejected form, bring the first problem into view.
+function focusFirstError(root) {
+  const el = (root || document).querySelector("[aria-invalid=true], [data-errors]");
+  if (!el) return;
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  if (el.matches("input, select, textarea")) el.focus({ preventScroll: true });
+}
+document.addEventListener("DOMContentLoaded", () => focusFirstError());
 
 // ------------------------------------------------------------------ htmx glue
 // Show a toast when the server sends an HX-Trigger: {"toast": {"message": "...", "tone": "ok"}}
@@ -260,6 +331,15 @@ document.body.addEventListener("htmx:beforeSwap", (e) => {
     e.detail.shouldSwap = true;
     e.detail.isError = false;
   }
+});
+document.body.addEventListener("htmx:afterSwap", (e) => {
+  if (e.detail.xhr && e.detail.xhr.status === 422) focusFirstError(e.detail.target);
+});
+// A background save that failed must never look like it worked.
+document.body.addEventListener("htmx:responseError", (e) => {
+  const st = e.detail.xhr.status;
+  if (st === 422) return;
+  showToast(message(st === 401 || st === 403 ? "expired" : "serverError"), "warn");
 });
 
 // ------------------------------------------------------------------ offline queue
@@ -305,7 +385,7 @@ document.body.addEventListener("htmx:beforeSwap", (e) => {
   // Catch htmx saves that never reached the server.
   document.body.addEventListener("htmx:sendError", (e) => {
     const cfg = e.detail.requestConfig || {};
-    if (cfg.verb !== "post" || !queueable(cfg.path)) return;
+    if (cfg.verb !== "post" || !queueable(cfg.path)) { showToast(message("offline"), "warn"); return; }
     const form = cfg.formData instanceof FormData ? cfg.formData : new FormData(e.detail.elt.closest("form") || undefined);
     queue.add(cfg.path, form);
   });

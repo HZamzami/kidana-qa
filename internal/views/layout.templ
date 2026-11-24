@@ -33,7 +33,12 @@ templ Base(title string) {
 				role="status"
 				aria-live="polite"
 				hidden
-				class="fixed bottom-6 inset-x-0 mx-auto w-fit max-w-[90vw] z-50 rounded-xl bg-ink text-white px-4 py-2.5 text-sm shadow-lg data-[tone=ok]:bg-green data-[tone=warn]:bg-fail"
+				data-server-error={ t(ctx, "تعذّر الحفظ بسبب خطأ في الخادم. حاول مرة أخرى، وإن تكرر أبلغ مدير النظام.") }
+				data-offline={ t(ctx, "لا يوجد اتصال بالإنترنت. لم يُحفظ التغيير؛ حاول مرة أخرى عند عودة الاتصال.") }
+				data-expired={ t(ctx, "انتهت الجلسة. سجّل الدخول مرة أخرى.") }
+				data-saving={ t(ctx, "جارٍ الإرسال…") }
+				data-unsaved={ t(ctx, "لديك تغييرات لم تُحفظ. هل تريد مغادرة الصفحة؟") }
+				class="fixed bottom-24 md:bottom-6 inset-x-0 mx-auto w-fit max-w-[90vw] z-50 rounded-xl bg-ink text-white px-4 py-2.5 text-sm shadow-lg data-[tone=ok]:bg-green data-[tone=warn]:bg-fail"
 			></div>
 		</body>
 	</html>

@@ -323,7 +323,7 @@ templ findingFacts(d FindingEditData) {
 }
 
 templ findingEditForm(d FindingEditData) {
-	<form method="post" action={ u("/findings/%d", d.F.ID) } class="space-y-4" novalidate>
+	<form method="post" action={ u("/findings/%d", d.F.ID) } class="space-y-4" novalidate data-guard>
 		@TextArea("description", t(ctx, "وصف الملاحظة"), d.V.Description, 3, d.Errors)
 		@TextArea("corrective_action", t(ctx, "الإجراء التصحيحي المطلوب"), d.V.CorrectiveAction, 2, d.Errors)
 		<div class="grid gap-4 sm:grid-cols-2">
