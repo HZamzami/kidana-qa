@@ -82,9 +82,9 @@ func delayText(planned, actual *time.Time) string {
 	case !ok:
 		return "—"
 	case d > 0:
-		return fmt.Sprintf("متأخر %d يوم", d)
+		return "متأخر " + domain.Count(d, domain.NounDay)
 	case d < 0:
-		return fmt.Sprintf("مبكر %d يوم", -d)
+		return "مبكر " + domain.Count(-d, domain.NounDay)
 	}
 	return "في الموعد"
 }
