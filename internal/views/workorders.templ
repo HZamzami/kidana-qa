@@ -177,7 +177,7 @@ templ WorkOrderForm(d WOFormData) {
 				<legend class="sr-only">بيانات العمل</legend>
 				@SelectField("type", "النوع", d.V.Type, TypeOptions, "", true, d.Errors)
 				@TextField("ref", "رقم أمر العمل / الصيانة", d.V.Ref, true, d.Errors, templ.Attributes{"maxlength": "60", "dir": "auto"})
-				@SelectField("priority", "الأولوية", d.V.Priority, d.Priorities, "—", false, d.Errors)
+				@SelectField("priority", "الأولوية", d.V.Priority, d.Priorities, "", true, d.Errors)
 				@SelectField("site_id", "الموقع", d.V.SiteID, d.Sites, "اختر الموقع", true, d.Errors)
 				@TextField("location", "الموقع التفصيلي", d.V.Location, false, d.Errors, templ.Attributes{"maxlength": "120", "placeholder": "المبنى / الدور / الغرفة"})
 				@SelectField("system_id", "النظام", d.V.SystemID, d.Systems, "اختر النظام", true, d.Errors)
@@ -249,9 +249,7 @@ templ WorkOrderShow(d WOShowData) {
 						<h1 class="text-xl font-semibold num">{ d.WO.Ref }</h1>
 						@TypePill(string(d.WO.Type))
 						@WOStatusPill(string(d.WO.Status))
-						if d.WO.Priority != nil {
-							<span class="pill bg-ink-5 text-ink-80">{ "الأولوية: " + domain.Label(domain.PriorityLabels, string(*d.WO.Priority)) }</span>
-						}
+						@PriorityPill(string(d.WO.Priority))
 					</div>
 					if d.WO.Description != "" {
 						<p class="mt-2 text-ink-80 max-w-prose">{ d.WO.Description }</p>

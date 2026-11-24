@@ -77,7 +77,7 @@ func (s *Server) woFormData(r *http.Request, id int64, v views.WOFormValues, err
 //	?from=ID            copy: everything except the number and dates
 //	?from=ID&keep=ctx   "save and add another": only the shared context
 func (s *Server) workOrderNew(w http.ResponseWriter, r *http.Request) {
-	v := views.WOFormValues{Type: "WO"}
+	v := views.WOFormValues{Type: "WO", Priority: string(gen.WoPriorityNormal)}
 	if from := queryID(r, "from"); from != nil {
 		wo, err := s.q.GetWorkOrder(r.Context(), *from)
 		if err != nil {
@@ -90,9 +90,7 @@ func (s *Server) workOrderNew(w http.ResponseWriter, r *http.Request) {
 		}
 		if r.URL.Query().Get("keep") != "ctx" {
 			v.Location, v.Asset, v.Technician, v.Description = wo.Location, wo.Asset, wo.Technician, wo.Description
-			if wo.Priority != nil {
-				v.Priority = string(*wo.Priority)
-			}
+			v.Priority = string(wo.Priority)
 		}
 	}
 	d, err := s.woFormData(r, 0, v, nil)
@@ -109,7 +107,7 @@ type woInput struct {
 	Type                                          gen.WoType
 	SiteID, SystemID                              int64
 	ContractorID                                  *int64
-	Priority                                      *gen.WoPriority
+	Priority                                      gen.WoPriority
 	PlannedDate, ActualDate                       *time.Time
 	Status                                        gen.WoStatus
 }
@@ -142,13 +140,12 @@ func (s *Server) parseWO(r *http.Request, id int64) (woInput, views.WOFormValues
 	if !in.Type.Valid() {
 		f.Errors["type"] = "اختر النوع"
 	}
-	if v.Priority != "" {
-		p := gen.WoPriority(v.Priority)
-		if p.Valid() {
-			in.Priority = &p
-		} else {
-			f.Errors["priority"] = "قيمة غير صالحة"
-		}
+	if v.Priority == "" {
+		v.Priority = string(gen.WoPriorityNormal) // the column default
+	}
+	in.Priority = gen.WoPriority(v.Priority)
+	if !in.Priority.Valid() {
+		f.Errors["priority"] = "اختر الأولوية"
 	}
 	in.Status = gen.WoStatus(v.Status)
 	if id != 0 && (!in.Status.Valid()) {
@@ -242,14 +239,11 @@ func (s *Server) workOrderEdit(w http.ResponseWriter, r *http.Request) {
 	v := views.WOFormValues{
 		Ref: wo.Ref, Type: string(wo.Type), SiteID: idStr(wo.SiteID), Location: wo.Location,
 		SystemID: idStr(wo.SystemID), Asset: wo.Asset, Technician: wo.Technician,
-		Description: wo.Description, Status: string(wo.Status),
+		Priority: string(wo.Priority), Description: wo.Description, Status: string(wo.Status),
 		PlannedDate: fmtDate(wo.PlannedDate), ActualDate: fmtDate(wo.ActualDate),
 	}
 	if wo.ContractorID != nil {
 		v.ContractorID = idStr(*wo.ContractorID)
-	}
-	if wo.Priority != nil {
-		v.Priority = string(*wo.Priority)
 	}
 	d, err := s.woFormData(r, id, v, nil)
 	if err != nil {

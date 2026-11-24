@@ -346,14 +346,6 @@ func (lr *lookupResolver) optional(kind, name string) (*int64, error) {
 	return &id, err
 }
 
-func priorityPtr(p string) *gen.WoPriority {
-	if p == "" {
-		return nil
-	}
-	v := gen.WoPriority(p)
-	return &v
-}
-
 // importWorkOrders creates work orders; existing refs are skipped. One transaction.
 func (s *Server) importWorkOrders(ctx context.Context, res *excel.Result, out *views.ImportOutcome) error {
 	return db.InTx(ctx, s.pool, func(tx pgx.Tx) error {
@@ -383,7 +375,7 @@ func (s *Server) importWorkOrders(ctx context.Context, res *excel.Result, out *v
 			}
 			if _, err := q.CreateWorkOrder(ctx, gen.CreateWorkOrderParams{
 				Ref: row.Ref, Type: gen.WoType(row.Type), SiteID: siteID, Location: row.Location, SystemID: systemID,
-				Asset: row.Asset, ContractorID: contractorID, Technician: row.Technician, Priority: priorityPtr(row.Priority),
+				Asset: row.Asset, ContractorID: contractorID, Technician: row.Technician, Priority: gen.WoPriority(row.Priority),
 				Description: row.Description, PlannedDate: row.PlannedDate, ActualDate: row.ActualDate, CreatedBy: currentUserID(ctx),
 			}); err != nil {
 				return err

@@ -373,10 +373,9 @@ func AllUserRoleValues() []UserRole {
 type WoPriority string
 
 const (
-	WoPriorityEmergency WoPriority = "emergency"
+	WoPriorityNormal    WoPriority = "normal"
 	WoPriorityHigh      WoPriority = "high"
-	WoPriorityMedium    WoPriority = "medium"
-	WoPriorityLow       WoPriority = "low"
+	WoPriorityEmergency WoPriority = "emergency"
 )
 
 func (e *WoPriority) Scan(src interface{}) error {
@@ -416,10 +415,9 @@ func (ns NullWoPriority) Value() (driver.Value, error) {
 
 func (e WoPriority) Valid() bool {
 	switch e {
-	case WoPriorityEmergency,
+	case WoPriorityNormal,
 		WoPriorityHigh,
-		WoPriorityMedium,
-		WoPriorityLow:
+		WoPriorityEmergency:
 		return true
 	}
 	return false
@@ -427,10 +425,9 @@ func (e WoPriority) Valid() bool {
 
 func AllWoPriorityValues() []WoPriority {
 	return []WoPriority{
-		WoPriorityEmergency,
+		WoPriorityNormal,
 		WoPriorityHigh,
-		WoPriorityMedium,
-		WoPriorityLow,
+		WoPriorityEmergency,
 	}
 }
 
@@ -696,7 +693,7 @@ type WorkOrder struct {
 	Asset        string
 	ContractorID *int64
 	Technician   string
-	Priority     *WoPriority
+	Priority     WoPriority
 	Description  string
 	PlannedDate  *time.Time
 	ActualDate   *time.Time

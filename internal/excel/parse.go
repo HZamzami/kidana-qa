@@ -105,18 +105,21 @@ func ParseType(v string) (string, bool) {
 	return "", false
 }
 
+// priorityAliases maps spellings people type to the enum. The retired levels
+// (متوسط، منخفض) fold into "normal" so older sheets still import.
 var priorityAliases = map[string]string{
-	"طارئ": "emergency", "emergency": "emergency",
+	"عادي": "normal", "عاديه": "normal", "normal": "normal",
+	"متوسط": "normal", "منخفض": "normal", "medium": "normal", "low": "normal",
 	"عالي": "high", "عاليه": "high", "high": "high",
-	"متوسط": "medium", "medium": "medium",
-	"منخفض": "low", "low": "low",
+	"طارئ": "emergency", "طارئه": "emergency", "طوارئ": "emergency", "emergency": "emergency",
 }
 
-// ParsePriority returns the enum value; ok is false for unknown non-empty values.
+// ParsePriority returns the enum value; ok is false for unknown non-empty
+// values. A blank cell is "normal", the column default.
 func ParsePriority(v string) (string, bool) {
 	s := Norm(v)
 	if s == "" {
-		return "", true
+		return "normal", true
 	}
 	p, ok := priorityAliases[s]
 	return p, ok

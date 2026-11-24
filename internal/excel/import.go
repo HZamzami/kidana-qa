@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/xuri/excelize/v2"
+
+	"github.com/HZamzami/kidana-quality/internal/domain"
 )
 
 // SheetWorkOrders is the data sheet of the work order import template.
@@ -127,7 +129,8 @@ func parseWorkOrders(res *Result, h header, rows [][]string, firstRow int) {
 		if p, ok := ParsePriority(cell(row, col["priority"])); ok {
 			w.Priority = p
 		} else {
-			res.warn("الصف %d: أولوية غير معروفة «%s» — تُركت فارغة", n, cell(row, col["priority"]))
+			w.Priority = "normal"
+			res.warn("الصف %d: أولوية غير معروفة «%s» — اعتُبرت «%s»", n, cell(row, col["priority"]), domain.PriorityLabels["normal"])
 		}
 		var okDate bool
 		if w.PlannedDate, okDate = ParseDate(cell(row, col["planned"])); !okDate {

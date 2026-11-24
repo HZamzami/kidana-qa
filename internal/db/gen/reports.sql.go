@@ -310,7 +310,7 @@ type ListSubmittedInspectionsRow struct {
 	Asset          string
 	Location       string
 	Technician     string
-	Priority       *WoPriority
+	Priority       WoPriority
 	PlannedDate    *time.Time
 	ActualDate     *time.Time
 	WoStatus       WoStatus

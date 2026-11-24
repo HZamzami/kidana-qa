@@ -64,7 +64,7 @@ type CreateWorkOrderParams struct {
 	Asset        string
 	ContractorID *int64
 	Technician   string
-	Priority     *WoPriority
+	Priority     WoPriority
 	Description  string
 	PlannedDate  *time.Time
 	ActualDate   *time.Time
@@ -142,7 +142,7 @@ type GetWorkOrderRow struct {
 	Asset          string
 	ContractorID   *int64
 	Technician     string
-	Priority       *WoPriority
+	Priority       WoPriority
 	Description    string
 	PlannedDate    *time.Time
 	ActualDate     *time.Time
@@ -285,7 +285,7 @@ type ListWorkOrdersRow struct {
 	Asset            string
 	Location         string
 	Status           WoStatus
-	Priority         *WoPriority
+	Priority         WoPriority
 	PlannedDate      *time.Time
 	ActualDate       *time.Time
 	CreatedAt        time.Time
@@ -384,7 +384,7 @@ type UpdateWorkOrderParams struct {
 	Asset        string
 	ContractorID *int64
 	Technician   string
-	Priority     *WoPriority
+	Priority     WoPriority
 	Description  string
 	PlannedDate  *time.Time
 	ActualDate   *time.Time

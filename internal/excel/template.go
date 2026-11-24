@@ -64,7 +64,7 @@ func WorkOrderTemplate(sites, systems, contractors []string) (*excelize.File, er
 	columns := map[string][]string{
 		"A": {domain.WOTypeLabels["PM"], domain.WOTypeLabels["WO"]},
 		"B": sites, "C": systems, "D": contractors,
-		"E": {domain.PriorityLabels["emergency"], domain.PriorityLabels["high"], domain.PriorityLabels["medium"], domain.PriorityLabels["low"]},
+		"E": {domain.PriorityLabels["normal"], domain.PriorityLabels["high"], domain.PriorityLabels["emergency"]},
 	}
 	for col, vals := range columns {
 		for i, v := range vals {

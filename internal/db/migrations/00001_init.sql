@@ -48,7 +48,7 @@ CREATE TABLE contractors (
 
 -- ---------------------------------------------------------------- work orders
 CREATE TYPE wo_type     AS ENUM ('PM', 'WO');
-CREATE TYPE wo_priority AS ENUM ('emergency', 'high', 'medium', 'low');
+CREATE TYPE wo_priority AS ENUM ('normal', 'high', 'emergency');
 -- accepted = latest after-work inspection passed and no open findings (maintained by the app)
 CREATE TYPE wo_status   AS ENUM ('open', 'in_progress', 'completed', 'accepted', 'cancelled');
 
@@ -62,7 +62,7 @@ CREATE TABLE work_orders (
     asset         text        NOT NULL DEFAULT '',
     contractor_id bigint      REFERENCES contractors (id),
     technician    text        NOT NULL DEFAULT '',
-    priority      wo_priority,
+    priority      wo_priority NOT NULL DEFAULT 'normal',
     description   text        NOT NULL DEFAULT '',
     planned_date  date,                              -- PM schedule date or WO SLA due date
     actual_date   date,                              -- date the work was actually done

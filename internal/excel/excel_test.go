@@ -115,3 +115,17 @@ func TestReportBuilds(t *testing.T) {
 
 // 1x1 transparent PNG
 var png1x1 = []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 0x1f, 0x15, 0xc4, 0x89, 0, 0, 0, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0, 1, 0, 0, 5, 0, 1, 0x0d, 0x0a, 0x2d, 0xb4, 0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82}
+
+func TestParsePriority(t *testing.T) {
+	for in, want := range map[string]string{
+		"": "normal", "عادي": "normal", "متوسط": "normal", "منخفض": "normal",
+		"عالي": "high", "عالية": "high", "طارئ": "emergency", "طارئة": "emergency", "Emergency": "emergency",
+	} {
+		if got, ok := ParsePriority(in); !ok || got != want {
+			t.Errorf("ParsePriority(%q) = %q, %v; want %q", in, got, ok, want)
+		}
+	}
+	if _, ok := ParsePriority("قصوى"); ok {
+		t.Error("unknown priority must not be accepted")
+	}
+}

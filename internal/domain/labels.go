@@ -8,13 +8,12 @@ var WOTypeLabels = map[string]string{
 	"WO": "أمر عمل",
 }
 
-var PriorityOrder = []string{"emergency", "high", "medium", "low"}
+var PriorityOrder = []string{"normal", "high", "emergency"}
 
 var PriorityLabels = map[string]string{
-	"emergency": "طارئ",
+	"normal":    "عادي",
 	"high":      "عالي",
-	"medium":    "متوسط",
-	"low":       "منخفض",
+	"emergency": "طارئ",
 }
 
 var FindingStatusOrder = []string{"open", "in_progress", "closed"}
