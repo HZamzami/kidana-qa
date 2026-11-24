@@ -40,7 +40,8 @@ work_orders (site, system = المنظومة, asset_group = مجموعة الأ�
             1──* findings (status open|in_progress|responded|closed, root cause, owner_user, repeat_of)
             1──* inspection_assignments (stage, assignee or pool, reason manual|sampling|reinspection)
 inspections / findings 1──* attachments (kind photo|signature, lat/lng, annotated_of)
-checklist_templates (stage, version, active, optional system/asset group scope) 1──* template_criteria
+checklist_templates (family_id, version within family, active, optional asset group) 1──* template_criteria
+            *──* systems via checklist_template_systems (scope; none = general)
 users (role admin|inspector|viewer|contractor, contractor_id, lang, totp, session_version)
 notifications · sampling_rules · sla_targets · saved_views · report_runs · settings · api_tokens · audit_log
 ```

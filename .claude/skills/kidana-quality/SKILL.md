@@ -59,7 +59,8 @@ Clean, quiet, data-first ("Style 1": shadcn/Linear-like minimalism) with Kidana'
 - **Use Kidana tokens only** (`ink`, `gold`, `green`, `sky`, plus `fail` for semantics). No raw hex values in templates except where SVG needs a literal colour.
 - **Dates**: display Gregorian as **dd/mm/yyyy** with the **Umm al-Qura Hijri** date alongside (read-only). Use `@DateText`, `@DateInline` and `@HijriText` in views and `internal/dates` in Go. Store and submit ISO only.
 - **Numbers inside Arabic text**: put percentages through `domain.Pct` / `domain.PctVal` (bidi-isolated, so you never get "%50"), and counted nouns through `count(ctx, n, domain.NounX)` (views) or `domain.CountIn(lang, …)` for correct agreement in both languages (فحصان، 5 فحوصات، 12 فحصاً / 5 inspections).
-- **Forms validate on the server.** On error, re-render with status `422` and `Errors map[string]string`.
+- **Forms validate on the server.** On error, re-render with status `422` and `Errors map[string]string`, keeping what the user typed; a multi-part settings form saves all or nothing. Numbers go through `form.Int` / `domain.ASCIIDigits` so Arabic digits work; use `type="text" inputmode="numeric"` for them.
+- **Built-in safety nets** (app.js): POST forms disable their button after one tap; forms with `data-guard` warn before leaving with unsaved typing; failed htmx saves show a toast; after a 422 the first error scrolls into view. Mark new edit forms with `data-guard`.
 - **Every mutation** runs in `db.InTx` when it touches more than one row, calls `s.audit(...)`, and calls `s.refreshWorkOrderStatus(...)` if it can change acceptance.
 - After editing `.templ` or `.sql`, run `just gen`. Generated files are committed.
 

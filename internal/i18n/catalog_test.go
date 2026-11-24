@@ -20,6 +20,7 @@ var (
 var skip = map[string]bool{
 	"excel/parse.go":     true,
 	"domain/count.go":    true,
+	"domain/digits.go":   true,
 	"dates/dates.go":     true,
 	"i18n/catalog_en.go": true,
 }

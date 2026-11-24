@@ -404,13 +404,32 @@ with sync_playwright() as p:
         shot(page, "admin-user-generated-password", full=False)
         page.goto(BASE + "/admin/checklists"); shot(page, "admin-checklists")
         page.goto(BASE + "/admin/checklists")
-        page.locator("a:has-text('إصدار جديد من هذه')").first.click(); page.wait_for_load_state("networkidle")
+        page.locator("a:has-text('تعديل البنود')").first.click(); page.wait_for_load_state("networkidle")
         shot(page, "admin-checklist-new-version")
+        assert "من 100" in page.locator("[data-ok]").inner_text(), "live total shown"
+        page.fill("input[name=weight_1]", "٥")
+        assert "أضف" in page.locator("[data-ok]").inner_text() or "أنقص" in page.locator("[data-ok]").inner_text(), "live total reacts (Arabic digits too)"
+        shot(page, "admin-checklist-weight-total", full=False)
         page.fill("input[name=weight_0]", "0")
         page.fill("input[name=code_6]", "D1"); page.fill("input[name=label_6]", "بند مكرر")
         page.locator("main form button:has-text('حفظ الإصدار')").click(); page.wait_for_load_state("networkidle")
         shot(page, "admin-checklist-errors")
         pp.goto(BASE + "/admin/checklists"); shot(pp, "phone-admin-checklists")
+        # A new checklist for the camp systems, separate from the general one.
+        page.goto(BASE + "/admin/checklists")
+        page.select_option("#nc_stage", "after"); page.click("#new-checklist button[type=submit]"); page.wait_for_load_state("networkidle")
+        page.fill("#cl_name", f"المخيمات {TAG}")
+        for box in page.locator("input[name=system_id]").all():
+            if "مخيمات" in box.locator("xpath=..").inner_text():
+                box.check()
+        shot(page, "admin-checklist-new")
+        page.locator("main form button:has-text('إنشاء القائمة')").click(); page.wait_for_load_state("networkidle")
+        assert "/admin/checklists/" in page.url, "camps checklist created"
+        page.goto(BASE + "/admin/checklists"); shot(page, "admin-checklists-families")
+        page.goto(BASE + "/admin/sla"); page.fill("input[name=w_after]", "30")
+        page.click("main form button:has-text('حفظ')"); page.wait_for_load_state("networkidle")
+        assert page.locator("[data-errors]").count() == 1, "weights not totalling 100 are refused"
+        shot(page, "admin-sla-weights-error", full=False)
     s_admin()
 
     @step("account: password page validation")

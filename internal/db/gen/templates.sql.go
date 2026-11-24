@@ -19,6 +19,20 @@ func (q *Queries) ActivateTemplate(ctx context.Context, id int64) error {
 	return err
 }
 
+const addTemplateSystem = `-- name: AddTemplateSystem :exec
+INSERT INTO checklist_template_systems (template_id, system_id) VALUES ($1, $2) ON CONFLICT DO NOTHING
+`
+
+type AddTemplateSystemParams struct {
+	TemplateID int64
+	SystemID   int64
+}
+
+func (q *Queries) AddTemplateSystem(ctx context.Context, arg AddTemplateSystemParams) error {
+	_, err := q.db.Exec(ctx, addTemplateSystem, arg.TemplateID, arg.SystemID)
+	return err
+}
+
 const createCriterion = `-- name: CreateCriterion :one
 INSERT INTO template_criteria (template_id, code, label, description, weight, is_critical, sort, label_en, description_en)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -66,28 +80,32 @@ func (q *Queries) CreateCriterion(ctx context.Context, arg CreateCriterionParams
 }
 
 const createTemplate = `-- name: CreateTemplate :one
-INSERT INTO checklist_templates (stage, version, name, active, created_by, system_id, asset_group_id)
-VALUES ($1, $2, $3, false, $4, $5, $6)
-RETURNING id, stage, version, name, active, created_by, created_at, system_id, asset_group_id
+INSERT INTO checklist_templates (id, stage, version, name, active, created_by, asset_group_id, family_id)
+OVERRIDING SYSTEM VALUE
+VALUES ($1, $2, $3, $4, false, $5, $6, $7)
+RETURNING id, stage, version, name, active, created_by, created_at, asset_group_id, family_id
 `
 
 type CreateTemplateParams struct {
+	ID           int64
 	Stage        InspectionStage
 	Version      int32
 	Name         string
 	CreatedBy    *int64
-	SystemID     *int64
 	AssetGroupID *int64
+	FamilyID     int64
 }
 
+// A new checklist family uses its first version's id as family_id.
 func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) (ChecklistTemplate, error) {
 	row := q.db.QueryRow(ctx, createTemplate,
+		arg.ID,
 		arg.Stage,
 		arg.Version,
 		arg.Name,
 		arg.CreatedBy,
-		arg.SystemID,
 		arg.AssetGroupID,
+		arg.FamilyID,
 	)
 	var i ChecklistTemplate
 	err := row.Scan(
@@ -98,35 +116,30 @@ func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) 
 		&i.Active,
 		&i.CreatedBy,
 		&i.CreatedAt,
-		&i.SystemID,
 		&i.AssetGroupID,
+		&i.FamilyID,
 	)
 	return i, err
 }
 
-const deactivateStageTemplates = `-- name: DeactivateStageTemplates :exec
-UPDATE checklist_templates SET active = false
-WHERE stage = $1 AND active
-  AND system_id IS NOT DISTINCT FROM $2::bigint
-  AND asset_group_id IS NOT DISTINCT FROM $3::bigint
+const deactivateFamily = `-- name: DeactivateFamily :exec
+UPDATE checklist_templates SET active = false WHERE family_id = $1 AND active
 `
 
-type DeactivateStageTemplatesParams struct {
-	Stage        InspectionStage
-	SystemID     *int64
-	AssetGroupID *int64
-}
-
-// Deactivates the active checklist of the same stage and scope.
-func (q *Queries) DeactivateStageTemplates(ctx context.Context, arg DeactivateStageTemplatesParams) error {
-	_, err := q.db.Exec(ctx, deactivateStageTemplates, arg.Stage, arg.SystemID, arg.AssetGroupID)
+// Deactivates the active version of a checklist.
+func (q *Queries) DeactivateFamily(ctx context.Context, familyID int64) error {
+	_, err := q.db.Exec(ctx, deactivateFamily, familyID)
 	return err
 }
 
 const getActiveTemplate = `-- name: GetActiveTemplate :one
-SELECT id, stage, version, name, active, created_by, created_at, system_id, asset_group_id FROM checklist_templates WHERE stage = $1 AND active AND system_id IS NULL AND asset_group_id IS NULL
+SELECT t.id, t.stage, t.version, t.name, t.active, t.created_by, t.created_at, t.asset_group_id, t.family_id FROM checklist_templates t
+WHERE t.stage = $1 AND t.active AND t.asset_group_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM checklist_template_systems s WHERE s.template_id = t.id)
+ORDER BY t.id DESC LIMIT 1
 `
 
+// The general checklist of a stage (no system or asset group).
 func (q *Queries) GetActiveTemplate(ctx context.Context, stage InspectionStage) (ChecklistTemplate, error) {
 	row := q.db.QueryRow(ctx, getActiveTemplate, stage)
 	var i ChecklistTemplate
@@ -138,14 +151,53 @@ func (q *Queries) GetActiveTemplate(ctx context.Context, stage InspectionStage) 
 		&i.Active,
 		&i.CreatedBy,
 		&i.CreatedAt,
-		&i.SystemID,
 		&i.AssetGroupID,
+		&i.FamilyID,
+	)
+	return i, err
+}
+
+const getAssetGroup = `-- name: GetAssetGroup :one
+SELECT id, name, active, sort, name_en FROM asset_groups WHERE id = $1
+`
+
+func (q *Queries) GetAssetGroup(ctx context.Context, id int64) (AssetGroup, error) {
+	row := q.db.QueryRow(ctx, getAssetGroup, id)
+	var i AssetGroup
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Active,
+		&i.Sort,
+		&i.NameEn,
+	)
+	return i, err
+}
+
+const getFamilyLatest = `-- name: GetFamilyLatest :one
+SELECT id, stage, version, name, active, created_by, created_at, asset_group_id, family_id FROM checklist_templates WHERE family_id = $1 ORDER BY version DESC LIMIT 1
+`
+
+// The newest version of a checklist.
+func (q *Queries) GetFamilyLatest(ctx context.Context, familyID int64) (ChecklistTemplate, error) {
+	row := q.db.QueryRow(ctx, getFamilyLatest, familyID)
+	var i ChecklistTemplate
+	err := row.Scan(
+		&i.ID,
+		&i.Stage,
+		&i.Version,
+		&i.Name,
+		&i.Active,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.AssetGroupID,
+		&i.FamilyID,
 	)
 	return i, err
 }
 
 const getTemplate = `-- name: GetTemplate :one
-SELECT id, stage, version, name, active, created_by, created_at, system_id, asset_group_id FROM checklist_templates WHERE id = $1
+SELECT id, stage, version, name, active, created_by, created_at, asset_group_id, family_id FROM checklist_templates WHERE id = $1
 `
 
 func (q *Queries) GetTemplate(ctx context.Context, id int64) (ChecklistTemplate, error) {
@@ -159,10 +211,52 @@ func (q *Queries) GetTemplate(ctx context.Context, id int64) (ChecklistTemplate,
 		&i.Active,
 		&i.CreatedBy,
 		&i.CreatedAt,
-		&i.SystemID,
 		&i.AssetGroupID,
+		&i.FamilyID,
 	)
 	return i, err
+}
+
+const listActiveScopes = `-- name: ListActiveScopes :many
+SELECT t.id, t.family_id, t.name, t.asset_group_id,
+       COALESCE((SELECT array_agg(s.system_id ORDER BY s.system_id) FROM checklist_template_systems s WHERE s.template_id = t.id), '{}')::bigint[] AS system_ids
+FROM checklist_templates t
+WHERE t.stage = $1 AND t.active
+`
+
+type ListActiveScopesRow struct {
+	ID           int64
+	FamilyID     int64
+	Name         string
+	AssetGroupID *int64
+	SystemIds    []int64
+}
+
+// Scopes of the active checklists of a stage, to refuse overlaps.
+func (q *Queries) ListActiveScopes(ctx context.Context, stage InspectionStage) ([]ListActiveScopesRow, error) {
+	rows, err := q.db.Query(ctx, listActiveScopes, stage)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveScopesRow{}
+	for rows.Next() {
+		var i ListActiveScopesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilyID,
+			&i.Name,
+			&i.AssetGroupID,
+			&i.SystemIds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCriteria = `-- name: ListCriteria :many
@@ -200,14 +294,45 @@ func (q *Queries) ListCriteria(ctx context.Context, templateID int64) ([]Templat
 	return items, nil
 }
 
+const listTemplateSystems = `-- name: ListTemplateSystems :many
+SELECT sy.id, sy.name, sy.name_en FROM checklist_template_systems s JOIN systems sy ON sy.id = s.system_id
+WHERE s.template_id = $1 ORDER BY sy.name
+`
+
+type ListTemplateSystemsRow struct {
+	ID     int64
+	Name   string
+	NameEn string
+}
+
+func (q *Queries) ListTemplateSystems(ctx context.Context, templateID int64) ([]ListTemplateSystemsRow, error) {
+	rows, err := q.db.Query(ctx, listTemplateSystems, templateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTemplateSystemsRow{}
+	for rows.Next() {
+		var i ListTemplateSystemsRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.NameEn); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTemplates = `-- name: ListTemplates :many
-SELECT t.id, t.stage, t.version, t.name, t.active, t.created_by, t.created_at, t.system_id, t.asset_group_id, (SELECT count(*) FROM inspections i WHERE i.template_id = t.id) AS inspections_count,
-       COALESCE(sy.name, '')::text AS system_name, COALESCE(sy.name_en, '')::text AS system_name_en,
+SELECT t.id, t.stage, t.version, t.name, t.active, t.created_by, t.created_at, t.asset_group_id, t.family_id, (SELECT count(*) FROM inspections i WHERE i.template_id = t.id) AS inspections_count,
+       COALESCE((SELECT string_agg(sy.name, '، ' ORDER BY sy.name) FROM checklist_template_systems s JOIN systems sy ON sy.id = s.system_id WHERE s.template_id = t.id), '')::text AS system_names,
+       COALESCE((SELECT string_agg(COALESCE(NULLIF(sy.name_en, ''), sy.name), ', ' ORDER BY sy.name) FROM checklist_template_systems s JOIN systems sy ON sy.id = s.system_id WHERE s.template_id = t.id), '')::text AS system_names_en,
        COALESCE(ag.name, '')::text AS asset_group_name, COALESCE(ag.name_en, '')::text AS asset_group_name_en
 FROM checklist_templates t
-LEFT JOIN systems sy ON sy.id = t.system_id
 LEFT JOIN asset_groups ag ON ag.id = t.asset_group_id
-ORDER BY t.stage, t.active DESC, t.version DESC
+ORDER BY t.stage, t.family_id, t.version DESC
 `
 
 type ListTemplatesRow struct {
@@ -218,11 +343,11 @@ type ListTemplatesRow struct {
 	Active           bool
 	CreatedBy        *int64
 	CreatedAt        time.Time
-	SystemID         *int64
 	AssetGroupID     *int64
+	FamilyID         int64
 	InspectionsCount int64
-	SystemName       string
-	SystemNameEn     string
+	SystemNames      string
+	SystemNamesEn    string
 	AssetGroupName   string
 	AssetGroupNameEn string
 }
@@ -244,11 +369,11 @@ func (q *Queries) ListTemplates(ctx context.Context) ([]ListTemplatesRow, error)
 			&i.Active,
 			&i.CreatedBy,
 			&i.CreatedAt,
-			&i.SystemID,
 			&i.AssetGroupID,
+			&i.FamilyID,
 			&i.InspectionsCount,
-			&i.SystemName,
-			&i.SystemNameEn,
+			&i.SystemNames,
+			&i.SystemNamesEn,
 			&i.AssetGroupName,
 			&i.AssetGroupNameEn,
 		); err != nil {
@@ -262,36 +387,52 @@ func (q *Queries) ListTemplates(ctx context.Context) ([]ListTemplatesRow, error)
 	return items, nil
 }
 
-const nextTemplateVersion = `-- name: NextTemplateVersion :one
-SELECT (COALESCE(max(version), 0) + 1)::int FROM checklist_templates WHERE stage = $1
+const newTemplateID = `-- name: NewTemplateID :one
+SELECT nextval(pg_get_serial_sequence('checklist_templates', 'id'))::bigint
 `
 
-func (q *Queries) NextTemplateVersion(ctx context.Context, stage InspectionStage) (int32, error) {
-	row := q.db.QueryRow(ctx, nextTemplateVersion, stage)
+func (q *Queries) NewTemplateID(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, newTemplateID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const nextTemplateVersion = `-- name: NextTemplateVersion :one
+SELECT (COALESCE(max(version), 0) + 1)::int FROM checklist_templates WHERE family_id = $1
+`
+
+func (q *Queries) NextTemplateVersion(ctx context.Context, familyID int64) (int32, error) {
+	row := q.db.QueryRow(ctx, nextTemplateVersion, familyID)
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
 }
 
 const pickActiveTemplate = `-- name: PickActiveTemplate :one
-SELECT id, stage, version, name, active, created_by, created_at, system_id, asset_group_id FROM checklist_templates
-WHERE stage = $1 AND active
-  AND (system_id IS NULL OR system_id = $2::bigint)
-  AND (asset_group_id IS NULL OR asset_group_id = $3::bigint)
-ORDER BY (asset_group_id IS NOT NULL) DESC, (system_id IS NOT NULL) DESC
+SELECT t.id, t.stage, t.version, t.name, t.active, t.created_by, t.created_at, t.asset_group_id, t.family_id FROM checklist_templates t
+WHERE t.stage = $1 AND t.active
+  AND (t.asset_group_id IS NULL OR t.asset_group_id = $2::bigint)
+  AND (NOT EXISTS (SELECT 1 FROM checklist_template_systems s WHERE s.template_id = t.id)
+       OR EXISTS (SELECT 1 FROM checklist_template_systems s WHERE s.template_id = t.id AND s.system_id = $3::bigint))
+ORDER BY (t.asset_group_id IS NOT NULL) DESC,
+         EXISTS (SELECT 1 FROM checklist_template_systems s WHERE s.template_id = t.id) DESC,
+         (SELECT count(*) FROM checklist_template_systems s WHERE s.template_id = t.id) ASC,
+         t.id DESC
 LIMIT 1
 `
 
 type PickActiveTemplateParams struct {
 	Stage        InspectionStage
-	SystemID     int64
 	AssetGroupID int64
+	SystemID     int64
 }
 
 // The checklist for a new inspection: the most specific active one that
-// matches the work order (asset group, then system, then general).
+// matches the work order (asset group, then system, then general; fewer
+// systems is more specific).
 func (q *Queries) PickActiveTemplate(ctx context.Context, arg PickActiveTemplateParams) (ChecklistTemplate, error) {
-	row := q.db.QueryRow(ctx, pickActiveTemplate, arg.Stage, arg.SystemID, arg.AssetGroupID)
+	row := q.db.QueryRow(ctx, pickActiveTemplate, arg.Stage, arg.AssetGroupID, arg.SystemID)
 	var i ChecklistTemplate
 	err := row.Scan(
 		&i.ID,
@@ -301,8 +442,8 @@ func (q *Queries) PickActiveTemplate(ctx context.Context, arg PickActiveTemplate
 		&i.Active,
 		&i.CreatedBy,
 		&i.CreatedAt,
-		&i.SystemID,
 		&i.AssetGroupID,
+		&i.FamilyID,
 	)
 	return i, err
 }

@@ -118,3 +118,71 @@ func TestScopedChecklists(t *testing.T) {
 		}
 	}
 }
+
+// TestChecklistFamilies: a new checklist for several systems is separate
+// from the general one; editing makes a new version; overlaps, wrong
+// weight totals and stopping the general list are refused.
+func TestChecklistFamilies(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	admin := e.login("admin@test.local")
+	general := must(e.q.GetActiveTemplate(ctx, gen.InspectionStageAfter))
+	systems, _ := e.q.ListActiveSystems(ctx)
+	camps := func(extra url.Values) url.Values {
+		v := url.Values{"stage": {"after"}, "family": {"0"}, "name": {"المخيمات"}, "activate": {"on"}, "rows": {"2"},
+			"system_id": {idStr(systems[0].ID), idStr(systems[1].ID)},
+			"code_0":    {"C1"}, "label_0": {"بند"}, "weight_0": {"60"}, "code_1": {"C2"}, "label_1": {"بند 2"}, "weight_1": {"40"}}
+		for k, x := range extra {
+			v[k] = x
+		}
+		return v
+	}
+	if res := e.post(admin, "/admin/checklists", camps(url.Values{"weight_1": {"30"}})); res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("weights totalling 90 must be refused: %d", res.StatusCode)
+	}
+	if res := e.post(admin, "/admin/checklists", camps(url.Values{"weight_1": {"50"}})); res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("weights totalling 110 must be refused: %d", res.StatusCode)
+	}
+	if res := e.post(admin, "/admin/checklists", camps(nil)); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("new checklist: %d", res.StatusCode)
+	}
+	if still := must(e.q.GetActiveTemplate(ctx, gen.InspectionStageAfter)); still.ID != general.ID || still.Version != general.Version {
+		t.Fatal("a new checklist must not touch the general one")
+	}
+	pick := func(sys int64) gen.ChecklistTemplate {
+		groups, _ := e.q.ListActiveAssetGroups(ctx)
+		return must(e.q.PickActiveTemplate(ctx, gen.PickActiveTemplateParams{Stage: gen.InspectionStageAfter, SystemID: sys, AssetGroupID: groups[0].ID}))
+	}
+	c := pick(systems[1].ID)
+	if c.ID == general.ID || c.Version != 1 {
+		t.Fatalf("camp systems must use the camps checklist, version 1 (got %d v%d)", c.ID, c.Version)
+	}
+	if pick(systems[2].ID).ID != general.ID {
+		t.Fatal("other systems keep the general checklist")
+	}
+	// Another active list for one of the same systems is refused.
+	other := camps(url.Values{"name": {"أخرى"}, "system_id": {idStr(systems[1].ID)}})
+	if res := e.post(admin, "/admin/checklists", other); res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("overlapping checklist must be refused: %d", res.StatusCode)
+	}
+	// Editing makes version 2 of the same checklist, scope kept.
+	edit := camps(url.Values{"family": {idStr(c.FamilyID)}, "system_id": nil})
+	if res := e.post(admin, "/admin/checklists", edit); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("edit: %d", res.StatusCode)
+	}
+	if v2 := pick(systems[0].ID); v2.FamilyID != c.FamilyID || v2.Version != 2 {
+		t.Fatalf("edit must make version 2 of the same checklist (got family %d v%d)", v2.FamilyID, v2.Version)
+	}
+	// The general list can't be stopped; the camps list can.
+	e.post(admin, "/admin/checklists/"+idStr(general.ID)+"/deactivate", nil)
+	if must(e.q.GetActiveTemplate(ctx, gen.InspectionStageAfter)).ID != general.ID {
+		t.Fatal("the general checklist must stay active")
+	}
+	e.post(admin, "/admin/checklists/"+idStr(pick(systems[0].ID).ID)+"/deactivate", nil)
+	if pick(systems[0].ID).ID != general.ID {
+		t.Fatal("after stopping the camps list, its systems use the general one")
+	}
+	if _, body := e.get(admin, "/admin/checklists"); !strings.Contains(body, "المخيمات") {
+		t.Fatal("list shows the checklist")
+	}
+}

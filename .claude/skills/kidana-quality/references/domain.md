@@ -124,7 +124,7 @@ Check roles in the UI with `appctx.CanEdit(ctx)` / `appctx.IsAdmin(ctx)` / `appc
 
 **Scorecards** (`domain.Composite`, `domain.Rank`): composite of after-work average, during-work average, SLA met rate and findings closed on time, with admin weights (`settings.scorecard_weights`); unknown parts are left out and the rest reweighted.
 
-**Checklist scope**: a version may be scoped to a system and/or asset group; `PickActiveTemplate` picks the most specific active one for a new inspection.
+**Checklists and versions**: a checklist is a family (`checklist_templates.family_id`) of versions numbered 1, 2, … within it. «تعديل البنود» makes a new version of the same checklist (scope fixed); «قائمة فحص جديدة» starts a new family with its own scope: an asset group and/or several systems (`checklist_template_systems`, e.g. the three camp systems). `PickActiveTemplate` uses the most specific active one (asset group, then systems, fewer systems first, then general). Two active checklists of a stage may not overlap (`domain.ScopesOverlap`); the general one can't be stopped, specific ones can. **Weights always total exactly 100** (`domain.WeightGap`), for checklist items and for scorecard weights; forms show a live total and the server refuses anything else.
 
 **Notifications** (in-app only): kinds `finding_raised`, `finding_responded`, `finding_verified`, `finding_rejected`, `finding_due_soon`, `finding_overdue`, `assigned`, `reinspection`, `reset_request`, `report_ready`. Stored with parameters and rendered per reader's language (`views.NotificationText`).
 

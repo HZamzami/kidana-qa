@@ -29,13 +29,10 @@ func Norm(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
 }
 
-// arabicDigits converts Arabic-Indic digits to ASCII.
-var arabicDigits = strings.NewReplacer("٠", "0", "١", "1", "٢", "2", "٣", "3", "٤", "4", "٥", "5", "٦", "6", "٧", "7", "٨", "8", "٩", "9")
-
 // ParseDate accepts yyyy-mm-dd, dd/mm/yyyy (and . or - separators), Arabic
 // digits, and Excel serial numbers. ok is false for a non-empty invalid value.
 func ParseDate(v string) (t *time.Time, ok bool) {
-	v = strings.TrimSpace(arabicDigits.Replace(v))
+	v = domain.ASCIIDigits(v)
 	if v == "" {
 		return nil, true
 	}

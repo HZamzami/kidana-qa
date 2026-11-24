@@ -18,6 +18,7 @@ import (
 
 	"github.com/HZamzami/kidana-quality/internal/appctx"
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/domain"
 	"github.com/HZamzami/kidana-quality/internal/views"
 )
 
@@ -180,7 +181,7 @@ func (f *form) ReqID(name, label string) int64 {
 }
 
 func (f *form) Int(name string, def int) int {
-	v := f.Str(name)
+	v := domain.ASCIIDigits(f.Str(name))
 	if v == "" {
 		return def
 	}

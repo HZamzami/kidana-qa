@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/mail"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/HZamzami/kidana-quality/internal/auth"
 	"github.com/HZamzami/kidana-quality/internal/db"
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/i18n"
 	"github.com/HZamzami/kidana-quality/internal/views"
 )
 
@@ -348,35 +351,140 @@ func tempPassword() string {
 // ---------------------------------------------------------------- checklists
 
 func (s *Server) checklistsList(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.q.ListTemplates(r.Context())
+	ctx := r.Context()
+	rows, err := s.q.ListTemplates(ctx)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, views.ChecklistsPage(rows))
+	// One entry per checklist: its active version (else the newest), with
+	// the other versions underneath. Rows come newest first per family.
+	var fams []views.ChecklistFamily
+	idx := map[int64]int{}
+	for _, row := range rows {
+		i, ok := idx[row.FamilyID]
+		if !ok {
+			idx[row.FamilyID] = len(fams)
+			fams = append(fams, views.ChecklistFamily{Current: row})
+			continue
+		}
+		f := &fams[i]
+		if row.Active && !f.Current.Active {
+			f.Older = append(f.Older, f.Current)
+			f.Current = row
+		} else {
+			f.Older = append(f.Older, row)
+		}
+	}
+	s.render(w, r, http.StatusOK, views.ChecklistsPage(fams))
 }
 
 func (s *Server) checklistShow(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	id, ok := pathID(r, "id")
 	if !ok {
 		s.notFound(w, r)
 		return
 	}
-	t, err := s.q.GetTemplate(r.Context(), id)
+	t, err := s.q.GetTemplate(ctx, id)
 	if err != nil {
 		s.dbError(w, r, err)
 		return
 	}
-	crits, err := s.q.ListCriteria(r.Context(), id)
+	crits, err := s.q.ListCriteria(ctx, id)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, views.ChecklistShow(t, crits))
+	scope, err := s.checklistScopeText(ctx, t)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, views.ChecklistShow(t, crits, scope))
+}
+
+// checklistScopeText describes who a checklist applies to.
+func (s *Server) checklistScopeText(ctx context.Context, t gen.ChecklistTemplate) (string, error) {
+	systems, err := s.q.ListTemplateSystems(ctx, t.ID)
+	if err != nil {
+		return "", err
+	}
+	l := appctx.Lang(ctx)
+	var parts []string
+	if t.AssetGroupID != nil {
+		g, err := s.q.GetAssetGroup(ctx, *t.AssetGroupID)
+		if err != nil {
+			return "", err
+		}
+		parts = append(parts, appctx.T(ctx, "مجموعة الأصل: ")+i18n.Pick(l, g.Name, g.NameEn))
+	}
+	if len(systems) > 0 {
+		names := make([]string, len(systems))
+		for i, sy := range systems {
+			names[i] = i18n.Pick(l, sy.Name, sy.NameEn)
+		}
+		parts = append(parts, appctx.T(ctx, "المنظومات: ")+strings.Join(names, appctx.T(ctx, "، ")))
+	}
+	if len(parts) == 0 {
+		return appctx.T(ctx, "عامة — لكل أوامر العمل التي ليس لها قائمة خاصة"), nil
+	}
+	return strings.Join(parts, " · "), nil
 }
 
 const blankCriterionRows = 3
 
+// checklistBaseName drops the "— الإصدار N" suffix the app adds.
+func checklistBaseName(name string) string {
+	base, _, _ := strings.Cut(name, " — الإصدار ")
+	return strings.TrimSpace(base)
+}
+
+func criteriaRows(crits []gen.TemplateCriterion, blanks int) []views.CriterionInput {
+	rows := make([]views.CriterionInput, 0, len(crits)+blanks)
+	for _, c := range crits {
+		rows = append(rows, views.CriterionInput{Code: c.Code, Label: c.Label, Description: c.Description, LabelEn: c.LabelEn, DescriptionEn: c.DescriptionEn, Weight: strconv.Itoa(int(c.Weight)), Critical: c.IsCritical})
+	}
+	for i := 0; i < blanks; i++ {
+		rows = append(rows, views.CriterionInput{})
+	}
+	return rows
+}
+
+// checklistNew starts a new checklist (its own scope, version 1), either
+// blank or copying the items of an existing one: /admin/checklists/new?stage=after&from=ID.
+func (s *Server) checklistNew(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	stage := r.URL.Query().Get("stage")
+	if !gen.InspectionStage(stage).Valid() {
+		stage = string(gen.InspectionStageAfter)
+	}
+	d := views.ChecklistFormData{Stage: stage, Activate: true}
+	fromQ := r.URL.Query().Get("from")
+	if fromQ == "" { // default: the stage's general checklist
+		if g, err := s.q.GetActiveTemplate(ctx, gen.InspectionStage(stage)); err == nil {
+			fromQ = idStr(g.ID)
+		}
+	}
+	if from, err := strconv.ParseInt(fromQ, 10, 64); err == nil && from > 0 {
+		crits, err := s.q.ListCriteria(ctx, from)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		d.Rows = criteriaRows(crits, blankCriterionRows)
+	}
+	if len(d.Rows) == 0 {
+		d.Rows = criteriaRows(nil, 6)
+	}
+	if err := s.checklistScopes(ctx, &d); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.render(w, r, http.StatusOK, views.ChecklistForm(d))
+}
+
+// checklistNewVersion edits a checklist: a new version with the same scope.
 func (s *Server) checklistNewVersion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id, ok := pathID(r, "id")
@@ -394,23 +502,10 @@ func (s *Server) checklistNewVersion(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	next, err := s.q.NextTemplateVersion(ctx, t.Stage)
-	if err != nil {
+	d := views.ChecklistFormData{Stage: string(t.Stage), Name: checklistBaseName(t.Name), Activate: true, Family: t.FamilyID, Rows: criteriaRows(crits, blankCriterionRows)}
+	if d.ScopeText, err = s.checklistScopeText(ctx, t); err != nil {
 		s.serverError(w, r, err)
 		return
-	}
-	name := strings.TrimSpace(strings.Split(t.Name, " — ")[0])
-	d := views.ChecklistFormData{Stage: string(t.Stage), Name: appctx.Tf(ctx, "%s — الإصدار %d", name, next), Activate: true,
-		SystemID: idPtr(t.SystemID), AssetGroupID: idPtr(t.AssetGroupID)}
-	if err := s.checklistScopes(ctx, &d); err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	for _, c := range crits {
-		d.Rows = append(d.Rows, views.CriterionInput{Code: c.Code, Label: c.Label, Description: c.Description, LabelEn: c.LabelEn, DescriptionEn: c.DescriptionEn, Weight: strconv.Itoa(int(c.Weight)), Critical: c.IsCritical})
-	}
-	for i := 0; i < blankCriterionRows; i++ {
-		d.Rows = append(d.Rows, views.CriterionInput{})
 	}
 	s.render(w, r, http.StatusOK, views.ChecklistForm(d))
 }
@@ -418,12 +513,42 @@ func (s *Server) checklistNewVersion(w http.ResponseWriter, r *http.Request) {
 func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	f := newForm(r)
-	d := views.ChecklistFormData{Stage: f.Str("stage"), Name: f.Str("name"), Activate: f.Bool("activate"),
-		SystemID: f.Str("system_id"), AssetGroupID: f.Str("asset_group_id")}
-	systemID, groupID := f.OptID("system_id"), f.OptID("asset_group_id")
-	if err := s.checklistScopes(ctx, &d); err != nil {
-		s.serverError(w, r, err)
-		return
+	d := views.ChecklistFormData{Stage: f.Str("stage"), Name: f.Str("name"), Activate: f.Bool("activate"), Family: int64(f.Int("family", 0))}
+	var scope domain.ChecklistScope
+	if d.Family > 0 {
+		// Editing: stage and scope come from the checklist, not the form.
+		latest, err := s.q.GetFamilyLatest(ctx, d.Family)
+		if err != nil {
+			s.dbError(w, r, err)
+			return
+		}
+		d.Stage = string(latest.Stage)
+		scope.AssetGroupID = latest.AssetGroupID
+		systems, err := s.q.ListTemplateSystems(ctx, latest.ID)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		for _, sy := range systems {
+			scope.SystemIDs = append(scope.SystemIDs, sy.ID)
+		}
+		if d.ScopeText, err = s.checklistScopeText(ctx, latest); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+	} else {
+		scope.AssetGroupID = f.OptID("asset_group_id")
+		d.AssetGroupID = f.Str("asset_group_id")
+		for _, v := range r.PostForm["system_id"] {
+			if id, err := strconv.ParseInt(v, 10, 64); err == nil && id > 0 && !slices.Contains(scope.SystemIDs, id) {
+				scope.SystemIDs = append(scope.SystemIDs, id)
+				d.SystemIDs = append(d.SystemIDs, v)
+			}
+		}
+		if err := s.checklistScopes(ctx, &d); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
 	}
 	stage := gen.InspectionStage(d.Stage)
 	if !stage.Valid() {
@@ -446,7 +571,7 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < n; i++ {
 		in := views.CriterionInput{
 			Code: f.Str(fmt.Sprintf("code_%d", i)), Label: f.Str(fmt.Sprintf("label_%d", i)),
-			Description: f.Str(fmt.Sprintf("desc_%d", i)), Weight: f.Str(fmt.Sprintf("weight_%d", i)),
+			Description: f.Str(fmt.Sprintf("desc_%d", i)), Weight: domain.ASCIIDigits(f.Str(fmt.Sprintf("weight_%d", i))),
 			LabelEn: f.Str(fmt.Sprintf("label_en_%d", i)), DescriptionEn: f.Str(fmt.Sprintf("desc_en_%d", i)),
 			Critical: f.Bool(fmt.Sprintf("critical_%d", i)),
 		}
@@ -480,6 +605,27 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(crits) == 0 {
 		d.Errors = append(d.Errors, appctx.T(ctx, "أضف بنداً واحداً على الأقل"))
+	} else if len(d.Errors) == 0 {
+		weights := make([]int, len(crits))
+		for i, c := range crits {
+			weights[i] = c.weight
+		}
+		if msg := weightProblem(ctx, weights...); msg != "" {
+			d.Errors = append(d.Errors, msg)
+		}
+	}
+	if d.Activate {
+		active, err := s.q.ListActiveScopes(ctx, stage)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		for _, a := range active {
+			if a.FamilyID != d.Family && domain.ScopesOverlap(scope, domain.ChecklistScope{AssetGroupID: a.AssetGroupID, SystemIDs: a.SystemIds}) {
+				d.Errors = append(d.Errors, appctx.Tf(ctx, "يوجد تداخل مع القائمة المفعّلة «%s» لنفس المنظومة أو مجموعة الأصل. لتغيير بنودها افتح «تعديل» عليها، أو اختر نطاقاً آخر، أو احفظ دون تفعيل.", checklistBaseName(a.Name)))
+				break
+			}
+		}
 	}
 	if len(d.Errors) > 0 {
 		s.render(w, r, http.StatusUnprocessableEntity, views.ChecklistForm(d))
@@ -488,13 +634,28 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 	var newID int64
 	err := db.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		ver, err := q.NextTemplateVersion(ctx, stage)
+		id, err := q.NewTemplateID(ctx)
 		if err != nil {
 			return err
 		}
-		t, err := q.CreateTemplate(ctx, gen.CreateTemplateParams{Stage: stage, Version: ver, Name: d.Name, CreatedBy: currentUserID(ctx), SystemID: systemID, AssetGroupID: groupID})
+		family, ver := id, int32(1)
+		if d.Family > 0 {
+			family = d.Family
+			if ver, err = q.NextTemplateVersion(ctx, family); err != nil {
+				return err
+			}
+		}
+		t, err := q.CreateTemplate(ctx, gen.CreateTemplateParams{
+			ID: id, Stage: stage, Version: ver, Name: appctx.Tf(ctx, "%s — الإصدار %d", checklistBaseName(d.Name), ver),
+			CreatedBy: currentUserID(ctx), AssetGroupID: scope.AssetGroupID, FamilyID: family,
+		})
 		if err != nil {
 			return err
+		}
+		for _, sys := range scope.SystemIDs {
+			if err := q.AddTemplateSystem(ctx, gen.AddTemplateSystemParams{TemplateID: t.ID, SystemID: sys}); err != nil {
+				return err
+			}
 		}
 		for i, c := range crits {
 			if _, err := q.CreateCriterion(ctx, gen.CreateCriterionParams{
@@ -505,7 +666,7 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if d.Activate {
-			if err := q.DeactivateStageTemplates(ctx, gen.DeactivateStageTemplatesParams{Stage: stage, SystemID: systemID, AssetGroupID: groupID}); err != nil {
+			if err := q.DeactivateFamily(ctx, family); err != nil {
 				return err
 			}
 			if err := q.ActivateTemplate(ctx, t.ID); err != nil {
@@ -513,15 +674,64 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		newID = t.ID
-		s.audit(ctx, q, "checklist_template", t.ID, "created", map[string]any{"stage": stage, "version": ver, "activated": d.Activate})
+		s.audit(ctx, q, "checklist_template", t.ID, "created", map[string]any{"stage": stage, "version": ver, "activated": d.Activate, "new_checklist": d.Family == 0})
 		return nil
 	})
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	s.flash(ctx, appctx.T(ctx, "تم حفظ الإصدار الجديد"), "ok")
+	if d.Family == 0 {
+		s.flash(ctx, appctx.T(ctx, "تم إنشاء القائمة الجديدة"), "ok")
+	} else {
+		s.flash(ctx, appctx.T(ctx, "تم حفظ الإصدار الجديد"), "ok")
+	}
 	http.Redirect(w, r, "/admin/checklists/"+idStr(newID), http.StatusSeeOther)
+}
+
+// checklistDeactivate stops a specific checklist; its work orders go back
+// to the general one. The general checklist of a stage can't be stopped.
+func (s *Server) checklistDeactivate(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id, ok := pathID(r, "id")
+	if !ok {
+		s.notFound(w, r)
+		return
+	}
+	t, err := s.q.GetTemplate(ctx, id)
+	if err != nil {
+		s.dbError(w, r, err)
+		return
+	}
+	systems, err := s.q.ListTemplateSystems(ctx, t.ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if t.AssetGroupID == nil && len(systems) == 0 {
+		s.flash(ctx, appctx.T(ctx, "القائمة العامة لا تُوقف، فهي تُستخدم لكل أمر عمل ليس له قائمة خاصة. عدّل بنودها بدلاً من ذلك."), "warn")
+		http.Redirect(w, r, "/admin/checklists", http.StatusSeeOther)
+		return
+	}
+	if err := s.q.DeactivateFamily(ctx, t.FamilyID); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.audit(ctx, s.q, "checklist_template", t.ID, "deactivated", nil)
+	s.flash(ctx, appctx.T(ctx, "أُوقفت القائمة. الفحوصات الجديدة لهذه الأوامر تستخدم القائمة العامة."), "ok")
+	http.Redirect(w, r, "/admin/checklists", http.StatusSeeOther)
+}
+
+// weightProblem explains, in plain words, weights that don't add up to 100.
+func weightProblem(ctx context.Context, weights ...int) string {
+	gap := domain.WeightGap(weights...)
+	switch {
+	case gap > 0:
+		return appctx.Tf(ctx, "مجموع الأوزان %d من 100. أضف %d إلى بند أو أكثر ليصبح المجموع 100.", domain.WeightTotal-gap, gap)
+	case gap < 0:
+		return appctx.Tf(ctx, "مجموع الأوزان %d من 100. أنقص %d من بند أو أكثر ليصبح المجموع 100.", domain.WeightTotal-gap, -gap)
+	}
+	return ""
 }
 
 // checklistScopes fills the system and asset group choices of the checklist form.
@@ -532,11 +742,4 @@ func (s *Server) checklistScopes(ctx context.Context, d *views.ChecklistFormData
 	}
 	d.Systems, d.AssetGroups = lk.Systems, lk.AssetGroups
 	return nil
-}
-
-func idPtr(p *int64) string {
-	if p == nil {
-		return ""
-	}
-	return idStr(*p)
 }

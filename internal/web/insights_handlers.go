@@ -5,7 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/HZamzami/kidana-quality/internal/appctx"
+	"github.com/HZamzami/kidana-quality/internal/db"
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
 	"github.com/HZamzami/kidana-quality/internal/domain"
 	"github.com/HZamzami/kidana-quality/internal/views"
@@ -51,7 +54,10 @@ func (s *Server) auditPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) scoreWeights(r *http.Request) domain.ScoreWeights {
 	w := domain.DefaultScoreWeights
 	if v, err := s.q.GetSetting(r.Context(), "scorecard_weights"); err == nil {
-		_ = json.Unmarshal([]byte(v), &w)
+		var saved domain.ScoreWeights
+		if json.Unmarshal([]byte(v), &saved) == nil && domain.WeightGap(saved.After, saved.During, saved.SLA, saved.Findings) == 0 {
+			w = saved // never use weights that don't total 100
+		}
 	}
 	return w
 }
@@ -62,40 +68,74 @@ func (s *Server) slaPage(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, views.SLAPage(rows, s.scoreWeights(r)))
+	d := views.SLAData{Keys: views.SLAKeys, Days: map[string]string{}, Weights: map[string]string{}}
+	for _, row := range rows {
+		d.Days[row.Key] = strconv.Itoa(int(row.Days))
+	}
+	ws := s.scoreWeights(r)
+	d.Weights["after"], d.Weights["during"] = strconv.Itoa(ws.After), strconv.Itoa(ws.During)
+	d.Weights["sla"], d.Weights["findings"] = strconv.Itoa(ws.SLA), strconv.Itoa(ws.Findings)
+	s.render(w, r, http.StatusOK, views.SLAPage(d))
 }
 
+// slaSave saves the resolution targets and the scorecard weights together:
+// nothing is saved unless every value is valid and the weights total 100.
 func (s *Server) slaSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	_ = r.ParseForm()
-	for _, key := range []string{"emergency", "high", "normal", "finding_critical", "finding_normal"} {
-		days, err := strconv.Atoi(r.PostFormValue("days_" + key))
-		if err != nil || days < 0 || days > 365 {
+	d := views.SLAData{Keys: views.SLAKeys, Days: map[string]string{}, Weights: map[string]string{}}
+	days := map[string]int{}
+	for _, key := range views.SLAKeys {
+		v := domain.ASCIIDigits(r.PostFormValue("days_" + key))
+		d.Days[key] = v
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 365 {
+			d.Errors = append(d.Errors, appctx.Tf(ctx, "«%s»: اكتب عدد أيام من 1 إلى 365.", appctx.T(ctx, views.SLALabel(key))))
 			continue
 		}
-		if err := s.q.UpdateSLATarget(ctx, gen.UpdateSLATargetParams{Key: key, Days: int32(days)}); err != nil { //nolint:gosec // 0..365
-			s.serverError(w, r, err)
-			return
+		days[key] = n
+	}
+	weights := map[string]int{}
+	weightsOK := true
+	for _, key := range views.WeightKeys {
+		v := domain.ASCIIDigits(r.PostFormValue("w_" + key))
+		d.Weights[key] = v
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 || n > 100 {
+			d.Errors = append(d.Errors, appctx.Tf(ctx, "«%s»: اكتب وزناً من 0 إلى 100.", appctx.T(ctx, views.WeightLabel(key))))
+			weightsOK = false
+			continue
+		}
+		weights[key] = n
+	}
+	ws := domain.ScoreWeights{After: weights["after"], During: weights["during"], SLA: weights["sla"], Findings: weights["findings"]}
+	if weightsOK {
+		if msg := weightProblem(ctx, ws.After, ws.During, ws.SLA, ws.Findings); msg != "" {
+			d.Errors = append(d.Errors, msg)
 		}
 	}
-	weight := func(k string) int {
-		v, err := strconv.Atoi(r.PostFormValue("w_" + k))
-		if err != nil || v < 0 || v > 100 {
-			return 0
-		}
-		return v
+	if len(d.Errors) > 0 {
+		s.render(w, r, http.StatusUnprocessableEntity, views.SLAPage(d))
+		return
 	}
-	ws := domain.ScoreWeights{After: weight("after"), During: weight("during"), SLA: weight("sla"), Findings: weight("findings")}
-	if ws.After+ws.During+ws.SLA+ws.Findings != 100 {
-		s.flash(ctx, appctx.T(ctx, "مجموع أوزان التقييم يجب أن يساوي 100. لم تُحفظ الأوزان."), "warn")
-	} else {
+	err := db.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.q.WithTx(tx)
+		for key, n := range days {
+			if err := q.UpdateSLATarget(ctx, gen.UpdateSLATargetParams{Key: key, Days: int32(n)}); err != nil { //nolint:gosec // 1..365
+				return err
+			}
+		}
 		b, _ := json.Marshal(ws)
-		if err := s.q.SetSetting(ctx, gen.SetSettingParams{Key: "scorecard_weights", Value: string(b)}); err != nil {
-			s.serverError(w, r, err)
-			return
+		if err := q.SetSetting(ctx, gen.SetSettingParams{Key: "scorecard_weights", Value: string(b)}); err != nil {
+			return err
 		}
-		s.flash(ctx, appctx.T(ctx, "تم الحفظ"), "ok")
+		s.audit(ctx, q, "sla", 0, "updated", map[string]any{"days": days, "weights": ws})
+		return nil
+	})
+	if err != nil {
+		s.serverError(w, r, err)
+		return
 	}
-	s.audit(ctx, s.q, "sla", 0, "updated", nil)
+	s.flash(ctx, appctx.T(ctx, "تم الحفظ"), "ok")
 	http.Redirect(w, r, "/admin/sla", http.StatusSeeOther)
 }

@@ -115,7 +115,12 @@ during the work; the functional test and safe return to service after it) is
 rated غير مطابق. Grades: ممتاز ≥ 90, جيد جداً ≥ 80, جيد ≥ 70,
 مقبول ≥ 60, ضعيف below.
 
-Checklists are **versioned**. Editing one creates a new version, so old
+Checklist item weights are percentages and must total exactly 100.
+
+Each stage has a **general checklist**, and admins can add **specific
+checklists** for one or more المنظومات (e.g. the camps) and/or a مجموعة الأصل;
+a new inspection uses the most specific one that matches. Checklists are
+**versioned**: editing one creates a new version of that checklist, so old
 inspections keep the criteria and weights they were scored with.
 
 ## Data in and out

@@ -221,7 +221,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/sampling", admin(s.samplingCreate))
 	mux.HandleFunc("POST /admin/sampling/{id}", admin(s.samplingUpdate))
 	mux.HandleFunc("GET /admin/checklists", admin(s.checklistsList))
+	mux.HandleFunc("GET /admin/checklists/new", admin(s.checklistNew))
 	mux.HandleFunc("GET /admin/checklists/{id}", admin(s.checklistShow))
+	mux.HandleFunc("POST /admin/checklists/{id}/deactivate", admin(s.checklistDeactivate))
 	mux.HandleFunc("GET /admin/checklists/{id}/new-version", admin(s.checklistNewVersion))
 	mux.HandleFunc("POST /admin/checklists", admin(s.checklistCreate))
 

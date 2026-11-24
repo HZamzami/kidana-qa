@@ -1,7 +1,10 @@
 package views
 
 import (
+	"context"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
 	"github.com/HZamzami/kidana-quality/internal/domain"
@@ -235,55 +238,136 @@ templ UsersPage(d UsersData) {
 }
 
 // ---------------------------------------------------------------- checklists
-templ ChecklistsPage(rows []gen.ListTemplatesRow) {
+
+// ChecklistFamily is one checklist: its active (else newest) version and
+// the other versions.
+type ChecklistFamily struct {
+	Current gen.ListTemplatesRow
+	Older   []gen.ListTemplatesRow
+}
+
+func familyScope(ctx context.Context, r gen.ListTemplatesRow) string {
+	if r.SystemNames == "" && r.AssetGroupName == "" {
+		return t(ctx, "عامة — لكل أوامر العمل التي ليس لها قائمة خاصة")
+	}
+	var parts []string
+	if r.AssetGroupName != "" {
+		parts = append(parts, t(ctx, "مجموعة الأصل: ")+nm(ctx, r.AssetGroupName, r.AssetGroupNameEn))
+	}
+	if r.SystemNames != "" {
+		parts = append(parts, t(ctx, "المنظومات: ")+nm(ctx, r.SystemNames, r.SystemNamesEn))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func familyGeneral(r gen.ListTemplatesRow) bool { return r.SystemNames == "" && r.AssetGroupName == "" }
+
+templ ChecklistsPage(fams []ChecklistFamily) {
 	@App(t(ctx, "قوائم الفحص")) {
-		@PageHeader(t(ctx, "قوائم الفحص"), t(ctx, "قائمة واحدة مفعّلة لكل مرحلة. الفحوصات تحتفظ بالإصدار الذي استخدمته."))
+		@PageHeader(t(ctx, "قوائم الفحص"), t(ctx, "لكل مرحلة قائمة عامة، ويمكن إضافة قوائم خاصة لمنظومات أو مجموعة أصل. الفحص الجديد يستخدم أدق قائمة تطابق أمر العمل، والفحوصات السابقة تحتفظ بقائمتها.")) {
+			<a href="#new-checklist" class="btn btn-primary">{ t(ctx, "قائمة فحص جديدة") }</a>
+		}
 		@adminNav("/admin/checklists")
-		<div class="card overflow-hidden">
-			<div class="overflow-x-auto">
-				<table class="table">
-					<thead><tr><th>{ t(ctx, "القائمة") }</th><th>{ t(ctx, "المرحلة") }</th><th>{ t(ctx, "الإصدار") }</th><th>{ t(ctx, "الحالة") }</th><th>{ t(ctx, "فحوصات") }</th><th></th></tr></thead>
-					<tbody>
-						for _, tpl := range rows {
-							<tr>
-								<td>
-									<a class="underline decoration-gold-50 underline-offset-4" href={ u("/admin/checklists/%d", tpl.ID) }>{ checklistName(ctx, tpl.Name) }</a>
-									<span class="block text-xs text-ink-60">
-										if tpl.SystemName == "" && tpl.AssetGroupName == "" {
-											{ t(ctx, "عامة") }
-										} else {
-											{ joinNonEmpty(" · ", nm(ctx, tpl.SystemName, tpl.SystemNameEn), nm(ctx, tpl.AssetGroupName, tpl.AssetGroupNameEn)) }
-										}
-									</span>
-								</td>
-								<td>
-									@StagePill(string(tpl.Stage))
-								</td>
-								<td class="num">{ itoa(int(tpl.Version)) }</td>
-								<td>
-									if tpl.Active {
-										<span class="pill bg-green-10 text-green">{ t(ctx, "مفعّلة") }</span>
-									} else {
-										<span class="pill bg-ink-5 text-ink-60">{ t(ctx, "غير مفعّلة") }</span>
-									}
-								</td>
-								<td class="num">{ fmt.Sprint(tpl.InspectionsCount) }</td>
-								<td>
-									<a href={ u("/admin/checklists/%d/new-version", tpl.ID) } class="btn btn-outline py-1 text-xs">{ t(ctx, "إصدار جديد من هذه") }</a>
-								</td>
-							</tr>
+		for _, stage := range []domain.Stage{domain.StageDuring, domain.StageAfter} {
+			<section class="mb-6">
+				<h2 class="mb-2 flex items-center gap-2 font-semibold">
+					@StagePill(string(stage))
+				</h2>
+				<div class="space-y-3">
+					for _, f := range fams {
+						if domain.Stage(f.Current.Stage) == stage {
+							@checklistCard(f)
 						}
-					</tbody>
-				</table>
-			</div>
-		</div>
+					}
+				</div>
+			</section>
+		}
+		<section id="new-checklist" class="card p-5 scroll-mt-24">
+			<h2 class="font-semibold">{ t(ctx, "قائمة فحص جديدة") }</h2>
+			<p class="mt-1 text-sm text-ink-80">{ t(ctx, "لنوع عمل له بنود مختلفة، مثل المخيمات. تبدأ بالإصدار 1 ولا تغيّر القوائم الأخرى. لتعديل قائمة موجودة استخدم «تعديل البنود» عليها.") }</p>
+			<form method="get" action="/admin/checklists/new" class="mt-4 grid gap-3 sm:grid-cols-3 items-end">
+				<div>
+					<label class="label" for="nc_stage">{ t(ctx, "المرحلة") }</label>
+					<select class="input" id="nc_stage" name="stage">
+						<option value="after">{ t(ctx, domain.StageAfter.Label()) }</option>
+						<option value="during">{ t(ctx, domain.StageDuring.Label()) }</option>
+					</select>
+				</div>
+				<div>
+					<label class="label" for="nc_from">{ t(ctx, "ابدأ من") }</label>
+					<select class="input" id="nc_from" name="from">
+						<option value="">{ t(ctx, "نسخة من القائمة العامة لنفس المرحلة") }</option>
+						for _, f := range fams {
+							if f.Current.Active {
+								<option value={ idStr(f.Current.ID) }>{ t(ctx, "نسخة من: ") + checklistName(ctx, f.Current.Name) }</option>
+							}
+						}
+						<option value="0">{ t(ctx, "قائمة فارغة") }</option>
+					</select>
+				</div>
+				<button type="submit" class="btn btn-primary">{ t(ctx, "متابعة") }</button>
+			</form>
+		</section>
 	}
 }
 
-templ ChecklistShow(tpl gen.ChecklistTemplate, crits []gen.TemplateCriterion) {
+templ checklistCard(f ChecklistFamily) {
+	<article class="card p-4">
+		<div class="flex flex-wrap items-start gap-3">
+			<div class="min-w-0 flex-1">
+				<a class="font-medium underline decoration-gold-50 underline-offset-4" href={ u("/admin/checklists/%d", f.Current.ID) }>{ checklistName(ctx, f.Current.Name) }</a>
+				<p class="mt-1 text-sm text-ink-80">{ familyScope(ctx, f.Current) }</p>
+				<p class="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-60">
+					if f.Current.Active {
+						<span class="pill bg-green-10 text-green">{ t(ctx, "مستخدمة الآن") }</span>
+					} else {
+						<span class="pill bg-ink-5 text-ink-60">{ t(ctx, "موقوفة") }</span>
+					}
+					<span class="num">{ tf(ctx, "الإصدار %d", f.Current.Version) }</span>
+					<span>·</span>
+					<span>{ count(ctx, int(f.Current.InspectionsCount), domain.NounInspection) }</span>
+				</p>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				<a href={ u("/admin/checklists/%d/new-version", f.Current.ID) } class="btn btn-outline py-1.5 text-sm">
+					if f.Current.Active {
+						{ t(ctx, "تعديل البنود") }
+					} else {
+						{ t(ctx, "تعديل وإعادة تفعيل") }
+					}
+				</a>
+				if f.Current.Active && !familyGeneral(f.Current) {
+					<div x-data="confirmAction">
+						<button type="button" class="btn btn-ghost py-1.5 text-sm text-fail" x-show="!asking" @click="ask">{ t(ctx, "إيقاف") }</button>
+						<form method="post" action={ u("/admin/checklists/%d/deactivate", f.Current.ID) } x-show="asking" x-cloak class="flex flex-wrap items-center gap-2 text-sm">
+							<span>{ t(ctx, "إيقاف هذه القائمة؟ أوامر عملها تعود للقائمة العامة.") }</span>
+							<button type="submit" class="btn btn-danger py-1.5 text-sm">{ t(ctx, "نعم، أوقفها") }</button>
+							<button type="button" class="btn btn-ghost py-1.5 text-sm" @click="cancel">{ t(ctx, "إلغاء") }</button>
+						</form>
+					</div>
+				}
+			</div>
+		</div>
+		if len(f.Older) > 0 {
+			<details class="mt-3 text-sm">
+				<summary class="cursor-pointer text-ink-80">{ tf(ctx, "الإصدارات السابقة (%d)", len(f.Older)) }</summary>
+				<ul class="mt-2 divide-y divide-ink-10">
+					for _, o := range f.Older {
+						<li class="flex flex-wrap items-center gap-2 py-2">
+							<a class="underline decoration-ink-30 underline-offset-4" href={ u("/admin/checklists/%d", o.ID) }>{ checklistName(ctx, o.Name) }</a>
+							<span class="text-xs text-ink-60">{ count(ctx, int(o.InspectionsCount), domain.NounInspection) }</span>
+						</li>
+					}
+				</ul>
+			</details>
+		}
+	</article>
+}
+
+templ ChecklistShow(tpl gen.ChecklistTemplate, crits []gen.TemplateCriterion, scope string) {
 	@App(checklistName(ctx, tpl.Name)) {
-		@PageHeader(checklistName(ctx, tpl.Name), fmt.Sprintf(t(ctx, "%s · الإصدار %d"), t(ctx, domain.Stage(tpl.Stage).Label()), tpl.Version)) {
-			<a href={ u("/admin/checklists/%d/new-version", tpl.ID) } class="btn btn-primary">{ t(ctx, "إصدار جديد من هذه") }</a>
+		@PageHeader(checklistName(ctx, tpl.Name), t(ctx, domain.Stage(tpl.Stage).Label())+" · "+scope) {
+			<a href={ u("/admin/checklists/%d/new-version", tpl.ID) } class="btn btn-primary">{ t(ctx, "تعديل البنود") }</a>
 		}
 		@adminNav("/admin/checklists")
 		<div class="card overflow-hidden">
@@ -329,67 +413,121 @@ type ChecklistFormData struct {
 	Stage    string
 	Name     string
 	Activate bool
-	// Scope: empty = general; a system and/or asset group makes it specific.
-	SystemID, AssetGroupID string
-	Systems, AssetGroups   []Option
-	Rows                   []CriterionInput
-	Errors                 []string
+	// Family is the checklist being edited (a new version); 0 = a new checklist.
+	Family    int64
+	ScopeText string // edit: who the checklist applies to (fixed)
+	// New checklist scope: none = general.
+	AssetGroupID string
+	SystemIDs    []string
+	Systems      []Option
+	AssetGroups  []Option
+	Rows         []CriterionInput
+	Errors       []string
+}
+
+func (d ChecklistFormData) systemChecked(id string) bool { return slices.Contains(d.SystemIDs, id) }
+
+// weightTotal is the live "total of 100" line under a set of weight inputs.
+// The messages are filled in by the weightTotal component in app.js.
+templ weightTotal() {
+	<p
+		class="text-sm font-medium"
+		aria-live="polite"
+		x-text="totalText"
+		:class="totalClass"
+		data-ok={ t(ctx, "المجموع 100 من 100 ✓") }
+		data-under={ t(ctx, "المجموع {sum} من 100 — أضف {gap}") }
+		data-over={ t(ctx, "المجموع {sum} من 100 — أنقص {gap}") }
+	></p>
 }
 
 templ ChecklistForm(d ChecklistFormData) {
-	@App(t(ctx, "إصدار جديد لقائمة الفحص")) {
-		@PageHeader(t(ctx, "إصدار جديد — ")+t(ctx, domain.Stage(d.Stage).Label()), t(ctx, "الصفوف الفارغة تُتجاهل. الفحوصات السابقة لا تتأثر."))
+	@App(tern(d.Family == 0, t(ctx, "قائمة فحص جديدة"), t(ctx, "تعديل قائمة الفحص"))) {
+		if d.Family == 0 {
+			@PageHeader(t(ctx, "قائمة فحص جديدة — ")+t(ctx, domain.Stage(d.Stage).Label()), t(ctx, "قائمة مستقلة تبدأ بالإصدار 1. القوائم الأخرى لا تتغير."))
+		} else {
+			@PageHeader(t(ctx, "تعديل البنود — ")+t(ctx, domain.Stage(d.Stage).Label()), t(ctx, "الحفظ يُنشئ إصداراً جديداً من هذه القائمة. الفحوصات السابقة تحتفظ بالإصدار الذي استخدمته. الصفوف الفارغة تُتجاهل."))
+		}
 		@adminNav("/admin/checklists")
-		<form method="post" action="/admin/checklists" class="card p-5 space-y-4" novalidate>
+		<form method="post" action="/admin/checklists" class="card p-5 space-y-5" novalidate data-guard x-data="weightTotal" @input="recount">
 			if len(d.Errors) > 0 {
-				<div role="alert" class="rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2">
+				<div role="alert" class="rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2" data-errors>
 					<ul class="list-disc ps-5">
 						for _, e := range d.Errors {
-							<li>{ t(ctx, e) }</li>
+							<li>{ e }</li>
 						}
 					</ul>
 				</div>
 			}
 			<input type="hidden" name="stage" value={ d.Stage }/>
+			<input type="hidden" name="family" value={ fmt.Sprint(d.Family) }/>
 			<div class="max-w-md">
-				<label class="label" for="cl_name">{ t(ctx, "اسم القائمة") }</label>
-				<input class="input" id="cl_name" name="name" value={ d.Name } required maxlength="120"/>
+				<label class="label" for="cl_name">{ t(ctx, "اسم القائمة") } <span class="text-fail">*</span></label>
+				<input class="input" id="cl_name" name="name" value={ d.Name } required maxlength="100" placeholder={ t(ctx, "مثال: فحص بعد التنفيذ — المخيمات") }/>
 			</div>
-			<fieldset class="grid gap-3 sm:grid-cols-2 max-w-2xl">
-				<legend class="label">{ t(ctx, "نطاق القائمة (اختياري)") }</legend>
-				@SelectField("system_id", t(ctx, "المنظومة"), d.SystemID, d.Systems, t(ctx, "كل المنظومات"), false, nil)
-				@SelectField("asset_group_id", t(ctx, "مجموعة الأصل"), d.AssetGroupID, d.AssetGroups, t(ctx, "كل مجموعات الأصول"), false, nil)
-				<p class="sm:col-span-2 text-xs text-ink-60">{ t(ctx, "الفحص الجديد يستخدم أدق قائمة مفعّلة تطابق أمر العمل: مجموعة الأصل، ثم المنظومة، ثم القائمة العامة.") }</p>
-			</fieldset>
-			<div class="overflow-x-auto">
-				<table class="table">
-					<thead><tr><th class="w-20">{ t(ctx, "الرمز") }</th><th>{ t(ctx, "البند") }</th><th>{ t(ctx, "الوصف / طريقة التحقق") }</th><th class="w-20">{ t(ctx, "الوزن") }</th><th class="w-16">{ t(ctx, "حرج") }</th></tr></thead>
-					<tbody>
-						for i, row := range d.Rows {
-							<tr>
-								<td><input class="input h-9" name={ fmt.Sprintf("code_%d", i) } value={ row.Code } maxlength="10" aria-label={ t(ctx, "الرمز") }/></td>
-								<td class="space-y-1.5">
-									<input class="input h-9 min-w-48" name={ fmt.Sprintf("label_%d", i) } value={ row.Label } maxlength="120" aria-label={ t(ctx, "البند") }/>
-									<input class="input h-9 min-w-48" name={ fmt.Sprintf("label_en_%d", i) } value={ row.LabelEn } maxlength="120" aria-label={ t(ctx, "البند بالإنجليزية (اختياري)") } placeholder="English (optional)" dir="ltr" lang="en"/>
-								</td>
-								<td class="space-y-1.5">
-									<textarea class="input py-1.5 min-w-64" rows="2" name={ fmt.Sprintf("desc_%d", i) } aria-label={ t(ctx, "الوصف") }>{ row.Description }</textarea>
-									<textarea class="input py-1.5 min-w-64" rows="2" name={ fmt.Sprintf("desc_en_%d", i) } aria-label={ t(ctx, "الوصف بالإنجليزية (اختياري)") } placeholder="English (optional)" dir="ltr" lang="en">{ row.DescriptionEn }</textarea>
-								</td>
-								<td><input class="input h-9" type="number" min="1" max="100" name={ fmt.Sprintf("weight_%d", i) } value={ row.Weight } aria-label={ t(ctx, "الوزن") }/></td>
-								<td class="text-center"><input type="checkbox" class="size-4" name={ fmt.Sprintf("critical_%d", i) } value="on" checked?={ row.Critical } aria-label={ t(ctx, "بند حرج") }/></td>
-							</tr>
-						}
-					</tbody>
-				</table>
+			if d.Family > 0 {
+				<div class="rounded-lg bg-ink-5 px-3 py-2 text-sm">
+					<span class="text-ink-60">{ t(ctx, "تُستخدم لـ: ") }</span>{ d.ScopeText }
+				</div>
+			} else {
+				<fieldset class="space-y-3">
+					<legend class="label">{ t(ctx, "لمن هذه القائمة؟") }</legend>
+					<p class="text-xs text-ink-80">{ t(ctx, "اختر المنظومات التي تخصها (مثل المخيمات)، أو مجموعة أصل، أو كليهما. أمر العمل يستخدم أدق قائمة تطابقه، وإلا القائمة العامة.") }</p>
+					<div class="max-w-md">
+						@SelectField("asset_group_id", t(ctx, "مجموعة الأصل"), d.AssetGroupID, d.AssetGroups, t(ctx, "كل مجموعات الأصول"), false, nil)
+					</div>
+					<div>
+						<p class="label">{ t(ctx, "المنظومات") }</p>
+						<div class="max-h-64 overflow-y-auto rounded-lg border border-ink-10 p-2 grid gap-1 sm:grid-cols-2">
+							for _, o := range d.Systems {
+								<label class="flex items-start gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-ink-5 cursor-pointer">
+									<input type="checkbox" class="size-4 mt-0.5 shrink-0" name="system_id" value={ o.Value } checked?={ d.systemChecked(o.Value) }/>
+									<span>{ o.Label }</span>
+								</label>
+							}
+						</div>
+						<p class="mt-1 text-xs text-ink-60">{ t(ctx, "بدون اختيار = كل المنظومات.") }</p>
+					</div>
+				</fieldset>
+			}
+			<div>
+				<div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+					<p class="label mb-0">{ t(ctx, "البنود") }</p>
+					<p class="text-xs text-ink-80">{ t(ctx, "الأوزان نسب مئوية: يجب أن يكون مجموعها 100 بالضبط.") }</p>
+				</div>
+				<div class="overflow-x-auto">
+					<table class="table">
+						<thead><tr><th class="w-20">{ t(ctx, "الرمز") }</th><th>{ t(ctx, "البند") }</th><th>{ t(ctx, "الوصف / طريقة التحقق") }</th><th class="w-24">{ t(ctx, "الوزن") }</th><th class="w-16">{ t(ctx, "حرج") }</th></tr></thead>
+						<tbody>
+							for i, row := range d.Rows {
+								<tr>
+									<td><input class="input h-9" name={ fmt.Sprintf("code_%d", i) } value={ row.Code } maxlength="10" aria-label={ t(ctx, "الرمز") }/></td>
+									<td class="space-y-1.5">
+										<input class="input h-9 min-w-48" name={ fmt.Sprintf("label_%d", i) } value={ row.Label } maxlength="120" aria-label={ t(ctx, "البند") }/>
+										<input class="input h-9 min-w-48" name={ fmt.Sprintf("label_en_%d", i) } value={ row.LabelEn } maxlength="120" aria-label={ t(ctx, "البند بالإنجليزية (اختياري)") } placeholder="English (optional)" dir="ltr" lang="en"/>
+									</td>
+									<td class="space-y-1.5">
+										<textarea class="input py-1.5 min-w-64" rows="2" name={ fmt.Sprintf("desc_%d", i) } aria-label={ t(ctx, "الوصف") }>{ row.Description }</textarea>
+										<textarea class="input py-1.5 min-w-64" rows="2" name={ fmt.Sprintf("desc_en_%d", i) } aria-label={ t(ctx, "الوصف بالإنجليزية (اختياري)") } placeholder="English (optional)" dir="ltr" lang="en">{ row.DescriptionEn }</textarea>
+									</td>
+									<td><input class="input h-9 num" type="text" inputmode="numeric" maxlength="3" data-weight name={ fmt.Sprintf("weight_%d", i) } value={ row.Weight } aria-label={ t(ctx, "الوزن") }/></td>
+									<td class="text-center"><input type="checkbox" class="size-4" name={ fmt.Sprintf("critical_%d", i) } value="on" checked?={ row.Critical } aria-label={ t(ctx, "بند حرج") }/></td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				<div class="mt-2 flex justify-end">
+					@weightTotal()
+				</div>
 			</div>
 			<input type="hidden" name="rows" value={ itoa(len(d.Rows)) }/>
 			<label class="flex items-center gap-2 text-sm">
 				<input type="checkbox" name="activate" value="on" checked?={ d.Activate } class="size-4"/>
-				{ t(ctx, "تفعيل هذا الإصدار فوراً للفحوصات الجديدة") }
+				{ t(ctx, "استخدامها فوراً للفحوصات الجديدة") }
 			</label>
 			<div class="flex gap-2">
-				<button type="submit" class="btn btn-primary">{ t(ctx, "حفظ الإصدار") }</button>
+				<button type="submit" class="btn btn-primary">{ tern(d.Family == 0, t(ctx, "إنشاء القائمة"), t(ctx, "حفظ الإصدار")) }</button>
 				<a href="/admin/checklists" class="btn btn-ghost">{ t(ctx, "إلغاء") }</a>
 			</div>
 		</form>
@@ -397,6 +535,11 @@ templ ChecklistForm(d ChecklistFormData) {
 }
 
 // ---------------------------------------------------------------- resolution targets and scorecard weights
+
+// SLALabel and WeightLabel name the settings (Arabic source; translate with T).
+func SLALabel(key string) string { return slaLabel(key) }
+
+func WeightLabel(key string) string { return weightLabel(key) }
 
 func slaLabel(key string) string {
 	switch key {
@@ -414,39 +557,78 @@ func slaLabel(key string) string {
 	return key
 }
 
-templ SLAPage(rows []gen.SlaTarget, w domain.ScoreWeights) {
+// SLAData is the resolution targets and scorecard weights form. Values are
+// kept as typed so a rejected form shows what the user entered.
+type SLAData struct {
+	Keys    []string
+	Days    map[string]string
+	Weights map[string]string
+	Errors  []string
+}
+
+// SLAKeys are the resolution targets in display order.
+var SLAKeys = []string{"emergency", "high", "normal", "finding_critical", "finding_normal"}
+
+// WeightKeys are the scorecard weights in display order.
+var WeightKeys = []string{"after", "during", "sla", "findings"}
+
+func weightLabel(key string) string {
+	switch key {
+	case "after":
+		return "متوسط الفحص بعد التنفيذ"
+	case "during":
+		return "متوسط الفحص أثناء التنفيذ"
+	case "sla":
+		return "الالتزام بزمن الحل"
+	case "findings":
+		return "إغلاق الملاحظات في موعدها"
+	}
+	return key
+}
+
+templ SLAPage(d SLAData) {
 	@App(t(ctx, "زمن الحل والتقييم")) {
 		@PageHeader(t(ctx, "زمن الحل والتقييم"), t(ctx, "قيم افتراضية تحتاج تأكيد الإدارة. تُطبق على أوامر العمل والملاحظات الجديدة."))
 		@adminNav("/admin/sla")
-		<form method="post" action="/admin/sla" class="grid gap-5 lg:grid-cols-2">
+		if len(d.Errors) > 0 {
+			<div role="alert" class="mb-4 rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2" data-errors>
+				<p class="font-medium">{ t(ctx, "لم يُحفظ شيء. صحّح ما يلي ثم اضغط «حفظ»:") }</p>
+				<ul class="mt-1 list-disc ps-5">
+					for _, e := range d.Errors {
+						<li>{ e }</li>
+					}
+				</ul>
+			</div>
+		}
+		<form method="post" action="/admin/sla" class="grid gap-5 lg:grid-cols-2" novalidate data-guard>
 			<section class="card p-5 space-y-3">
 				<h2 class="font-semibold">{ t(ctx, "زمن الحل المستهدف (بالأيام)") }</h2>
 				<p class="text-xs text-ink-80">{ t(ctx, "استحقاق أمر العمل = تاريخ البلاغ + أيام أولويته، إن لم يُدخل تاريخ مجدول. استحقاق الملاحظة = تاريخ تسجيلها + أيام أهميتها، إن لم يُدخل.") }</p>
-				for _, r := range rows {
+				for _, k := range d.Keys {
 					<label class="flex items-center gap-3">
-						<span class="flex-1 text-sm">{ t(ctx, slaLabel(r.Key)) }</span>
-						<input class="input h-9 w-24" type="number" min="0" max="365" name={ "days_" + r.Key } value={ itoa(int(r.Days)) }/>
+						<span class="flex-1 text-sm">{ t(ctx, slaLabel(k)) }</span>
+						<input class="input h-9 w-24 num" type="text" inputmode="numeric" maxlength="3" name={ "days_" + k } value={ d.Days[k] }/>
+						<span class="w-8 text-xs text-ink-60">{ t(ctx, "يوم") }</span>
 					</label>
 				}
 			</section>
-			<section class="card p-5 space-y-3">
+			<section class="card p-5 space-y-3" x-data="weightTotal" @input="recount">
 				<h2 class="font-semibold">{ t(ctx, "أوزان تقييم المقاولين (المجموع 100)") }</h2>
 				<p class="text-xs text-ink-80">{ t(ctx, "التقييم المركب في صفحة المقاولين. الأجزاء غير المتاحة تُستبعد وتُعاد موازنة الباقي.") }</p>
-				@weightInput("after", t(ctx, "متوسط الفحص بعد التنفيذ"), w.After)
-				@weightInput("during", t(ctx, "متوسط الفحص أثناء التنفيذ"), w.During)
-				@weightInput("sla", t(ctx, "الالتزام بزمن الحل"), w.SLA)
-				@weightInput("findings", t(ctx, "إغلاق الملاحظات في موعدها"), w.Findings)
+				for _, k := range WeightKeys {
+					<label class="flex items-center gap-3">
+						<span class="flex-1 text-sm">{ t(ctx, weightLabel(k)) }</span>
+						<input class="input h-9 w-24 num" type="text" inputmode="numeric" maxlength="3" data-weight name={ "w_" + k } value={ d.Weights[k] }/>
+						<span class="w-8 text-xs text-ink-60">%</span>
+					</label>
+				}
+				<div class="border-t border-ink-10 pt-3 flex justify-end">
+					@weightTotal()
+				</div>
 			</section>
 			<button type="submit" class="btn btn-primary justify-self-start">{ t(ctx, "حفظ") }</button>
 		</form>
 	}
-}
-
-templ weightInput(key, label string, v int) {
-	<label class="flex items-center gap-3">
-		<span class="flex-1 text-sm">{ label }</span>
-		<input class="input h-9 w-24" type="number" min="0" max="100" name={ "w_" + key } value={ itoa(v) }/>
-	</label>
 }
 
 func joinNonEmpty(sep string, parts ...string) string {

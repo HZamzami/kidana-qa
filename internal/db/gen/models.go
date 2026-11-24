@@ -831,8 +831,13 @@ type ChecklistTemplate struct {
 	Active       bool
 	CreatedBy    *int64
 	CreatedAt    time.Time
-	SystemID     *int64
 	AssetGroupID *int64
+	FamilyID     int64
+}
+
+type ChecklistTemplateSystem struct {
+	TemplateID int64
+	SystemID   int64
 }
 
 type Contractor struct {

@@ -83,7 +83,23 @@ func TestInsights(t *testing.T) {
 	if res, _ := e.get(c, "/reports/contractor/"+idStr(con.ID)); res.StatusCode != http.StatusOK {
 		t.Fatal("contractor report")
 	}
-	e.post(admin, "/admin/sla", url.Values{"days_emergency": {"2"}, "w_after": {"50"}, "w_during": {"10"}, "w_sla": {"20"}, "w_findings": {"20"}})
+	slaForm := func(emergency, after string) url.Values {
+		return url.Values{"days_emergency": {emergency}, "days_high": {"3"}, "days_normal": {"7"}, "days_finding_critical": {"2"}, "days_finding_normal": {"7"},
+			"w_after": {after}, "w_during": {"10"}, "w_sla": {"20"}, "w_findings": {"20"}}
+	}
+	// Weights that don't total 100 save nothing, not even the valid days.
+	if res := e.post(admin, "/admin/sla", slaForm("5", "45")); res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("weights totalling 95 must be refused: %d", res.StatusCode)
+	}
+	for _, x := range must(e.q.ListSLATargets(ctx)) {
+		if x.Key == "emergency" && x.Days == 5 {
+			t.Fatal("a rejected form must not save part of it")
+		}
+	}
+	// Arabic digits are understood.
+	if res := e.post(admin, "/admin/sla", slaForm("٢", "٥٠")); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("valid form: %d", res.StatusCode)
+	}
 	ts := must(e.q.ListSLATargets(ctx))
 	for _, x := range ts {
 		if x.Key == "emergency" && x.Days != 2 {
