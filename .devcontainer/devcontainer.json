@@ -1,5 +1,5 @@
 {
-  "name": "Kidana QA",
+  "name": "Kidana Quality",
   "dockerComposeFile": ["../compose.yaml"],
   "service": "app",
   "runServices": ["db", "app"],

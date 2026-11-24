@@ -8,10 +8,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/HZamzami/kidana-qa/internal/appctx"
-	"github.com/HZamzami/kidana-qa/internal/auth"
-	"github.com/HZamzami/kidana-qa/internal/db/gen"
-	"github.com/HZamzami/kidana-qa/internal/views"
+	"github.com/HZamzami/kidana-quality/internal/appctx"
+	"github.com/HZamzami/kidana-quality/internal/auth"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/views"
 )
 
 func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {

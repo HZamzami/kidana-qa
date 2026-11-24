@@ -1,4 +1,4 @@
-# Kidana QA — task runner. Everything runs inside Docker; no Go/Node needed on the host.
+# Kidana Quality — task runner. Everything runs inside Docker; no Go/Node needed on the host.
 # `just` with no arguments lists the recipes.
 
 set dotenv-load := false
@@ -45,7 +45,7 @@ fmt:
 lint:
     {{run}} sh -c "templ generate && sqlc generate && golangci-lint run ./..."
 
-# Run all tests (integration tests use the kidana_qa_test database)
+# Run all tests (integration tests use the kidana_quality_test database)
 test *args:
     {{dc}} run --rm app sh -c "templ generate && go test {{ if args == '' { './...' } else { args } }}"
 
@@ -63,14 +63,14 @@ migration name:
 
 # psql into the dev database
 psql:
-    {{dc}} exec db psql -U kidana -d kidana_qa
+    {{dc}} exec db psql -U kidana -d kidana_quality
 
 # Tidy Go modules
 tidy:
     {{run}} go mod tidy
 
 # Build the production image
-image tag="kidana-qa:latest":
+image tag="kidana-quality:latest":
     docker build --target prod -t {{tag}} .
 
 # Delete the stack AND its volumes (database, uploads, caches)

@@ -10,8 +10,8 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
-	"github.com/HZamzami/kidana-qa/internal/appctx"
-	"github.com/HZamzami/kidana-qa/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/appctx"
+	"github.com/HZamzami/kidana-quality/internal/domain"
 )
 
 // Base is the HTML document shell.

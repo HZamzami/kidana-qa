@@ -54,16 +54,16 @@ RUN go mod download
 COPY . .
 RUN templ generate \
  && tailwindcss -i web/styles/input.css -o web/static/css/app.css --minify \
- && go build -trimpath -ldflags="-s -w -X main.version=$(date -u +%Y%m%d%H%M)" -o /out/kidana-qa ./cmd/server \
+ && go build -trimpath -ldflags="-s -w -X main.version=$(date -u +%Y%m%d%H%M)" -o /out/kidana-quality ./cmd/server \
  && mkdir -p /out/data/uploads
 
 # ---------------------------------------------------------------- prod
 FROM gcr.io/distroless/static-debian12:nonroot AS prod
-COPY --from=build /out/kidana-qa /kidana-qa
+COPY --from=build /out/kidana-quality /kidana-quality
 # Pre-create the uploads dir owned by the nonroot user so a fresh named volume inherits it.
 COPY --from=build --chown=65532:65532 /out/data /data
 ENV APP_ENV=production HTTP_ADDR=:8080 UPLOAD_DIR=/data/uploads
 VOLUME ["/data/uploads"]
 EXPOSE 8080
 USER nonroot:nonroot
-ENTRYPOINT ["/kidana-qa"]
+ENTRYPOINT ["/kidana-quality"]

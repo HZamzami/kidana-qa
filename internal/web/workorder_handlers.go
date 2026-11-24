@@ -7,9 +7,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/HZamzami/kidana-qa/internal/db"
-	"github.com/HZamzami/kidana-qa/internal/db/gen"
-	"github.com/HZamzami/kidana-qa/internal/views"
+	"github.com/HZamzami/kidana-quality/internal/db"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/views"
 )
 
 const woPageSize = 25

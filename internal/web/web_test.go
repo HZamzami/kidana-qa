@@ -15,11 +15,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/HZamzami/kidana-qa/internal/auth"
-	"github.com/HZamzami/kidana-qa/internal/config"
-	"github.com/HZamzami/kidana-qa/internal/db"
-	"github.com/HZamzami/kidana-qa/internal/db/gen"
-	"github.com/HZamzami/kidana-qa/internal/storage"
+	"github.com/HZamzami/kidana-quality/internal/auth"
+	"github.com/HZamzami/kidana-quality/internal/config"
+	"github.com/HZamzami/kidana-quality/internal/db"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/storage"
 )
 
 // Integration tests run against TEST_DATABASE_URL (see compose.yaml / CI).

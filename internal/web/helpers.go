@@ -16,9 +16,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/HZamzami/kidana-qa/internal/appctx"
-	"github.com/HZamzami/kidana-qa/internal/db/gen"
-	"github.com/HZamzami/kidana-qa/internal/views"
+	"github.com/HZamzami/kidana-quality/internal/appctx"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/views"
 )
 
 func isHTMX(r *http.Request) bool { return r.Header.Get("HX-Request") == "true" }

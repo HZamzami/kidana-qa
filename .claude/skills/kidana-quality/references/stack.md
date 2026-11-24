@@ -33,7 +33,7 @@ The JS libraries are vendored, not loaded from a CDN, because site networks may 
 - **File ownership**: containers run as `${HOST_UID}:${HOST_GID}`, which the Justfile exports. Calling `docker compose` directly without them falls back to 1000:1000.
 - **Go caches**: `GOCACHE=/go-cache`, `GOMODCACHE=/go-mod`, `GOPATH=/go-mod/gopath`, all on named volumes made world-writable in the image. If you see "permission denied" on `/go/pkg/sumdb`, GOPATH isn't set.
 - **Postgres 18 volume path** is `/var/lib/postgresql`, not `/var/lib/postgresql/data`.
-- **Test DB**: `kidana_qa_test` is created by `docker/postgres/init/01-test-db.sql`, but only when the volume is first created. After `just nuke` it comes back automatically.
+- **Test DB**: `kidana_quality_test` is created by `docker/postgres/init/01-test-db.sql`, but only when the volume is first created. After `just nuke` it comes back automatically.
 - **Templ + Alpine**: write `x-on:click` / `x-bind:class`, not `@click` / `:class`. Conditional boolean attributes use `checked?={ cond }`.
 - **Alpine CSP**: the expression parser handles simple expressions and object literals, but no arbitrary JS. If something doesn't react, move it into a getter.
 - **excelize pictures need `_ "image/png"`** registered (done in `excel/export.go`), otherwise `AddPicture` fails with "image: unknown format".

@@ -4,8 +4,8 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/HZamzami/kidana-qa/internal/domain"
-	"github.com/HZamzami/kidana-qa/internal/views"
+	"github.com/HZamzami/kidana-quality/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/views"
 )
 
 // lookupOptions loads the select options for sites, systems and contractors.

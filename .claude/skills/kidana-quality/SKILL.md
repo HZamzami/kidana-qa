@@ -1,9 +1,9 @@
 ---
-name: kidana-qa
-description: How to build in the Kidana QA maintenance-quality app (Go + templ + HTMX + Alpine CSP + Tailwind v4 + Postgres, Arabic RTL, Kidana brand). Use for ANY work in this repo — new pages or screens, UI components, styling/theming, dashboard KPIs or charts, inspection/checklist/criteria changes, work-order or finding features, Excel import/export, migrations and queries, tests — and whenever someone asks what the app is, how its QA/QC model works, or how to make something "look like the rest of the app".
+name: kidana-quality
+description: How to build in the Kidana Quality maintenance-quality app (Go + templ + HTMX + Alpine CSP + Tailwind v4 + Postgres, Arabic RTL, Kidana brand). Use for ANY work in this repo — new pages or screens, UI components, styling/theming, dashboard KPIs or charts, inspection/checklist/criteria changes, work-order or finding features, Excel import/export, migrations and queries, tests — and whenever someone asks what the app is, how its QA/QC model works, or how to make something "look like the rest of the app".
 ---
 
-# Kidana QA
+# Kidana Quality
 
 A quality system for Kidana's maintenance contractors. Every **work order** (أمر عمل) or preventive maintenance job (صيانة وقائية) can be inspected twice:
 

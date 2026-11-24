@@ -5,7 +5,7 @@ package appctx
 import (
 	"context"
 
-	"github.com/HZamzami/kidana-qa/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
 )
 
 type key int

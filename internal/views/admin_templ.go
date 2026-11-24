@@ -12,8 +12,8 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	"fmt"
 
-	"github.com/HZamzami/kidana-qa/internal/db/gen"
-	"github.com/HZamzami/kidana-qa/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/domain"
 )
 
 func adminNav(active string) templ.Component {

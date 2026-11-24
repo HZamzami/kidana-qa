@@ -3,7 +3,7 @@
 #
 #   cp .env.example .env.prod   # set ADMIN_*, POSTGRES_PASSWORD, etc.
 #   docker compose -f compose.prod.yaml --env-file .env.prod up -d --build
-name: kidana-qa-prod
+name: kidana-quality-prod
 
 services:
   db:
@@ -12,11 +12,11 @@ services:
     environment:
       POSTGRES_USER: kidana
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-      POSTGRES_DB: kidana_qa
+      POSTGRES_DB: kidana_quality
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kidana -d kidana_qa"]
+      test: ["CMD-SHELL", "pg_isready -U kidana -d kidana_quality"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -25,11 +25,11 @@ services:
     build:
       context: .
       target: prod
-    image: kidana-qa:latest
+    image: kidana-quality:latest
     restart: unless-stopped
     environment:
       APP_ENV: production
-      DATABASE_URL: postgres://kidana:${POSTGRES_PASSWORD}@db:5432/kidana_qa?sslmode=disable
+      DATABASE_URL: postgres://kidana:${POSTGRES_PASSWORD}@db:5432/kidana_quality?sslmode=disable
       SESSION_SECURE: ${SESSION_SECURE:-true}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_NAME: ${ADMIN_NAME:-مدير النظام}
@@ -55,9 +55,9 @@ services:
     command:
       - |
         while true; do
-          f=/backups/kidana_qa_$$(date +%Y%m%d_%H%M).dump
-          pg_dump -h db -U kidana -d kidana_qa -Fc -f "$$f" && echo "backup ok: $$f"
-          find /backups -name 'kidana_qa_*.dump' -mtime +14 -delete
+          f=/backups/kidana_quality_$$(date +%Y%m%d_%H%M).dump
+          pg_dump -h db -U kidana -d kidana_quality -Fc -f "$$f" && echo "backup ok: $$f"
+          find /backups -name 'kidana_quality_*.dump' -mtime +14 -delete
           sleep 86400
         done
     depends_on:

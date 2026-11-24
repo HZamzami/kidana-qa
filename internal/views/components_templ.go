@@ -12,8 +12,8 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	"time"
 
-	"github.com/HZamzami/kidana-qa/internal/dates"
-	"github.com/HZamzami/kidana-qa/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/dates"
+	"github.com/HZamzami/kidana-quality/internal/domain"
 )
 
 // ---------------------------------------------------------------- dates

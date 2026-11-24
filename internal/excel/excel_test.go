@@ -7,7 +7,7 @@ import (
 
 	"github.com/xuri/excelize/v2"
 
-	"github.com/HZamzami/kidana-qa/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/domain"
 )
 
 func TestParseDate(t *testing.T) {

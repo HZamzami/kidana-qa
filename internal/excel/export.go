@@ -8,8 +8,8 @@ import (
 
 	"github.com/xuri/excelize/v2"
 
-	"github.com/HZamzami/kidana-qa/internal/dates"
-	"github.com/HZamzami/kidana-qa/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/dates"
+	"github.com/HZamzami/kidana-quality/internal/domain"
 )
 
 const font = "Avenir Next Arabic" // brand font; Excel substitutes it if not installed

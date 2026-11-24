@@ -1,4 +1,4 @@
-module github.com/HZamzami/kidana-qa
+module github.com/HZamzami/kidana-quality
 
 go 1.27.4
 

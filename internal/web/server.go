@@ -11,11 +11,11 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/HZamzami/kidana-qa/internal/auth"
-	"github.com/HZamzami/kidana-qa/internal/config"
-	"github.com/HZamzami/kidana-qa/internal/db/gen"
-	"github.com/HZamzami/kidana-qa/internal/storage"
-	webassets "github.com/HZamzami/kidana-qa/web"
+	"github.com/HZamzami/kidana-quality/internal/auth"
+	"github.com/HZamzami/kidana-quality/internal/config"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/storage"
+	webassets "github.com/HZamzami/kidana-quality/web"
 )
 
 type Server struct {

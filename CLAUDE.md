@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Kidana QA: maintenance quality system (Arabic, RTL). Work orders get **QA** (during work) and **QC** (after work) inspections, plus findings. See README.md and docs/ARCHITECTURE.md.
+Kidana Quality: maintenance quality system (Arabic, RTL). Work orders get **QA** (during work) and **QC** (after work) inspections, plus findings. See README.md and docs/ARCHITECTURE.md.
 
 ## Environment
 
@@ -16,5 +16,5 @@ Kidana QA: maintenance quality system (Arabic, RTL). Work orders get **QA** (dur
 * Alpine uses its **CSP build**: register components in `web/static/js/app.js` and never use inline JS. Don't use htmx `hx-on` attributes either, because eval is disabled.
 * UI text is Arabic. Put enum labels in `internal/domain/labels.go`. Counts go through `domain.Count`, percentages in text through `domain.Pct`/`PctVal`.
 * Dates: show dd/mm/yyyy plus read-only Umm al-Qura Hijri (`@DateText`/`@DateInline`, `internal/dates`). Store ISO.
-* The project skill `.claude/skills/kidana-qa` has the full design system and recipes. Verify UI work with `just ui-check`.
+* The project skill `.claude/skills/kidana-quality` has the full design system and recipes. Verify UI work with `just ui-check`.
 * Colours: use only the Kidana tokens in `web/styles/input.css` (lighter tints only).

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HZamzami/kidana-qa/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/domain"
 )
 
 var (

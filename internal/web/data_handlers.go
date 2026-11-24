@@ -11,13 +11,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/xuri/excelize/v2"
 
-	"github.com/HZamzami/kidana-qa/internal/dates"
-	"github.com/HZamzami/kidana-qa/internal/db"
-	"github.com/HZamzami/kidana-qa/internal/db/gen"
-	"github.com/HZamzami/kidana-qa/internal/domain"
-	"github.com/HZamzami/kidana-qa/internal/excel"
-	"github.com/HZamzami/kidana-qa/internal/views"
-	webassets "github.com/HZamzami/kidana-qa/web"
+	"github.com/HZamzami/kidana-quality/internal/dates"
+	"github.com/HZamzami/kidana-quality/internal/db"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/excel"
+	"github.com/HZamzami/kidana-quality/internal/views"
+	webassets "github.com/HZamzami/kidana-quality/web"
 )
 
 // describeScope turns the filters into a human-readable line for reports.
@@ -188,7 +188,7 @@ func (s *Server) exportExcel(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	s.sendWorkbook(w, r, book, "Kidana-QA-Report_"+time.Now().Format(time.DateOnly)+".xlsx")
+	s.sendWorkbook(w, r, book, "Kidana-Quality-Report_"+time.Now().Format(time.DateOnly)+".xlsx")
 }
 
 // activeChecklists returns the active QA and QC checklists for the criteria sheet.
@@ -249,7 +249,7 @@ func (s *Server) workOrderTemplate(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	s.sendWorkbook(w, r, book, "Kidana-QA-WorkOrders-Template.xlsx")
+	s.sendWorkbook(w, r, book, "Kidana-Quality-WorkOrders-Template.xlsx")
 }
 
 const maxImportBytes = 15 << 20

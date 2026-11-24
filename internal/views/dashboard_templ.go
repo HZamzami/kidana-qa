@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/HZamzami/kidana-qa/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/domain"
 )
 
 type DashFilters struct {

@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/HZamzami/kidana-qa/internal/db/gen"
-	"github.com/HZamzami/kidana-qa/internal/domain"
-	"github.com/HZamzami/kidana-qa/internal/views"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/views"
 )
 
 // reportScope is the filter set shared by the dashboard, printed report and Excel export.

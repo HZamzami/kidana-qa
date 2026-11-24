@@ -1,4 +1,4 @@
-// Command server runs the Kidana QA web application.
+// Command server runs the Kidana Quality web application.
 package main
 
 import (
@@ -13,13 +13,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/HZamzami/kidana-qa/internal/auth"
-	"github.com/HZamzami/kidana-qa/internal/config"
-	"github.com/HZamzami/kidana-qa/internal/db"
-	"github.com/HZamzami/kidana-qa/internal/db/gen"
-	"github.com/HZamzami/kidana-qa/internal/storage"
-	"github.com/HZamzami/kidana-qa/internal/views"
-	"github.com/HZamzami/kidana-qa/internal/web"
+	"github.com/HZamzami/kidana-quality/internal/auth"
+	"github.com/HZamzami/kidana-quality/internal/config"
+	"github.com/HZamzami/kidana-quality/internal/db"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/storage"
+	"github.com/HZamzami/kidana-quality/internal/views"
+	"github.com/HZamzami/kidana-quality/internal/web"
 )
 
 // version is set at build time (-ldflags "-X main.version=...").

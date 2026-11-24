@@ -9,8 +9,8 @@ import (
 
 	"github.com/a-h/templ"
 
-	"github.com/HZamzami/kidana-qa/internal/dates"
-	"github.com/HZamzami/kidana-qa/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/dates"
+	"github.com/HZamzami/kidana-quality/internal/domain"
 )
 
 // AssetVersion is appended to static URLs to bust caches after a deploy.

@@ -1,4 +1,4 @@
-# Kidana QA — نظام جودة الصيانة
+# Kidana Quality — نظام جودة الصيانة
 
 Quality system for Kidana's maintenance work orders. Every work order can be
 inspected at two stages:
@@ -39,7 +39,7 @@ and restarts it (air). Refresh the browser to see changes.
 |---|---|
 | `just up` / `just down` | Start / stop the stack (data is kept) |
 | `just logs` | Follow app logs |
-| `just test` | Unit + integration tests (uses the `kidana_qa_test` database) |
+| `just test` | Unit + integration tests (uses the `kidana_quality_test` database) |
 | `just lint` | golangci-lint, after regenerating code |
 | `just gen` | Regenerate templ components and sqlc queries |
 | `just migration add_thing` | New SQL migration in `internal/db/migrations` |

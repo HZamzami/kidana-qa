@@ -1,4 +1,4 @@
-// Kidana QA — client behaviour.
+// Kidana Quality — client behaviour.
 // Alpine runs in its CSP build (no eval), so components are registered here
 // with Alpine.data() and templates only reference their properties/methods.
 // htmx handles server round-trips; Alpine handles local UI state.
