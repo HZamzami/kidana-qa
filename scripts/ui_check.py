@@ -206,7 +206,7 @@ with sync_playwright() as p:
         sec.locator("input[type=file]").set_input_files({"name": "note.txt", "mimeType": "text/plain", "buffer": b"not an image"})
         pp.wait_for_timeout(1000)
         shot(pp, "phone-during-bad-file-toast", full=False)
-        rate_flow(pp, ["غير مطابق", "مطابق", "مطابق جزئياً", "مطابق", "مطابق"], finding_on=0)
+        rate_flow(pp, ["غير مطابق", "مطابق", "مطابق جزئياً", "مطابق", "مطابق", "مطابق"], finding_on=0)
         shot(pp, "phone-during-review")
         pp.click("text=إرسال الفحص"); pp.wait_for_load_state("networkidle")
         shot(pp, "phone-after-during-submit")
@@ -313,6 +313,31 @@ with sync_playwright() as p:
         page.goto(BASE + "/reports/print"); shot(page, "print-report")
         page.emulate_media(media="print"); shot(page, "print-report-print-media"); page.emulate_media(media="screen")
     s_print()
+
+    @step("work order print: single record and filtered batch")
+    def s_wo_print():
+        # The page opens the print dialog itself; stub it so the run doesn't block.
+        page.add_init_script("window.print = () => { window.__printed = true }")
+        pp.add_init_script("window.print = () => { window.__printed = true }")
+        page.goto(state["wo_url"])
+        with page.context.expect_page() as tab:
+            page.locator("main a:has-text('طباعة')").first.click()
+        pr = tab.value; watch(pr, "print-one"); pr.wait_for_load_state("networkidle")
+        pr.add_init_script("window.print = () => {}")
+        assert pr.locator("article.sheet").count() == 1, "single print must render one sheet"
+        shot(pr, "print-work-order")
+        pr.emulate_media(media="print"); shot(pr, "print-work-order-media-print"); pr.close()
+        page.goto(BASE + "/work-orders?priority=high"); page.wait_for_load_state("networkidle")
+        shot(page, "work-orders-print-button", full=False)
+        href = page.locator("a:has-text('طباعة النتائج')").get_attribute("href")
+        assert "priority=high" in href, f"print link must carry the filters: {href}"
+        page.goto(BASE + href); page.wait_for_load_state("networkidle")
+        total = page.locator("article.sheet").count()
+        assert total >= 1, "filtered print rendered no sheets"
+        shot(page, "print-filtered", full=False)
+        page.goto(BASE + "/work-orders/print?q=__no_such_ref__"); shot(page, "print-empty", full=False)
+        pp.goto(state["wo_url"].replace("/work-orders/", "/work-orders/") + "/print"); shot(pp, "phone-print-work-order", full=False)
+    s_wo_print()
 
     @step("data page: template download, import, export")
     def s_data():
