@@ -3,10 +3,12 @@ package web
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/HZamzami/kidana-quality/internal/appctx"
+	"github.com/HZamzami/kidana-quality/internal/i18n"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/xuri/excelize/v2"
@@ -24,10 +26,10 @@ import (
 func (s *Server) describeScope(ctx context.Context, sc reportScope) string {
 	var parts []string
 	if sc.F.Stage != "" {
-		parts = append(parts, "المرحلة: "+domain.Stage(sc.F.Stage).Label())
+		parts = append(parts, appctx.T(ctx, "المرحلة: ")+appctx.T(ctx, domain.Stage(sc.F.Stage).Label()))
 	}
 	if sc.F.Type != "" {
-		parts = append(parts, "النوع: "+domain.Label(domain.WOTypeLabels, sc.F.Type))
+		parts = append(parts, appctx.T(ctx, "النوع: ")+appctx.T(ctx, domain.Label(domain.WOTypeLabels, sc.F.Type)))
 	}
 	lk, err := s.lookupOptions(ctx, false)
 	if err == nil {
@@ -40,29 +42,29 @@ func (s *Server) describeScope(ctx context.Context, sc reportScope) string {
 			return v
 		}
 		if sc.F.Site != "" {
-			parts = append(parts, "الموقع: "+find(lk.Sites, sc.F.Site))
+			parts = append(parts, appctx.T(ctx, "الموقع: ")+find(lk.Sites, sc.F.Site))
 		}
 		if sc.F.System != "" {
-			parts = append(parts, "المنظومة: "+find(lk.Systems, sc.F.System))
+			parts = append(parts, appctx.T(ctx, "المنظومة: ")+find(lk.Systems, sc.F.System))
 		}
 		if sc.F.AssetGroup != "" {
-			parts = append(parts, "مجموعة الأصل: "+find(lk.AssetGroups, sc.F.AssetGroup))
+			parts = append(parts, appctx.T(ctx, "مجموعة الأصل: ")+find(lk.AssetGroups, sc.F.AssetGroup))
 		}
 		if sc.F.Contractor != "" {
-			parts = append(parts, "المقاول: "+find(lk.Contractors, sc.F.Contractor))
+			parts = append(parts, appctx.T(ctx, "المقاول: ")+find(lk.Contractors, sc.F.Contractor))
 		}
 	}
 	switch sc.F.Result {
 	case "pass":
-		parts = append(parts, "النتيجة: مطابق")
+		parts = append(parts, appctx.T(ctx, "النتيجة: مطابق"))
 	case "fail":
-		parts = append(parts, "النتيجة: غير مطابق")
+		parts = append(parts, appctx.T(ctx, "النتيجة: غير مطابق"))
 	}
 	if sc.F.From != "" || sc.F.To != "" {
-		parts = append(parts, fmt.Sprintf("الفترة: %s إلى %s", orEllipsis(sc.F.From), orEllipsis(sc.F.To)))
+		parts = append(parts, appctx.Tf(ctx, "الفترة: %s إلى %s", orEllipsis(sc.F.From), orEllipsis(sc.F.To)))
 	}
 	if len(parts) == 0 {
-		return "جميع الفحوصات"
+		return appctx.T(ctx, "جميع الفحوصات")
 	}
 	return strings.Join(parts, " · ")
 }
@@ -90,14 +92,14 @@ func (s *Server) reportPrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := views.ReportData{
-		Generated: dates.Both(time.Now().In(dates.Riyadh)), Scope: s.describeScope(ctx, sc),
-		S: rep.Summary, Insights: domain.Insights(rep.Summary),
+		Generated: dates.BothIn(appctx.Lang(ctx), time.Now().In(dates.Riyadh)), Scope: s.describeScope(ctx, sc),
+		S: rep.Summary, Insights: domain.InsightsIn(appctx.Lang(ctx), rep.Summary),
 		Findings: findings, Today: time.Now().In(dates.Riyadh).Format(time.DateOnly),
 	}
 	for _, row := range rep.Rows {
 		rr := views.ReportRow{
-			Ref: row.Ref, Stage: string(row.Stage), Attempt: int(row.Attempt), Date: dates.DMY(row.InspectedOn), Hijri: dates.Hijri(row.InspectedOn),
-			Site: row.SiteName, System: row.SystemName, AssetGroup: row.AssetGroupName, Contractor: row.ContractorName, Inspector: row.InspectorName,
+			Ref: row.Ref, Stage: string(row.Stage), Attempt: int(row.Attempt), Date: dates.DMY(row.InspectedOn), Hijri: dates.HijriIn(appctx.Lang(ctx), row.InspectedOn),
+			Site: i18n.Pick(appctx.Lang(ctx), row.SiteName, row.SiteNameEn), System: i18n.Pick(appctx.Lang(ctx), row.SystemName, row.SystemNameEn), AssetGroup: i18n.Pick(appctx.Lang(ctx), row.AssetGroupName, row.AssetGroupNameEn), Contractor: i18n.Pick(appctx.Lang(ctx), row.ContractorName, row.ContractorNameEn), Inspector: row.InspectorName,
 		}
 		if row.Score != nil {
 			rr.Score = *row.Score
@@ -140,8 +142,8 @@ func (s *Server) exportExcel(w http.ResponseWriter, r *http.Request) {
 	rows := make([]excel.InspectionExport, 0, len(rep.Rows))
 	for _, row := range rep.Rows {
 		e := excel.InspectionExport{
-			Ref: row.Ref, Type: string(row.Type), Site: row.SiteName, System: row.SystemName, AssetGroup: row.AssetGroupName, Asset: row.Asset,
-			Location: row.Location, Contractor: row.ContractorName, Technician: row.Technician,
+			Ref: row.Ref, Type: string(row.Type), Site: i18n.Pick(appctx.Lang(ctx), row.SiteName, row.SiteNameEn), System: i18n.Pick(appctx.Lang(ctx), row.SystemName, row.SystemNameEn), AssetGroup: i18n.Pick(appctx.Lang(ctx), row.AssetGroupName, row.AssetGroupNameEn), Asset: row.Asset,
+			Location: row.Location, Contractor: i18n.Pick(appctx.Lang(ctx), row.ContractorName, row.ContractorNameEn), Technician: row.Technician,
 			Stage: string(row.Stage), Template: row.TemplateName, Inspector: row.InspectorName,
 			Attempt: int(row.Attempt), Date: row.InspectedOn, CriticalFailed: row.CriticalFailed,
 			Ratings: ratings[row.ID], Notes: row.Notes,
@@ -167,10 +169,10 @@ func (s *Server) exportExcel(w http.ResponseWriter, r *http.Request) {
 	for _, f := range fs {
 		crit := ""
 		if f.CriterionCode != "" {
-			crit = f.CriterionCode + " - " + f.CriterionLabel
+			crit = f.CriterionCode + " - " + i18n.Pick(appctx.Lang(ctx), f.CriterionLabel, f.CriterionLabelEn)
 		}
 		findings = append(findings, excel.FindingExport{
-			ID: f.ID, Ref: f.WoRef, Site: f.SiteName, Contractor: f.ContractorName, Criterion: crit,
+			ID: f.ID, Ref: f.WoRef, Site: i18n.Pick(appctx.Lang(ctx), f.SiteName, f.SiteNameEn), Contractor: i18n.Pick(appctx.Lang(ctx), f.ContractorName, f.ContractorNameEn), Criterion: crit,
 			Severity: string(f.Severity), Status: string(f.Status), Description: f.Description,
 			CorrectiveAction: f.CorrectiveAction, Owner: f.Owner, ClosureNote: f.ClosureNote,
 			DueDate: f.DueDate, CreatedAt: f.CreatedAt, ClosedAt: f.ClosedAt,
@@ -184,8 +186,8 @@ func (s *Server) exportExcel(w http.ResponseWriter, r *http.Request) {
 	}
 	logo, _ := webassets.Static.ReadFile("static/img/kidana-logo.png")
 	book, err := excel.Report(excel.ReportInput{
-		Scope: s.describeScope(ctx, sc), Summary: rep.Summary, Insights: domain.Insights(rep.Summary),
-		Rows: rows, Criteria: crits, Findings: findings, Checklists: checklists, Logo: logo,
+		Scope: s.describeScope(ctx, sc), Summary: rep.Summary, Insights: domain.InsightsIn(appctx.Lang(ctx), rep.Summary),
+		Rows: rows, Criteria: crits, Findings: findings, Checklists: checklists, Logo: logo, Lang: appctx.Lang(ctx),
 	})
 	if err != nil {
 		s.serverError(w, r, err)
@@ -247,7 +249,7 @@ func (s *Server) workOrderTemplate(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	book, err := excel.WorkOrderTemplate(names(lk.Sites), names(lk.Systems), names(lk.AssetGroups), names(lk.Contractors))
+	book, err := excel.WorkOrderTemplate(appctx.Lang(ctx), names(lk.Sites), names(lk.Systems), names(lk.AssetGroups), names(lk.Contractors))
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -261,33 +263,33 @@ func (s *Server) importExcel(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	r.Body = http.MaxBytesReader(w, r.Body, maxImportBytes+1<<20)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
-		s.render(w, r, http.StatusBadRequest, views.DataPage(&views.ImportOutcome{Error: "الملف كبير جداً (الحد 15MB) أو غير صالح."}))
+		s.render(w, r, http.StatusBadRequest, views.DataPage(&views.ImportOutcome{Error: appctx.T(ctx, "الملف كبير جداً (الحد 15MB) أو غير صالح.")}))
 		return
 	}
 	defer func() { _ = r.MultipartForm.RemoveAll() }()
 	file, hdr, err := r.FormFile("file")
 	if err != nil {
-		s.render(w, r, http.StatusBadRequest, views.DataPage(&views.ImportOutcome{Error: "اختر ملف Excel بصيغة \u200e.xlsx"}))
+		s.render(w, r, http.StatusBadRequest, views.DataPage(&views.ImportOutcome{Error: appctx.T(ctx, "اختر ملف Excel بصيغة \u200e.xlsx")}))
 		return
 	}
 	defer func() { _ = file.Close() }()
 	if !strings.HasSuffix(strings.ToLower(hdr.Filename), ".xlsx") {
-		s.render(w, r, http.StatusBadRequest, views.DataPage(&views.ImportOutcome{Error: "الملف يجب أن يكون بصيغة \u200e.xlsx"}))
+		s.render(w, r, http.StatusBadRequest, views.DataPage(&views.ImportOutcome{Error: appctx.T(ctx, "الملف يجب أن يكون بصيغة \u200e.xlsx")}))
 		return
 	}
 
-	res, err := excel.Parse(file)
+	res, err := excel.Parse(file, appctx.Lang(ctx))
 	if err != nil {
-		msg := "تعذّرت قراءة الملف. تأكد أنه ملف Excel صالح."
+		msg := appctx.T(ctx, "تعذّرت قراءة الملف. تأكد أنه ملف Excel صالح.")
 		if errors.Is(err, excel.ErrUnrecognised) {
-			msg = "لم يتم التعرف على أعمدة الملف. استخدم قالب أوامر العمل."
+			msg = appctx.T(ctx, "لم يتم التعرف على أعمدة الملف. استخدم قالب أوامر العمل.")
 		}
 		s.render(w, r, http.StatusUnprocessableEntity, views.DataPage(&views.ImportOutcome{Error: msg}))
 		return
 	}
 
 	out := &views.ImportOutcome{FileName: hdr.Filename, Skipped: res.Skipped, Warnings: res.Warnings}
-	out.KindLabel = "أوامر العمل"
+	out.KindLabel = appctx.T(ctx, "أوامر العمل")
 	if err := s.importWorkOrders(ctx, res, out); err != nil {
 		s.serverError(w, r, err)
 		return
@@ -316,28 +318,28 @@ func (lr *lookupResolver) id(kind, name string) (int64, error) {
 		var x gen.Site
 		if x, err = lr.q.GetSiteByName(lr.ctx, name); errors.Is(err, pgx.ErrNoRows) {
 			x, err = lr.q.CreateSite(lr.ctx, gen.CreateSiteParams{Name: name, Sort: 100})
-			lr.created = append(lr.created, "موقع: "+name)
+			lr.created = append(lr.created, appctx.T(lr.ctx, "موقع: ")+name)
 		}
 		id = x.ID
 	case "system":
 		var x gen.System
 		if x, err = lr.q.GetSystemByName(lr.ctx, name); errors.Is(err, pgx.ErrNoRows) {
 			x, err = lr.q.CreateSystem(lr.ctx, gen.CreateSystemParams{Name: name, Sort: 100})
-			lr.created = append(lr.created, "منظومة: "+name)
+			lr.created = append(lr.created, appctx.T(lr.ctx, "منظومة: ")+name)
 		}
 		id = x.ID
 	case "asset_group":
 		var x gen.AssetGroup
 		if x, err = lr.q.GetAssetGroupByName(lr.ctx, name); errors.Is(err, pgx.ErrNoRows) {
 			x, err = lr.q.CreateAssetGroup(lr.ctx, gen.CreateAssetGroupParams{Name: name, Sort: 100})
-			lr.created = append(lr.created, "مجموعة أصل: "+name)
+			lr.created = append(lr.created, appctx.T(lr.ctx, "مجموعة أصل: ")+name)
 		}
 		id = x.ID
 	case "contractor":
 		var x gen.Contractor
 		if x, err = lr.q.GetContractorByName(lr.ctx, name); errors.Is(err, pgx.ErrNoRows) {
 			x, err = lr.q.CreateContractor(lr.ctx, gen.CreateContractorParams{Name: name})
-			lr.created = append(lr.created, "مقاول: "+name)
+			lr.created = append(lr.created, appctx.T(lr.ctx, "مقاول: ")+name)
 		}
 		id = x.ID
 	}
@@ -368,7 +370,7 @@ func (s *Server) importWorkOrders(ctx context.Context, res *excel.Result, out *v
 			}
 			if exists {
 				out.Skipped++
-				out.Warnings = append(out.Warnings, fmt.Sprintf("الصف %d: أمر العمل %s موجود مسبقاً — تم تجاهله", row.Row, row.Ref))
+				out.Warnings = append(out.Warnings, appctx.Tf(ctx, "الصف %d: أمر العمل %s موجود مسبقاً — تم تجاهله", row.Row, row.Ref))
 				continue
 			}
 			siteID, err := lr.id("site", row.Site)
@@ -397,7 +399,7 @@ func (s *Server) importWorkOrders(ctx context.Context, res *excel.Result, out *v
 			out.Created++
 		}
 		if len(lr.created) > 0 {
-			out.Extra = append(out.Extra, "أُضيفت قيم مرجعية جديدة: "+strings.Join(lr.created, "، "))
+			out.Extra = append(out.Extra, appctx.T(ctx, "أُضيفت قيم مرجعية جديدة: ")+strings.Join(lr.created, appctx.T(ctx, "، ")))
 		}
 		return nil
 	})

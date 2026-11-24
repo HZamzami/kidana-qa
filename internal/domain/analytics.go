@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"github.com/HZamzami/kidana-quality/internal/i18n"
+
 	"fmt"
 	"sort"
 	"strings"
@@ -302,31 +304,38 @@ func Fmt1(v float64) string {
 
 // Insights derives patterns and recommendations, including during/after gaps and
 // critical-criteria alerts.
-func Insights(S Summary) []Insight {
+func Insights(S Summary) []Insight { return InsightsIn(i18n.AR, S) }
+
+// InsightsIn is Insights in the given language.
+func InsightsIn(l i18n.Lang, S Summary) []Insight {
+	sep := "، "
+	if l == i18n.EN {
+		sep = ", "
+	}
 	if S.Total == 0 {
-		return []Insight{{"info", "لا توجد فحوصات مرسلة ضمن النطاق المحدد بعد. ابدأ بفتح أمر عمل وتسجيل فحص أثناء التنفيذ أو فحص بعد التنفيذ."}}
+		return []Insight{{"info", i18n.T(l, "لا توجد فحوصات مرسلة ضمن النطاق المحدد بعد. ابدأ بفتح أمر عمل وتسجيل فحص أثناء التنفيذ أو فحص بعد التنفيذ.")}}
 	}
 	var out []Insight
 	if S.PassRate != nil {
 		if *S.PassRate >= 90 {
-			out = append(out, Insight{"good", fmt.Sprintf("نسبة المطابقة %s — أداء مستقر فوق المستهدف. يوصى بالحفاظ على وتيرة التدقيق الحالية.", Pct(S.PassRate))})
+			out = append(out, Insight{"good", i18n.Tf(l, "نسبة المطابقة %s — أداء مستقر فوق المستهدف. يوصى بالحفاظ على وتيرة التدقيق الحالية.", Pct(S.PassRate))})
 		} else {
 			tone := "info"
 			if *S.PassRate < 70 {
 				tone = "risk"
 			}
-			out = append(out, Insight{tone, fmt.Sprintf("نسبة المطابقة %s (غير المطابق %d من %s). يوصى بزيادة عينة التدقيق على الجهات الأقل أداءً.", Pct(S.PassRate), S.FailCount, Count(S.Total, NounInspection))})
+			out = append(out, Insight{tone, i18n.Tf(l, "نسبة المطابقة %s (غير المطابق %d من %s). يوصى بزيادة عينة التدقيق على الجهات الأقل أداءً.", Pct(S.PassRate), S.FailCount, CountIn(l, S.Total, NounInspection))})
 		}
 	}
 	if S.CriticalFails > 0 || S.Findings.OpenCritical > 0 {
-		out = append(out, Insight{"risk", fmt.Sprintf("خطر سلامة: إخفاق في بند حرج في %s، والملاحظات الحرجة المفتوحة: %d. يوصى بإيقاف العمل غير الآمن فوراً وتصعيدها لإدارة السلامة.", Count(S.CriticalFails, NounInspection), S.Findings.OpenCritical)})
+		out = append(out, Insight{"risk", i18n.Tf(l, "خطر سلامة: إخفاق في بند حرج في %s، والملاحظات الحرجة المفتوحة: %d. يوصى بإيقاف العمل غير الآمن فوراً وتصعيدها لإدارة السلامة.", CountIn(l, S.CriticalFails, NounInspection), S.Findings.OpenCritical)})
 	}
 	weak := make([]CriterionStat, len(S.Criteria))
 	copy(weak, S.Criteria)
 	sort.Slice(weak, func(i, j int) bool { return weak[i].Compliance < weak[j].Compliance })
 	if len(weak) > 0 && weak[0].Compliance < 85 {
 		w := weak[0]
-		out = append(out, Insight{"risk", fmt.Sprintf("أضعف معيار: «%s» بنسبة مطابقة %s (عدم المطابقة: %s). يوصى بخطة تحسين مركّزة وتوعية الفنيين على هذا البند.", w.Label, PctVal(w.Compliance), Count(w.Fails, NounCase))})
+		out = append(out, Insight{"risk", i18n.Tf(l, "أضعف معيار: «%s» بنسبة مطابقة %s (عدم المطابقة: %s). يوصى بخطة تحسين مركّزة وتوعية الفنيين على هذا البند.", w.Label, PctVal(w.Compliance), CountIn(l, w.Fails, NounCase))})
 	}
 	var lowSites []string
 	for _, g := range S.BySite {
@@ -335,7 +344,7 @@ func Insights(S Summary) []Insight {
 		}
 	}
 	if len(lowSites) > 0 {
-		out = append(out, Insight{"risk", fmt.Sprintf("مواقع دون حد المطابقة (%s): %s.", PctVal(PassThreshold), strings.Join(lowSites, "، "))})
+		out = append(out, Insight{"risk", i18n.Tf(l, "مواقع دون حد المطابقة (%s): %s.", PctVal(PassThreshold), strings.Join(lowSites, sep))})
 	}
 	var lowCon []string
 	for _, g := range S.ByContractor {
@@ -344,31 +353,31 @@ func Insights(S Summary) []Insight {
 		}
 	}
 	if len(lowCon) > 0 {
-		out = append(out, Insight{"risk", fmt.Sprintf("مقاولون دون المستهدف: %s. يوصى بتفعيل بنود الجزاءات/الإنذار حسب العقد ومتابعة خطة تصحيحية.", strings.Join(lowCon, "، "))})
+		out = append(out, Insight{"risk", i18n.Tf(l, "مقاولون دون المستهدف: %s. يوصى بتفعيل بنود الجزاءات/الإنذار حسب العقد ومتابعة خطة تصحيحية.", strings.Join(lowCon, sep))})
 	}
 	if S.Findings.Overdue > 0 {
-		out = append(out, Insight{"risk", fmt.Sprintf("ملاحظات تجاوزت تاريخ الإغلاق المستهدف: %d. يوصى بمتابعة أسبوعية مع مسؤولي المعالجة.", S.Findings.Overdue)})
+		out = append(out, Insight{"risk", i18n.Tf(l, "ملاحظات تجاوزت تاريخ الإغلاق المستهدف: %d. يوصى بمتابعة أسبوعية مع مسؤولي المعالجة.", S.Findings.Overdue)})
 	}
 	if S.OnTimeRate != nil && *S.OnTimeRate < 90 {
 		delay := "—"
 		if S.AvgDelay != nil {
 			delay = Fmt1(*S.AvgDelay)
 		}
-		out = append(out, Insight{"info", fmt.Sprintf("الالتزام بالموعد %s — متوسط التأخير %s يوم، وأوامر العمل المتأخرة: %d. راجع توزيع الموارد وجدولة الصيانة الوقائية.", Pct(S.OnTimeRate), delay, S.LateCount)})
+		out = append(out, Insight{"info", i18n.Tf(l, "الالتزام بالموعد %s — متوسط التأخير %s يوم، وأوامر العمل المتأخرة: %d. راجع توزيع الموارد وجدولة الصيانة الوقائية.", Pct(S.OnTimeRate), delay, S.LateCount)})
 	}
 	if len(S.RepeatFailAssets) > 0 {
 		parts := make([]string, 0, len(S.RepeatFailAssets))
 		for _, a := range S.RepeatFailAssets {
 			parts = append(parts, fmt.Sprintf("%s (%d)", a.Asset, a.Fails))
 		}
-		out = append(out, Insight{"risk", fmt.Sprintf("إخفاق متكرر على أصول: %s. يوصى بتحليل السبب الجذري (RCA).", strings.Join(parts, "، "))})
+		out = append(out, Insight{"risk", i18n.Tf(l, "إخفاق متكرر على أصول: %s. يوصى بتحليل السبب الجذري (RCA).", strings.Join(parts, sep))})
 	}
 	if S.AvgDuring != nil && S.AvgAfter != nil {
 		diff := *S.AvgDuring - *S.AvgAfter
 		if diff >= 10 {
-			out = append(out, Insight{"info", fmt.Sprintf("أداء أثناء التنفيذ (%s) أعلى من نتيجة الفحص بعد التنفيذ (%s): العمل يُنفَّذ بطريقة سليمة لكن النتيجة النهائية أضعف — راجع جودة المخرجات والتوثيق.", Pct(S.AvgDuring), Pct(S.AvgAfter))})
+			out = append(out, Insight{"info", i18n.Tf(l, "أداء أثناء التنفيذ (%s) أعلى من نتيجة الفحص بعد التنفيذ (%s): العمل يُنفَّذ بطريقة سليمة لكن النتيجة النهائية أضعف — راجع جودة المخرجات والتوثيق.", Pct(S.AvgDuring), Pct(S.AvgAfter))})
 		} else if diff <= -10 {
-			out = append(out, Insight{"info", fmt.Sprintf("نتيجة الفحص بعد التنفيذ (%s) أعلى من الفحص أثناء التنفيذ (%s): النتائج مقبولة لكن طريقة العمل تحتاج ضبطاً — ركّز على السلامة والإجراءات.", Pct(S.AvgAfter), Pct(S.AvgDuring))})
+			out = append(out, Insight{"info", i18n.Tf(l, "نتيجة الفحص بعد التنفيذ (%s) أعلى من الفحص أثناء التنفيذ (%s): النتائج مقبولة لكن طريقة العمل تحتاج ضبطاً — ركّز على السلامة والإجراءات.", Pct(S.AvgAfter), Pct(S.AvgDuring))})
 		}
 	}
 	return out

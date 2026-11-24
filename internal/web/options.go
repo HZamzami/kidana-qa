@@ -4,6 +4,9 @@ import (
 	"context"
 	"strconv"
 
+	"github.com/HZamzami/kidana-quality/internal/appctx"
+	"github.com/HZamzami/kidana-quality/internal/i18n"
+
 	"github.com/HZamzami/kidana-quality/internal/domain"
 	"github.com/HZamzami/kidana-quality/internal/views"
 )
@@ -17,7 +20,10 @@ type lookupSet struct {
 // contractors. activeOnly is used by forms; filters also show inactive values.
 func (s *Server) lookupOptions(ctx context.Context, activeOnly bool) (lookupSet, error) {
 	var l lookupSet
-	opt := func(id int64, name string) views.Option { return views.Option{Value: idStr(id), Label: name} }
+	lang := appctx.Lang(ctx)
+	opt := func(id int64, ar, en string) views.Option {
+		return views.Option{Value: idStr(id), Label: i18n.Pick(lang, ar, en)}
+	}
 	sites, systems, groups, contractors := s.q.ListSites, s.q.ListSystems, s.q.ListAssetGroups, s.q.ListContractors
 	if activeOnly {
 		sites, systems, groups, contractors = s.q.ListActiveSites, s.q.ListActiveSystems, s.q.ListActiveAssetGroups, s.q.ListActiveContractors
@@ -27,28 +33,28 @@ func (s *Server) lookupOptions(ctx context.Context, activeOnly bool) (lookupSet,
 		return l, err
 	}
 	for _, x := range ss {
-		l.Sites = append(l.Sites, opt(x.ID, x.Name))
+		l.Sites = append(l.Sites, opt(x.ID, x.Name, x.NameEn))
 	}
 	sy, err := systems(ctx)
 	if err != nil {
 		return l, err
 	}
 	for _, x := range sy {
-		l.Systems = append(l.Systems, opt(x.ID, x.Name))
+		l.Systems = append(l.Systems, opt(x.ID, x.Name, x.NameEn))
 	}
 	ag, err := groups(ctx)
 	if err != nil {
 		return l, err
 	}
 	for _, x := range ag {
-		l.AssetGroups = append(l.AssetGroups, opt(x.ID, x.Name))
+		l.AssetGroups = append(l.AssetGroups, opt(x.ID, x.Name, x.NameEn))
 	}
 	cs, err := contractors(ctx)
 	if err != nil {
 		return l, err
 	}
 	for _, x := range cs {
-		l.Contractors = append(l.Contractors, opt(x.ID, x.Name))
+		l.Contractors = append(l.Contractors, opt(x.ID, x.Name, x.NameEn))
 	}
 	return l, nil
 }

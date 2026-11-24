@@ -2,7 +2,6 @@ package excel
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"github.com/HZamzami/kidana-quality/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/i18n"
 )
 
 // SheetWorkOrders is the data sheet of the work order import template.
@@ -38,11 +38,12 @@ type Result struct {
 	WorkOrders []WorkOrderRow
 	Skipped    int
 	Warnings   []string
+	Lang       i18n.Lang // language of the warnings
 }
 
 func (r *Result) warn(format string, args ...any) {
 	if len(r.Warnings) < 300 {
-		r.Warnings = append(r.Warnings, fmt.Sprintf(format, args...))
+		r.Warnings = append(r.Warnings, i18n.Tf(r.Lang, format, args...))
 	}
 }
 
@@ -51,7 +52,7 @@ var ErrUnrecognised = errors.New("unrecognised workbook layout")
 
 // Parse reads a work order import workbook (the template, or any sheet with
 // the same column titles).
-func Parse(r io.Reader) (*Result, error) {
+func Parse(r io.Reader, l i18n.Lang) (*Result, error) {
 	f, err := excelize.OpenReader(r)
 	if err != nil {
 		return nil, err
@@ -67,7 +68,7 @@ func Parse(r io.Reader) (*Result, error) {
 		for hr := 0; hr < len(rows) && hr < 10; hr++ {
 			h := newHeader(rows[hr])
 			if h.find("رقم أمر العمل") >= 0 && h.find("الموقع") >= 0 && h.find("مجموعة الأصل") >= 0 {
-				res := &Result{Kind: KindWorkOrders, Sheet: name}
+				res := &Result{Kind: KindWorkOrders, Sheet: name, Lang: l}
 				parseWorkOrders(res, h, rows[hr+1:], hr+2)
 				return res, nil
 			}
@@ -108,24 +109,24 @@ func parseWorkOrders(res *Result, h header, rows [][]string, firstRow int) {
 		}
 		var missing []string
 		if w.Ref == "" {
-			missing = append(missing, "رقم أمر العمل")
+			missing = append(missing, i18n.T(res.Lang, "رقم أمر العمل"))
 		}
 		if w.Site == "" {
-			missing = append(missing, "الموقع")
+			missing = append(missing, i18n.T(res.Lang, "الموقع"))
 		}
 		if w.System == "" {
-			missing = append(missing, "المنظومة")
+			missing = append(missing, i18n.T(res.Lang, "المنظومة"))
 		}
 		if w.AssetGroup == "" {
-			missing = append(missing, "مجموعة الأصل")
+			missing = append(missing, i18n.T(res.Lang, "مجموعة الأصل"))
 		}
 		t, ok := ParseType(cell(row, col["type"]))
 		if !ok || t == "" {
-			missing = append(missing, "النوع")
+			missing = append(missing, i18n.T(res.Lang, "النوع"))
 		}
 		if len(missing) > 0 {
 			res.Skipped++
-			res.warn("الصف %d: تم تجاهله — حقول إلزامية فارغة أو غير صالحة: %s", n, strings.Join(missing, "، "))
+			res.warn("الصف %d: تم تجاهله — حقول إلزامية فارغة أو غير صالحة: %s", n, strings.Join(missing, listSep(res.Lang)))
 			continue
 		}
 		w.Type = t
@@ -133,7 +134,7 @@ func parseWorkOrders(res *Result, h header, rows [][]string, firstRow int) {
 			w.Priority = p
 		} else {
 			w.Priority = "normal"
-			res.warn("الصف %d: أولوية غير معروفة «%s» — اعتُبرت «%s»", n, cell(row, col["priority"]), domain.PriorityLabels["normal"])
+			res.warn("الصف %d: أولوية غير معروفة «%s» — اعتُبرت «%s»", n, cell(row, col["priority"]), i18n.T(res.Lang, domain.PriorityLabels["normal"]))
 		}
 		var okDate bool
 		if w.PlannedDate, okDate = ParseDate(cell(row, col["planned"])); !okDate {
@@ -144,4 +145,11 @@ func parseWorkOrders(res *Result, h header, rows [][]string, firstRow int) {
 		}
 		res.WorkOrders = append(res.WorkOrders, w)
 	}
+}
+
+func listSep(l i18n.Lang) string {
+	if l == i18n.EN {
+		return ", "
+	}
+	return "، "
 }

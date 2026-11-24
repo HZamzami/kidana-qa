@@ -1,6 +1,8 @@
 package domain
 
-import "fmt"
+import (
+	"github.com/HZamzami/kidana-quality/internal/i18n"
+)
 
 // Stage of an inspection relative to the work.
 type Stage string
@@ -93,19 +95,20 @@ type SubmitCheck struct {
 	Result         Result
 	FindingsLinked int // findings recorded on this inspection
 	UnratedLabels  []string
+	Lang           i18n.Lang // language of the messages (Arabic when empty)
 }
 
 // ValidateSubmit returns the user-facing reasons an inspection cannot be submitted.
 func ValidateSubmit(c SubmitCheck) []string {
 	var errs []string
 	if len(c.UnratedLabels) > 0 {
-		errs = append(errs, fmt.Sprintf("قيّم جميع المعايير (غير المقيّم: %s)", Count(len(c.UnratedLabels), NounItem)))
+		errs = append(errs, i18n.Tf(c.Lang, "قيّم جميع المعايير (غير المقيّم: %s)", CountIn(c.Lang, len(c.UnratedLabels), NounItem)))
 	}
 	if !c.Result.Scored && len(c.UnratedLabels) == 0 {
-		errs = append(errs, "لا يمكن أن تكون جميع البنود «لا ينطبق»")
+		errs = append(errs, i18n.T(c.Lang, "لا يمكن أن تكون جميع البنود «لا ينطبق»"))
 	}
 	if c.Result.Scored && !c.Result.Passed && c.FindingsLinked == 0 {
-		errs = append(errs, "النتيجة غير مطابقة: سجّل ملاحظة واحدة على الأقل مع الإجراء التصحيحي المطلوب")
+		errs = append(errs, i18n.T(c.Lang, "النتيجة غير مطابقة: سجّل ملاحظة واحدة على الأقل مع الإجراء التصحيحي المطلوب"))
 	}
 	return errs
 }

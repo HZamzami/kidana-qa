@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/HZamzami/kidana-quality/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/i18n"
 )
 
 var (
@@ -144,6 +145,12 @@ func newHeader(row []string) header {
 // find returns the index of the first column whose title matches one of the
 // names exactly, or starts with it (to tolerate suffixes like " *").
 func (h header) find(names ...string) int {
+	// Accept the English column titles too.
+	for _, name := range names {
+		if en := i18n.T(i18n.EN, name); en != name {
+			names = append(names, en)
+		}
+	}
 	for _, name := range names {
 		if i, ok := h[Norm(name)]; ok {
 			return i

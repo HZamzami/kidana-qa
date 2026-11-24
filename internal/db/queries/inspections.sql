@@ -31,7 +31,7 @@ ORDER BY i.created_at, i.id;
 
 -- name: ListInspectionItems :many
 SELECT it.inspection_id, it.criterion_id, it.rating, it.note,
-       c.code, c.label, c.description, c.weight, c.is_critical, c.sort
+       c.code, c.label, c.label_en, c.description, c.description_en, c.weight, c.is_critical, c.sort
 FROM inspection_items it
 JOIN template_criteria c ON c.id = it.criterion_id
 WHERE it.inspection_id = $1
@@ -87,7 +87,7 @@ ORDER BY i.work_order_id, i.stage, i.attempt;
 
 -- Rated items of several inspections with their criteria, for printing.
 -- name: ListItemsForPrint :many
-SELECT it.inspection_id, it.rating, it.note, c.code, c.label, c.weight, c.is_critical, c.sort
+SELECT it.inspection_id, it.rating, it.note, c.code, c.label, c.label_en, c.weight, c.is_critical, c.sort
 FROM inspection_items it
 JOIN template_criteria c ON c.id = it.criterion_id
 WHERE it.inspection_id = ANY(sqlc.arg(ids)::bigint[])

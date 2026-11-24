@@ -61,7 +61,7 @@ func ratingOf(it gen.ListInspectionItemsRow) string {
 func stageTitle(s gen.InspectionStage) string { return domain.Stage(s).Label() }
 
 templ InspectionPage(d InspectionData) {
-	@App(domain.Stage(d.I.Stage).Short() + " · " + d.WO.Ref) {
+	@App(t(ctx, domain.Stage(d.I.Stage).Short()) + " · " + d.WO.Ref) {
 		if d.Editable {
 			@inspectionFlow(d)
 		} else {
@@ -76,14 +76,14 @@ templ inspectionFlow(d InspectionData) {
 		<div class="sticky top-0 z-20 -mx-4 sm:mx-0 px-4 sm:px-0 pt-2 pb-3 bg-ink-5/95 backdrop-blur">
 			<div class="card p-3">
 				<div class="flex items-center gap-3">
-					<a href={ u("/work-orders/%d", d.WO.ID) } class="btn btn-ghost px-2 -ms-1" aria-label="رجوع لأمر العمل">→</a>
+					<a href={ u("/work-orders/%d", d.WO.ID) } class="btn btn-ghost px-2 -ms-1" aria-label={ t(ctx, "رجوع لأمر العمل") }>{ backArrow(ctx) }</a>
 					<div class="min-w-0">
 						<div class="flex items-center gap-2">
 							<span class="num font-semibold truncate">{ d.WO.Ref }</span>
 							@StagePill(string(d.I.Stage))
 						</div>
 						<div class="text-xs text-ink-80 truncate">
-							{ d.WO.SiteName } · { d.WO.SystemName } · { d.WO.AssetGroupName }
+							{ nm(ctx, d.WO.SiteName, d.WO.SiteNameEn) } · { nm(ctx, d.WO.SystemName, d.WO.SystemNameEn) } · { nm(ctx, d.WO.AssetGroupName, d.WO.AssetGroupNameEn) }
 							if d.WO.Asset != "" {
 								{ " · " + d.WO.Asset }
 							}
@@ -94,7 +94,7 @@ templ inspectionFlow(d InspectionData) {
 						x-bind:class="{ 'bg-green-10 text-green': isPass, 'bg-fail-10 text-fail': isFail }"
 					>
 						<div class="num text-xl font-semibold leading-tight" x-text="scoreText">—</div>
-						<div class="text-[10px]">النتيجة المباشرة</div>
+						<div class="text-[10px]">{ t(ctx, "النتيجة المباشرة") }</div>
 					</div>
 				</div>
 				<div class="mt-3 flex items-center gap-2 text-xs text-ink-80">
@@ -105,10 +105,10 @@ templ inspectionFlow(d InspectionData) {
 					<div class="h-full bg-gold transition-all" x-bind:style="progressWidth"></div>
 				</div>
 				<div x-show="criticalFailed" x-cloak class="mt-2 rounded-lg bg-fail-10 text-fail text-xs px-2.5 py-1.5">
-					بند حرج غير مطابق — الفحص غير مطابق مهما كانت النتيجة. أوقف العمل غير الآمن وسجّل ملاحظة.
+					{ t(ctx, "بند حرج غير مطابق — الفحص غير مطابق مهما كانت النتيجة. أوقف العمل غير الآمن وسجّل ملاحظة.") }
 				</div>
 			</div>
-			<nav class="mt-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="البنود">
+			<nav class="mt-2 flex gap-1.5 overflow-x-auto pb-1" aria-label={ t(ctx, "البنود") }>
 				for i, it := range d.Items {
 					<button
 						type="button"
@@ -118,7 +118,7 @@ templ inspectionFlow(d InspectionData) {
 						x-on:click="goTo"
 					>{ it.Code }</button>
 				}
-				<button type="button" class="shrink-0 rounded-lg border px-2.5 py-1 text-xs bg-white border-ink-10" x-bind:class="{ 'border-gold ring-2 ring-gold-20': onReview }" x-on:click="goReview">مراجعة</button>
+				<button type="button" class="shrink-0 rounded-lg border px-2.5 py-1 text-xs bg-white border-ink-10" x-bind:class="{ 'border-gold ring-2 ring-gold-20': onReview }" x-on:click="goReview">{ t(ctx, "مراجعة") }</button>
 			</nav>
 		</div>
 		for i, it := range d.Items {
@@ -142,14 +142,14 @@ templ criterionCard(d InspectionData, i int, it gen.ListInspectionItemsRow) {
 		<div class="flex items-start gap-2">
 			<span class="num text-xs rounded-md bg-ink-5 px-1.5 py-0.5 mt-0.5">{ it.Code }</span>
 			<div class="min-w-0">
-				<h2 class="text-lg font-semibold leading-snug text-balance">{ it.Label }</h2>
-				<p class="text-sm text-ink-80 mt-1">{ it.Description }</p>
+				<h2 class="text-lg font-semibold leading-snug text-balance">{ nm(ctx, it.Label, it.LabelEn) }</h2>
+				<p class="text-sm text-ink-80 mt-1">{ nm(ctx, it.Description, it.DescriptionEn) }</p>
 			</div>
 		</div>
 		<div class="mt-2 flex gap-2 text-xs">
-			<span class="pill bg-ink-5 text-ink-80">{ fmt.Sprintf("الوزن %d", it.Weight) }</span>
+			<span class="pill bg-ink-5 text-ink-80">{ fmt.Sprintf(t(ctx, "الوزن %d"), it.Weight) }</span>
 			if it.IsCritical {
-				<span class="pill border border-fail text-fail">بند حرج — عدم المطابقة يُسقط الفحص</span>
+				<span class="pill border border-fail text-fail">{ t(ctx, "بند حرج — عدم المطابقة يُسقط الفحص") }</span>
 			}
 		</div>
 		<form
@@ -159,7 +159,7 @@ templ criterionCard(d InspectionData, i int, it gen.ListInspectionItemsRow) {
 			hx-swap="none"
 		>
 			<fieldset>
-				<legend class="sr-only">التقييم</legend>
+				<legend class="sr-only">{ t(ctx, "التقييم") }</legend>
 				<div class="grid grid-cols-2 gap-2">
 					for _, r := range domain.Ratings {
 						<label class="rate">
@@ -173,28 +173,28 @@ templ criterionCard(d InspectionData, i int, it gen.ListInspectionItemsRow) {
 							/>
 							<span data-k={ string(r) }>
 								@ratingIcon(r)
-								{ r.Label() }
+								{ t(ctx, r.Label()) }
 							</span>
 						</label>
 					}
 				</div>
 			</fieldset>
-			<label class="label mt-4" for={ fmt.Sprintf("note_%d", it.CriterionID) }>ملاحظة المدقق على هذا البند</label>
-			<textarea class="input" rows="2" maxlength="1000" id={ fmt.Sprintf("note_%d", it.CriterionID) } name="note" placeholder="ما الذي لاحظته؟">{ it.Note }</textarea>
+			<label class="label mt-4" for={ fmt.Sprintf("note_%d", it.CriterionID) }>{ t(ctx, "ملاحظة المدقق على هذا البند") }</label>
+			<textarea class="input" rows="2" maxlength="1000" id={ fmt.Sprintf("note_%d", it.CriterionID) } name="note" placeholder={ t(ctx, "ما الذي لاحظته؟") }>{ it.Note }</textarea>
 		</form>
 		<div class="mt-4">
-			<div class="label">صور البند</div>
+			<div class="label">{ t(ctx, "صور البند") }</div>
 			@PhotoStrip(d.I.ID, &it.CriterionID, d.photosFor(it.CriterionID), true)
 		</div>
 		<div id={ fmt.Sprintf("finding-box-%d", it.CriterionID) } class="mt-4">
 			@FindingBox(d.I.ID, &it.CriterionID, it.IsCritical, d.findingsFor(it.CriterionID), nil)
 		</div>
 		<div class="mt-5 grid grid-cols-2 gap-2">
-			<button type="button" class="btn btn-outline btn-lg" x-on:click="prev" x-bind:disabled="atStart">السابق</button>
+			<button type="button" class="btn btn-outline btn-lg" x-on:click="prev" x-bind:disabled="atStart">{ t(ctx, "السابق") }</button>
 			if i == len(d.Items)-1 {
-				<button type="button" class="btn btn-primary btn-lg" x-on:click="next">المراجعة</button>
+				<button type="button" class="btn btn-primary btn-lg" x-on:click="next">{ t(ctx, "المراجعة") }</button>
 			} else {
-				<button type="button" class="btn btn-primary btn-lg" x-on:click="next">التالي</button>
+				<button type="button" class="btn btn-primary btn-lg" x-on:click="next">{ t(ctx, "التالي") }</button>
 			}
 		</div>
 	</section>
@@ -226,7 +226,7 @@ templ PhotoStrip(inspectionID int64, criterionID *int64, photos []gen.Attachment
 					<button
 						type="button"
 						class="absolute -top-1.5 -start-1.5 size-6 rounded-full bg-white border border-ink-30 text-xs leading-none"
-						aria-label="حذف الصورة"
+						aria-label={ t(ctx, "حذف الصورة") }
 						hx-post={ path("/attachments/%d/delete", p.ID) }
 						hx-target={ "#" + photoStripID(inspectionID, criterionID) }
 						hx-swap="outerHTML"
@@ -248,11 +248,11 @@ templ PhotoStrip(inspectionID int64, criterionID *int64, photos []gen.Attachment
 				<label class="size-20 rounded-lg border-2 border-dashed border-ink-30 grid place-items-center text-ink-80 text-xs text-center cursor-pointer hover:border-gold hover:text-ink">
 					<span>
 						<svg aria-hidden="true" viewBox="0 0 24 24" class="size-6 mx-auto" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
-						إضافة صورة
+						{ t(ctx, "إضافة صورة") }
 					</span>
 					<input type="file" name="photo" accept="image/*" capture="environment" class="sr-only"/>
 				</label>
-				<span class="htmx-indicator text-xs text-ink-80">جارٍ الرفع…</span>
+				<span class="htmx-indicator text-xs text-ink-80">{ t(ctx, "جارٍ الرفع…") }</span>
 			</form>
 		}
 	</div>
@@ -270,16 +270,16 @@ templ FindingBox(inspectionID int64, criterionID *int64, critical bool, findings
 	for _, f := range findings {
 		<div class="mb-2 rounded-lg border border-fail-20 bg-fail-10 px-3 py-2 text-sm">
 			<div class="flex items-center gap-2">
-				<span class="font-medium text-fail">ملاحظة</span>
+				<span class="font-medium text-fail">{ t(ctx, "ملاحظة") }</span>
 				@SeverityPill(string(f.Severity))
 			</div>
 			<p class="mt-1">{ f.Description }</p>
-			<p class="text-ink-80 text-xs mt-0.5">{ "الإجراء التصحيحي: " + f.CorrectiveAction }</p>
+			<p class="text-ink-80 text-xs mt-0.5">{ t(ctx, "الإجراء التصحيحي: ") + f.CorrectiveAction }</p>
 		</div>
 	}
 	<div x-data="disclosure" data-open={ tern(len(errs) > 0, "true", "false") }>
 		<button type="button" class="btn btn-ghost px-2 text-fail" x-on:click="toggle" x-show="!open">
-			＋ تسجيل ملاحظة / عدم مطابقة
+			{ t(ctx, "＋ تسجيل ملاحظة / عدم مطابقة") }
 		</button>
 		<form
 			x-show="open"
@@ -294,19 +294,19 @@ templ FindingBox(inspectionID int64, criterionID *int64, critical bool, findings
 			if criterionID != nil {
 				<input type="hidden" name="criterion_id" value={ idStr(*criterionID) }/>
 			}
-			@TextArea("description", "وصف الملاحظة", "", 2, errs)
-			@TextArea("corrective_action", "الإجراء التصحيحي المطلوب", "", 2, errs)
+			@TextArea("description", t(ctx, "وصف الملاحظة"), "", 2, errs)
+			@TextArea("corrective_action", t(ctx, "الإجراء التصحيحي المطلوب"), "", 2, errs)
 			<div class="grid grid-cols-2 gap-3">
-				@TextField("owner", "مسؤول المعالجة", "", false, errs, templ.Attributes{"maxlength": "80"})
-				@TextField("due_date", "تاريخ الإغلاق المستهدف", "", false, errs, templ.Attributes{"type": "date"})
+				@TextField("owner", t(ctx, "مسؤول المعالجة"), "", false, errs, templ.Attributes{"maxlength": "80"})
+				@TextField("due_date", t(ctx, "تاريخ الإغلاق المستهدف"), "", false, errs, templ.Attributes{"type": "date"})
 			</div>
 			<label class="flex items-center gap-2 text-sm">
 				<input type="checkbox" name="critical" value="on" checked?={ critical } class="size-4 accent-[#A65A4E]"/>
-				ملاحظة حرجة (سلامة / إيقاف عمل)
+				{ t(ctx, "ملاحظة حرجة (سلامة / إيقاف عمل)") }
 			</label>
 			<div class="flex gap-2">
-				<button type="submit" class="btn btn-primary">حفظ الملاحظة</button>
-				<button type="button" class="btn btn-ghost" x-on:click="close">إلغاء</button>
+				<button type="submit" class="btn btn-primary">{ t(ctx, "حفظ الملاحظة") }</button>
+				<button type="button" class="btn btn-ghost" x-on:click="close">{ t(ctx, "إلغاء") }</button>
 			</div>
 		</form>
 	</div>
@@ -315,7 +315,7 @@ templ FindingBox(inspectionID int64, criterionID *int64, critical bool, findings
 // ReviewBody is the final step: server-computed result, notes, general findings and submit.
 templ ReviewBody(d InspectionData) {
 	<div class="card p-4 sm:p-5">
-		<h2 class="text-lg font-semibold">المراجعة والإرسال</h2>
+		<h2 class="text-lg font-semibold">{ t(ctx, "المراجعة والإرسال") }</h2>
 		<div class="mt-4 flex flex-wrap items-center gap-3">
 			<div
 				class={ "rounded-xl px-4 py-2 text-center",
@@ -324,15 +324,15 @@ templ ReviewBody(d InspectionData) {
 					templ.KV("bg-ink-5", !d.Result.Scored) }
 			>
 				<div class="num text-2xl font-semibold">{ tern(d.Result.Scored, scoreVal(d.Result.Score), "—") }</div>
-				<div class="text-xs">{ "التقدير: " + orDash(d.Result.Grade) }</div>
+				<div class="text-xs">{ t(ctx, "التقدير: ") + orDash(d.Result.Grade) }</div>
 			</div>
 			<div class="text-sm">
-				<div>{ fmt.Sprintf("المقيّم: %d من %d", d.Result.Rated, d.Result.Total) }</div>
+				<div>{ fmt.Sprintf(t(ctx, "المقيّم: %d من %d"), d.Result.Rated, d.Result.Total) }</div>
 				if d.Result.Scored {
 					<div class={ templ.KV("text-green", d.Result.Passed), templ.KV("text-fail", !d.Result.Passed) }>
-						{ tern(d.Result.Passed, "مطابق", "غير مطابق") }
+						{ tern(d.Result.Passed, t(ctx, "مطابق"), t(ctx, "غير مطابق")) }
 						if d.Result.CriticalFailed {
-							{ " — بند حرج غير مطابق" }
+							{ t(ctx, " — بند حرج غير مطابق") }
 						}
 					</div>
 				}
@@ -342,7 +342,7 @@ templ ReviewBody(d InspectionData) {
 			for i, it := range d.Items {
 				<li class="flex items-center gap-2 py-2 text-sm">
 					<span class="num text-xs text-ink-60 w-7">{ it.Code }</span>
-					<button type="button" class="truncate text-start hover:underline" data-step={ itoa(i) } x-on:click="goTo">{ it.Label }</button>
+					<button type="button" class="truncate text-start hover:underline" data-step={ itoa(i) } x-on:click="goTo">{ nm(ctx, it.Label, it.LabelEn) }</button>
 					<span class="ms-auto">
 						@RatingPill(ratingOf(it))
 					</span>
@@ -356,48 +356,48 @@ templ ReviewBody(d InspectionData) {
 			hx-swap="none"
 		>
 			<div x-data="dateEcho">
-				<label class="label" for="inspected_on">تاريخ الفحص</label>
+				<label class="label" for="inspected_on">{ t(ctx, "تاريخ الفحص") }</label>
 				<input class="input" type="date" id="inspected_on" name="inspected_on" value={ d.I.InspectedOn.Format("2006-01-02") } max={ d.Today } x-on:change="echo"/>
 				@dateEchoLine(d.I.InspectedOn.Format("2006-01-02"))
 			</div>
 			<div class="sm:col-span-2">
-				<label class="label" for="notes">ملاحظات عامة</label>
+				<label class="label" for="notes">{ t(ctx, "ملاحظات عامة") }</label>
 				<textarea class="input" id="notes" name="notes" rows="2" maxlength="2000">{ d.I.Notes }</textarea>
 			</div>
 		</form>
 		<div class="mt-4">
-			<div class="label">صور عامة</div>
+			<div class="label">{ t(ctx, "صور عامة") }</div>
 			@PhotoStrip(d.I.ID, nil, d.generalPhotos(), true)
 		</div>
 		<div class="mt-4">
-			<div class="label">{ fmt.Sprintf("الملاحظات المسجلة (%d)", len(d.Findings)) }</div>
+			<div class="label">{ fmt.Sprintf(t(ctx, "الملاحظات المسجلة (%d)"), len(d.Findings)) }</div>
 			<div id="finding-box-general">
 				@FindingBox(d.I.ID, nil, false, generalFindings(d.Findings), nil)
 			</div>
 			if n := len(d.Findings) - len(generalFindings(d.Findings)); n > 0 {
-				<p class="text-xs text-ink-60 mt-1">{ "إضافة إلى " + domain.Count(n, domain.NounFinding) + " على البنود." }</p>
+				<p class="text-xs text-ink-60 mt-1">{ t(ctx, "إضافة إلى ") + count(ctx, n, domain.NounFinding) + t(ctx, " على البنود.") }</p>
 			}
 		</div>
 		if len(d.Errors) > 0 {
 			<div role="alert" class="mt-4 rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2">
-				<strong>لا يمكن الإرسال بعد:</strong>
+				<strong>{ t(ctx, "لا يمكن الإرسال بعد:") }</strong>
 				<ul class="list-disc ps-5 mt-1">
 					for _, e := range d.Errors {
-						<li>{ e }</li>
+						<li>{ t(ctx, e) }</li>
 					}
 				</ul>
 			</div>
 		}
 		<form method="post" action={ u("/inspections/%d/submit", d.I.ID) } class="mt-5">
-			<button type="submit" class="btn btn-gold btn-lg w-full">إرسال الفحص</button>
-			<p class="text-xs text-ink-60 mt-2 text-center">بعد الإرسال لا يمكن تعديل الفحص إلا بإعادة فتحه من مدير النظام.</p>
+			<button type="submit" class="btn btn-gold btn-lg w-full">{ t(ctx, "إرسال الفحص") }</button>
+			<p class="text-xs text-ink-60 mt-2 text-center">{ t(ctx, "بعد الإرسال لا يمكن تعديل الفحص إلا بإعادة فتحه من مدير النظام.") }</p>
 		</form>
 		<div class="mt-4 border-t border-ink-10 pt-3" x-data="confirmAction">
-			<button type="button" class="btn btn-ghost text-fail px-2" x-on:click="ask" x-show="!asking">حذف المسودة</button>
+			<button type="button" class="btn btn-ghost text-fail px-2" x-on:click="ask" x-show="!asking">{ t(ctx, "حذف المسودة") }</button>
 			<form method="post" action={ u("/inspections/%d/delete", d.I.ID) } x-show="asking" x-cloak class="flex flex-wrap items-center gap-2">
-				<span class="text-sm">حذف المسودة وكل صورها وملاحظاتها؟</span>
-				<button type="submit" class="btn btn-danger">نعم، احذف</button>
-				<button type="button" class="btn btn-ghost" x-on:click="cancel">تراجع</button>
+				<span class="text-sm">{ t(ctx, "حذف المسودة وكل صورها وملاحظاتها؟") }</span>
+				<button type="submit" class="btn btn-danger">{ t(ctx, "نعم، احذف") }</button>
+				<button type="button" class="btn btn-ghost" x-on:click="cancel">{ t(ctx, "تراجع") }</button>
 			</form>
 		</div>
 	</div>
@@ -416,42 +416,42 @@ func generalFindings(fs []gen.ListFindingsByInspectionRow) []gen.ListFindingsByI
 templ RatingPill(r string) {
 	switch r {
 		case "C":
-			<span class="pill bg-green-10 text-green">مطابق</span>
+			<span class="pill bg-green-10 text-green">{ t(ctx, "مطابق") }</span>
 		case "P":
-			<span class="pill bg-gold-20 text-ink">جزئي</span>
+			<span class="pill bg-gold-20 text-ink">{ t(ctx, "جزئي") }</span>
 		case "N":
-			<span class="pill bg-fail-10 text-fail">غير مطابق</span>
+			<span class="pill bg-fail-10 text-fail">{ t(ctx, "غير مطابق") }</span>
 		case "NA":
-			<span class="pill bg-ink-5 text-ink-80">لا ينطبق</span>
+			<span class="pill bg-ink-5 text-ink-80">{ t(ctx, "لا ينطبق") }</span>
 		default:
-			<span class="pill border border-dashed border-ink-30 text-ink-60">غير مقيّم</span>
+			<span class="pill border border-dashed border-ink-30 text-ink-60">{ t(ctx, "غير مقيّم") }</span>
 	}
 }
 
 // ---------------------------------------------------------------- read-only summary
 templ inspectionSummary(d InspectionData) {
 	<div class="mb-4 text-sm">
-		<a href="/work-orders" class="text-ink-80 hover:text-ink">أوامر العمل</a>
+		<a href="/work-orders" class="text-ink-80 hover:text-ink">{ t(ctx, "أوامر العمل") }</a>
 		<span class="text-ink-30 mx-1">/</span>
 		<a href={ u("/work-orders/%d", d.WO.ID) } class="text-ink-80 hover:text-ink num">{ d.WO.Ref }</a>
 		<span class="text-ink-30 mx-1">/</span>
-		<span>{ domain.Stage(d.I.Stage).Short() }</span>
+		<span>{ t(ctx, domain.Stage(d.I.Stage).Short()) }</span>
 	</div>
 	<section class="card p-5">
 		<div class="flex flex-wrap items-start gap-4">
 			<div>
 				<div class="flex flex-wrap items-center gap-2">
-					<h1 class="text-xl font-semibold">{ stageTitle(d.I.Stage) }</h1>
+					<h1 class="text-xl font-semibold">{ t(ctx, stageTitle(d.I.Stage)) }</h1>
 					if d.I.Attempt > 1 {
-						<span class="pill bg-ink-5 text-ink-80">{ fmt.Sprintf("محاولة %d", d.I.Attempt) }</span>
+						<span class="pill bg-ink-5 text-ink-80">{ fmt.Sprintf(t(ctx, "محاولة %d"), d.I.Attempt) }</span>
 					}
 					if d.I.Status == gen.InspectionStatusDraft {
-						<span class="pill bg-sky-30 text-ink">مسودة</span>
+						<span class="pill bg-sky-30 text-ink">{ t(ctx, "مسودة") }</span>
 					}
 				</div>
 				<p class="text-sm text-ink-80 mt-1">
 					@DateInline(d.I.InspectedOn)
-					{ " · " + d.I.InspectorName } · { d.I.TemplateName }
+					{ " · " + d.I.InspectorName } · { checklistName(ctx, d.I.TemplateName) }
 				</p>
 			</div>
 			<div class="ms-auto">
@@ -459,15 +459,15 @@ templ inspectionSummary(d InspectionData) {
 			</div>
 		</div>
 		if d.I.Notes != "" {
-			<p class="mt-4 text-sm"><span class="text-ink-60">ملاحظات عامة:</span> { d.I.Notes }</p>
+			<p class="mt-4 text-sm"><span class="text-ink-60">{ t(ctx, "ملاحظات عامة:") }</span> { d.I.Notes }</p>
 		}
 		if appctx.IsAdmin(ctx) && d.I.Status == gen.InspectionStatusSubmitted {
 			<div class="mt-4" x-data="confirmAction">
-				<button type="button" class="btn btn-outline" x-on:click="ask" x-show="!asking">إعادة فتح للتصحيح</button>
+				<button type="button" class="btn btn-outline" x-on:click="ask" x-show="!asking">{ t(ctx, "إعادة فتح للتصحيح") }</button>
 				<form method="post" action={ u("/inspections/%d/reopen", d.I.ID) } x-show="asking" x-cloak class="flex flex-wrap items-center gap-2">
-					<span class="text-sm">إعادة الفحص إلى مسودة؟ ستُلغى النتيجة حتى يُرسل مجدداً.</span>
-					<button type="submit" class="btn btn-danger">إعادة فتح</button>
-					<button type="button" class="btn btn-ghost" x-on:click="cancel">تراجع</button>
+					<span class="text-sm">{ t(ctx, "إعادة الفحص إلى مسودة؟ ستُلغى النتيجة حتى يُرسل مجدداً.") }</span>
+					<button type="submit" class="btn btn-danger">{ t(ctx, "إعادة فتح") }</button>
+					<button type="button" class="btn btn-ghost" x-on:click="cancel">{ t(ctx, "تراجع") }</button>
 				</form>
 			</div>
 		}
@@ -476,16 +476,16 @@ templ inspectionSummary(d InspectionData) {
 		<div class="overflow-x-auto">
 			<table class="table">
 				<thead>
-					<tr><th>البند</th><th>الوزن</th><th>التقييم</th><th>ملاحظة</th><th>صور</th></tr>
+					<tr><th>{ t(ctx, "البند") }</th><th>{ t(ctx, "الوزن") }</th><th>{ t(ctx, "التقييم") }</th><th>{ t(ctx, "ملاحظة") }</th><th>{ t(ctx, "صور") }</th></tr>
 				</thead>
 				<tbody>
 					for _, it := range d.Items {
 						<tr>
 							<td>
 								<span class="num text-xs text-ink-60 me-1">{ it.Code }</span>
-								{ it.Label }
+								{ nm(ctx, it.Label, it.LabelEn) }
 								if it.IsCritical {
-									<span class="pill border border-fail text-fail text-[10px] ms-1">حرج</span>
+									<span class="pill border border-fail text-fail text-[10px] ms-1">{ t(ctx, "حرج") }</span>
 								}
 							</td>
 							<td class="num">{ itoa(int(it.Weight)) }</td>
@@ -504,15 +504,15 @@ templ inspectionSummary(d InspectionData) {
 	</section>
 	if len(d.generalPhotos()) > 0 {
 		<section class="card p-4 mt-4">
-			<h2 class="font-semibold mb-2">صور عامة</h2>
+			<h2 class="font-semibold mb-2">{ t(ctx, "صور عامة") }</h2>
 			@PhotoStrip(d.I.ID, nil, d.generalPhotos(), false)
 		</section>
 	}
 	<section class="mt-4">
-		<h2 class="font-semibold mb-2">{ fmt.Sprintf("الملاحظات (%d)", len(d.Findings)) }</h2>
+		<h2 class="font-semibold mb-2">{ fmt.Sprintf(t(ctx, "الملاحظات (%d)"), len(d.Findings)) }</h2>
 		if len(d.Findings) == 0 {
 			<div class="card">
-				@EmptyState("لا توجد ملاحظات على هذا الفحص", "")
+				@EmptyState(t(ctx, "لا توجد ملاحظات على هذا الفحص"), "")
 			</div>
 		} else {
 			<ul class="space-y-2">
@@ -522,12 +522,12 @@ templ inspectionSummary(d InspectionData) {
 							@FindingStatusPill(string(f.Status), f.Status != gen.FindingStatusClosed && f.DueDate != nil && isoDate(f.DueDate) < d.Today)
 							@SeverityPill(string(f.Severity))
 							if f.CriterionCode != "" {
-								<span class="text-xs text-ink-60">{ f.CriterionCode + " · " + f.CriterionLabel }</span>
+								<span class="text-xs text-ink-60">{ f.CriterionCode + " · " + nm(ctx, f.CriterionLabel, f.CriterionLabelEn) }</span>
 							}
-							<a href={ u("/findings/%d/edit", f.ID) } class="ms-auto text-xs underline">التفاصيل</a>
+							<a href={ u("/findings/%d/edit", f.ID) } class="ms-auto text-xs underline">{ t(ctx, "التفاصيل") }</a>
 						</div>
 						<p class="mt-2">{ f.Description }</p>
-						<p class="text-sm text-ink-80 mt-1">{ "الإجراء التصحيحي: " + f.CorrectiveAction }</p>
+						<p class="text-sm text-ink-80 mt-1">{ t(ctx, "الإجراء التصحيحي: ") + f.CorrectiveAction }</p>
 					</li>
 				}
 			</ul>

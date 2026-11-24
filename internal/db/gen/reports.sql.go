@@ -53,8 +53,8 @@ func (q *Queries) FindingStats(ctx context.Context, arg FindingStatsParams) (Fin
 }
 
 const listAllFindingsForExport = `-- name: ListAllFindingsForExport :many
-SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, w.ref AS wo_ref, s.name AS site_name, COALESCE(ct.name, '')::text AS contractor_name,
-       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label
+SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, w.ref AS wo_ref, s.name AS site_name, s.name_en AS site_name_en, COALESCE(ct.name, '')::text AS contractor_name, COALESCE(ct.name_en, '')::text AS contractor_name_en,
+       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
 FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id
 JOIN sites s ON s.id = w.site_id
@@ -82,9 +82,12 @@ type ListAllFindingsForExportRow struct {
 	UpdatedAt        time.Time
 	WoRef            string
 	SiteName         string
+	SiteNameEn       string
 	ContractorName   string
+	ContractorNameEn string
 	CriterionCode    string
 	CriterionLabel   string
+	CriterionLabelEn string
 }
 
 func (q *Queries) ListAllFindingsForExport(ctx context.Context) ([]ListAllFindingsForExportRow, error) {
@@ -115,9 +118,12 @@ func (q *Queries) ListAllFindingsForExport(ctx context.Context) ([]ListAllFindin
 			&i.UpdatedAt,
 			&i.WoRef,
 			&i.SiteName,
+			&i.SiteNameEn,
 			&i.ContractorName,
+			&i.ContractorNameEn,
 			&i.CriterionCode,
 			&i.CriterionLabel,
+			&i.CriterionLabelEn,
 		); err != nil {
 			return nil, err
 		}
@@ -130,7 +136,7 @@ func (q *Queries) ListAllFindingsForExport(ctx context.Context) ([]ListAllFindin
 }
 
 const listItemsForInspections = `-- name: ListItemsForInspections :many
-SELECT it.inspection_id, it.rating, c.code, c.label, c.weight, c.is_critical, c.sort, t.stage
+SELECT it.inspection_id, it.rating, c.code, c.label, c.label_en, c.weight, c.is_critical, c.sort, t.stage
 FROM inspection_items it
 JOIN template_criteria c ON c.id = it.criterion_id
 JOIN checklist_templates t ON t.id = c.template_id
@@ -142,6 +148,7 @@ type ListItemsForInspectionsRow struct {
 	Rating       *Rating
 	Code         string
 	Label        string
+	LabelEn      string
 	Weight       int32
 	IsCritical   bool
 	Sort         int32
@@ -163,6 +170,7 @@ func (q *Queries) ListItemsForInspections(ctx context.Context, ids []int64) ([]L
 			&i.Rating,
 			&i.Code,
 			&i.Label,
+			&i.LabelEn,
 			&i.Weight,
 			&i.IsCritical,
 			&i.Sort,
@@ -180,8 +188,8 @@ func (q *Queries) ListItemsForInspections(ctx context.Context, ids []int64) ([]L
 
 const listOpenFindingsScoped = `-- name: ListOpenFindingsScoped :many
 SELECT f.id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status,
-       w.ref AS wo_ref, s.name AS site_name, COALESCE(ct.name, '')::text AS contractor_name,
-       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label,
+       w.ref AS wo_ref, s.name AS site_name, s.name_en AS site_name_en, COALESCE(ct.name, '')::text AS contractor_name, COALESCE(ct.name_en, '')::text AS contractor_name_en,
+       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en,
        COALESCE(i.stage::text, '')::text AS inspection_stage
 FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id
@@ -216,9 +224,12 @@ type ListOpenFindingsScopedRow struct {
 	Status           FindingStatus
 	WoRef            string
 	SiteName         string
+	SiteNameEn       string
 	ContractorName   string
+	ContractorNameEn string
 	CriterionCode    string
 	CriterionLabel   string
+	CriterionLabelEn string
 	InspectionStage  string
 }
 
@@ -248,9 +259,12 @@ func (q *Queries) ListOpenFindingsScoped(ctx context.Context, arg ListOpenFindin
 			&i.Status,
 			&i.WoRef,
 			&i.SiteName,
+			&i.SiteNameEn,
 			&i.ContractorName,
+			&i.ContractorNameEn,
 			&i.CriterionCode,
 			&i.CriterionLabel,
+			&i.CriterionLabelEn,
 			&i.InspectionStage,
 		); err != nil {
 			return nil, err
@@ -268,7 +282,7 @@ SELECT i.id, i.stage, i.attempt, i.inspected_on, i.score, i.passed, i.critical_f
        u.name AS inspector_name, t.name AS template_name,
        w.id AS work_order_id, w.ref, w.type, w.asset, w.location, w.technician, w.priority,
        w.planned_date, w.actual_date, w.status AS wo_status,
-       s.name AS site_name, sy.name AS system_name, ag.name AS asset_group_name, COALESCE(c.name, '')::text AS contractor_name
+       s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en, COALESCE(c.name, '')::text AS contractor_name, COALESCE(c.name_en, '')::text AS contractor_name_en
 FROM inspections i
 JOIN work_orders w ON w.id = i.work_order_id
 JOIN users u ON u.id = i.inspector_id
@@ -303,30 +317,34 @@ type ListSubmittedInspectionsParams struct {
 }
 
 type ListSubmittedInspectionsRow struct {
-	ID             int64
-	Stage          InspectionStage
-	Attempt        int32
-	InspectedOn    time.Time
-	Score          *float64
-	Passed         *bool
-	CriticalFailed bool
-	Notes          string
-	InspectorName  string
-	TemplateName   string
-	WorkOrderID    int64
-	Ref            string
-	Type           WoType
-	Asset          string
-	Location       string
-	Technician     string
-	Priority       WoPriority
-	PlannedDate    *time.Time
-	ActualDate     *time.Time
-	WoStatus       WoStatus
-	SiteName       string
-	SystemName     string
-	AssetGroupName string
-	ContractorName string
+	ID               int64
+	Stage            InspectionStage
+	Attempt          int32
+	InspectedOn      time.Time
+	Score            *float64
+	Passed           *bool
+	CriticalFailed   bool
+	Notes            string
+	InspectorName    string
+	TemplateName     string
+	WorkOrderID      int64
+	Ref              string
+	Type             WoType
+	Asset            string
+	Location         string
+	Technician       string
+	Priority         WoPriority
+	PlannedDate      *time.Time
+	ActualDate       *time.Time
+	WoStatus         WoStatus
+	SiteName         string
+	SiteNameEn       string
+	SystemName       string
+	SystemNameEn     string
+	AssetGroupName   string
+	AssetGroupNameEn string
+	ContractorName   string
+	ContractorNameEn string
 }
 
 // Submitted inspections joined with their work order, for the dashboard,
@@ -372,9 +390,13 @@ func (q *Queries) ListSubmittedInspections(ctx context.Context, arg ListSubmitte
 			&i.ActualDate,
 			&i.WoStatus,
 			&i.SiteName,
+			&i.SiteNameEn,
 			&i.SystemName,
+			&i.SystemNameEn,
 			&i.AssetGroupName,
+			&i.AssetGroupNameEn,
 			&i.ContractorName,
+			&i.ContractorNameEn,
 		); err != nil {
 			return nil, err
 		}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/HZamzami/kidana-quality/internal/appctx"
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/i18n"
 )
 
 const (
@@ -60,7 +61,7 @@ func (s *Server) recoverPanics(next http.Handler) http.Handler {
 				}
 				s.log.Error("panic", slog.Any("value", v), slog.String("stack", string(debug.Stack())))
 				w.Header().Set("Connection", "close")
-				http.Error(w, "حدث خطأ غير متوقع", http.StatusInternalServerError)
+				http.Error(w, appctx.T(r.Context(), "حدث خطأ غير متوقع"), http.StatusInternalServerError)
 			}
 		}()
 		next.ServeHTTP(w, r)
@@ -89,6 +90,9 @@ func securityHeaders(next http.Handler) http.Handler {
 func (s *Server) loadUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := appctx.WithPath(r.Context(), r.URL.Path)
+		if r.Method == http.MethodGet && !isHTMX(r) {
+			ctx = appctx.WithReturnURI(ctx, r.URL.RequestURI())
+		}
 		if id := s.sm.GetInt64(ctx, sessionUserID); id != 0 {
 			u, err := s.q.GetUser(ctx, id)
 			switch {
@@ -102,6 +106,7 @@ func (s *Server) loadUser(next http.Handler) http.Handler {
 				return
 			}
 		}
+		ctx = appctx.WithLang(ctx, requestLang(r, appctx.User(ctx)))
 		if r.Method == http.MethodGet && !isHTMX(r) {
 			if msg := s.sm.PopString(ctx, sessionFlash); msg != "" {
 				ctx = appctx.WithFlash(ctx, &appctx.Flash{Message: msg, Tone: s.sm.PopString(ctx, sessionFlashT)})
@@ -134,4 +139,18 @@ func (s *Server) requireRole(roles ...gen.UserRole) func(http.HandlerFunc) http.
 			next(w, r)
 		}
 	}
+}
+
+const langCookie = "lang"
+
+// requestLang picks the UI language: the lang cookie (set by the toggle),
+// then the user's saved choice, then Arabic.
+func requestLang(r *http.Request, u *gen.User) i18n.Lang {
+	if c, err := r.Cookie(langCookie); err == nil && i18n.Valid(c.Value) {
+		return i18n.Lang(c.Value)
+	}
+	if u != nil {
+		return i18n.Parse(u.Lang)
+	}
+	return i18n.AR
 }

@@ -5,8 +5,11 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/HZamzami/kidana-quality/internal/appctx"
+
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
 	"github.com/HZamzami/kidana-quality/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/i18n"
 	"github.com/HZamzami/kidana-quality/internal/views"
 )
 
@@ -79,7 +82,7 @@ func (s *Server) loadReport(ctx context.Context, sc reportScope) (reportData, er
 		ids[i] = r.ID
 		ir := domain.InspectionRow{
 			ID: r.ID, WorkOrderID: r.WorkOrderID, Stage: domain.Stage(r.Stage), CriticalFailed: r.CriticalFailed,
-			Type: string(r.Type), Site: r.SiteName, System: r.SystemName, AssetGroup: r.AssetGroupName, Contractor: r.ContractorName, Asset: r.Asset,
+			Type: string(r.Type), Site: i18n.Pick(appctx.Lang(ctx), r.SiteName, r.SiteNameEn), System: i18n.Pick(appctx.Lang(ctx), r.SystemName, r.SystemNameEn), AssetGroup: i18n.Pick(appctx.Lang(ctx), r.AssetGroupName, r.AssetGroupNameEn), Contractor: i18n.Pick(appctx.Lang(ctx), r.ContractorName, r.ContractorNameEn), Asset: r.Asset,
 		}
 		if r.Score != nil {
 			ir.Score = *r.Score
@@ -102,7 +105,7 @@ func (s *Server) loadReport(ctx context.Context, sc reportScope) (reportData, er
 			continue
 		}
 		itRows = append(itRows, domain.ItemRow{
-			InspectionID: it.InspectionID, Stage: domain.Stage(it.Stage), Code: it.Code, Label: it.Label,
+			InspectionID: it.InspectionID, Stage: domain.Stage(it.Stage), Code: it.Code, Label: i18n.Pick(appctx.Lang(ctx), it.Label, it.LabelEn),
 			Rating: domain.Rating(*it.Rating), Critical: it.IsCritical,
 		})
 	}
@@ -133,7 +136,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, r, http.StatusOK, views.Dashboard(views.DashboardData{
-		S: rep.Summary, Insights: domain.Insights(rep.Summary), F: sc.F, Query: sc.query(),
+		S: rep.Summary, Insights: domain.InsightsIn(appctx.Lang(ctx), rep.Summary), F: sc.F, Query: sc.query(),
 		Sites: lk.Sites, Systems: lk.Systems, AssetGroups: lk.AssetGroups, Contractors: lk.Contractors,
 	}))
 }

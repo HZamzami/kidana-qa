@@ -100,7 +100,7 @@ func (q *Queries) DeleteFinding(ctx context.Context, id int64) error {
 }
 
 const getFinding = `-- name: GetFinding :one
-SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, w.ref AS wo_ref, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label
+SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, w.ref AS wo_ref, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
 FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id
 LEFT JOIN template_criteria c ON c.id = f.criterion_id
@@ -127,6 +127,7 @@ type GetFindingRow struct {
 	WoRef            string
 	CriterionCode    string
 	CriterionLabel   string
+	CriterionLabelEn string
 }
 
 func (q *Queries) GetFinding(ctx context.Context, id int64) (GetFindingRow, error) {
@@ -152,13 +153,14 @@ func (q *Queries) GetFinding(ctx context.Context, id int64) (GetFindingRow, erro
 		&i.WoRef,
 		&i.CriterionCode,
 		&i.CriterionLabel,
+		&i.CriterionLabelEn,
 	)
 	return i, err
 }
 
 const listFindings = `-- name: ListFindings :many
-SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, w.ref AS wo_ref, s.name AS site_name, COALESCE(ct.name, '')::text AS contractor_name,
-       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label
+SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, w.ref AS wo_ref, s.name AS site_name, s.name_en AS site_name_en, COALESCE(ct.name, '')::text AS contractor_name, COALESCE(ct.name_en, '')::text AS contractor_name_en,
+       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
 FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id
 JOIN sites s ON s.id = w.site_id
@@ -205,9 +207,12 @@ type ListFindingsRow struct {
 	UpdatedAt        time.Time
 	WoRef            string
 	SiteName         string
+	SiteNameEn       string
 	ContractorName   string
+	ContractorNameEn string
 	CriterionCode    string
 	CriterionLabel   string
+	CriterionLabelEn string
 }
 
 func (q *Queries) ListFindings(ctx context.Context, arg ListFindingsParams) ([]ListFindingsRow, error) {
@@ -245,9 +250,12 @@ func (q *Queries) ListFindings(ctx context.Context, arg ListFindingsParams) ([]L
 			&i.UpdatedAt,
 			&i.WoRef,
 			&i.SiteName,
+			&i.SiteNameEn,
 			&i.ContractorName,
+			&i.ContractorNameEn,
 			&i.CriterionCode,
 			&i.CriterionLabel,
+			&i.CriterionLabelEn,
 		); err != nil {
 			return nil, err
 		}
@@ -260,7 +268,7 @@ func (q *Queries) ListFindings(ctx context.Context, arg ListFindingsParams) ([]L
 }
 
 const listFindingsByInspection = `-- name: ListFindingsByInspection :many
-SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label
+SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
 FROM findings f
 LEFT JOIN template_criteria c ON c.id = f.criterion_id
 WHERE f.inspection_id = $1
@@ -286,6 +294,7 @@ type ListFindingsByInspectionRow struct {
 	UpdatedAt        time.Time
 	CriterionCode    string
 	CriterionLabel   string
+	CriterionLabelEn string
 }
 
 func (q *Queries) ListFindingsByInspection(ctx context.Context, inspectionID *int64) ([]ListFindingsByInspectionRow, error) {
@@ -316,6 +325,7 @@ func (q *Queries) ListFindingsByInspection(ctx context.Context, inspectionID *in
 			&i.UpdatedAt,
 			&i.CriterionCode,
 			&i.CriterionLabel,
+			&i.CriterionLabelEn,
 		); err != nil {
 			return nil, err
 		}
@@ -328,7 +338,7 @@ func (q *Queries) ListFindingsByInspection(ctx context.Context, inspectionID *in
 }
 
 const listFindingsByWorkOrder = `-- name: ListFindingsByWorkOrder :many
-SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label,
+SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en,
        COALESCE(i.stage::text, '')::text AS inspection_stage, COALESCE(i.attempt, 0)::int AS inspection_attempt
 FROM findings f
 LEFT JOIN template_criteria c ON c.id = f.criterion_id
@@ -356,6 +366,7 @@ type ListFindingsByWorkOrderRow struct {
 	UpdatedAt         time.Time
 	CriterionCode     string
 	CriterionLabel    string
+	CriterionLabelEn  string
 	InspectionStage   string
 	InspectionAttempt int32
 }
@@ -388,6 +399,7 @@ func (q *Queries) ListFindingsByWorkOrder(ctx context.Context, workOrderID int64
 			&i.UpdatedAt,
 			&i.CriterionCode,
 			&i.CriterionLabel,
+			&i.CriterionLabelEn,
 			&i.InspectionStage,
 			&i.InspectionAttempt,
 		); err != nil {
@@ -404,7 +416,7 @@ func (q *Queries) ListFindingsByWorkOrder(ctx context.Context, workOrderID int64
 const listFindingsForWorkOrders = `-- name: ListFindingsForWorkOrders :many
 SELECT f.id, f.work_order_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date,
        f.status, f.closed_at, f.created_at,
-       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label,
+       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en,
        COALESCE(i.stage::text, '')::text AS inspection_stage
 FROM findings f
 LEFT JOIN template_criteria c ON c.id = f.criterion_id
@@ -426,6 +438,7 @@ type ListFindingsForWorkOrdersRow struct {
 	CreatedAt        time.Time
 	CriterionCode    string
 	CriterionLabel   string
+	CriterionLabelEn string
 	InspectionStage  string
 }
 
@@ -452,6 +465,7 @@ func (q *Queries) ListFindingsForWorkOrders(ctx context.Context, ids []int64) ([
 			&i.CreatedAt,
 			&i.CriterionCode,
 			&i.CriterionLabel,
+			&i.CriterionLabelEn,
 			&i.InspectionStage,
 		); err != nil {
 			return nil, err

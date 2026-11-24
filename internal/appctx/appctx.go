@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/i18n"
 )
 
 type key int
@@ -14,6 +15,8 @@ const (
 	userKey key = iota
 	flashKey
 	pathKey
+	langKey
+	uriKey
 )
 
 // Flash is a one-time message shown on the next page.
@@ -70,3 +73,34 @@ func CanEdit(ctx context.Context) bool {
 }
 
 func IsAdmin(ctx context.Context) bool { return Can(ctx, gen.UserRoleAdmin) }
+
+func WithLang(ctx context.Context, l i18n.Lang) context.Context {
+	return context.WithValue(ctx, langKey, l)
+}
+
+// Lang is the UI language of the request (Arabic unless chosen otherwise).
+func Lang(ctx context.Context) i18n.Lang {
+	if l, ok := ctx.Value(langKey).(i18n.Lang); ok {
+		return l
+	}
+	return i18n.AR
+}
+
+// T translates s into the request's language.
+func T(ctx context.Context, s string) string { return i18n.T(Lang(ctx), s) }
+
+// Tf translates a format string into the request's language and formats it.
+func Tf(ctx context.Context, format string, args ...any) string {
+	return i18n.Tf(Lang(ctx), format, args...)
+}
+
+// WithReturnURI stores the page address the language toggle returns to.
+func WithReturnURI(ctx context.Context, uri string) context.Context {
+	return context.WithValue(ctx, uriKey, uri)
+}
+
+// ReturnURI is the current page address for GET requests ("" otherwise).
+func ReturnURI(ctx context.Context) string {
+	s, _ := ctx.Value(uriKey).(string)
+	return s
+}

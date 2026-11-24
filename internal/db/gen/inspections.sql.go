@@ -172,7 +172,7 @@ func (q *Queries) GetInspection(ctx context.Context, id int64) (GetInspectionRow
 
 const listInspectionItems = `-- name: ListInspectionItems :many
 SELECT it.inspection_id, it.criterion_id, it.rating, it.note,
-       c.code, c.label, c.description, c.weight, c.is_critical, c.sort
+       c.code, c.label, c.label_en, c.description, c.description_en, c.weight, c.is_critical, c.sort
 FROM inspection_items it
 JOIN template_criteria c ON c.id = it.criterion_id
 WHERE it.inspection_id = $1
@@ -180,16 +180,18 @@ ORDER BY c.sort, c.code
 `
 
 type ListInspectionItemsRow struct {
-	InspectionID int64
-	CriterionID  int64
-	Rating       *Rating
-	Note         string
-	Code         string
-	Label        string
-	Description  string
-	Weight       int32
-	IsCritical   bool
-	Sort         int32
+	InspectionID  int64
+	CriterionID   int64
+	Rating        *Rating
+	Note          string
+	Code          string
+	Label         string
+	LabelEn       string
+	Description   string
+	DescriptionEn string
+	Weight        int32
+	IsCritical    bool
+	Sort          int32
 }
 
 func (q *Queries) ListInspectionItems(ctx context.Context, inspectionID int64) ([]ListInspectionItemsRow, error) {
@@ -208,7 +210,9 @@ func (q *Queries) ListInspectionItems(ctx context.Context, inspectionID int64) (
 			&i.Note,
 			&i.Code,
 			&i.Label,
+			&i.LabelEn,
 			&i.Description,
+			&i.DescriptionEn,
 			&i.Weight,
 			&i.IsCritical,
 			&i.Sort,
@@ -291,7 +295,7 @@ func (q *Queries) ListInspectionsByWorkOrder(ctx context.Context, workOrderID in
 }
 
 const listItemsForPrint = `-- name: ListItemsForPrint :many
-SELECT it.inspection_id, it.rating, it.note, c.code, c.label, c.weight, c.is_critical, c.sort
+SELECT it.inspection_id, it.rating, it.note, c.code, c.label, c.label_en, c.weight, c.is_critical, c.sort
 FROM inspection_items it
 JOIN template_criteria c ON c.id = it.criterion_id
 WHERE it.inspection_id = ANY($1::bigint[])
@@ -304,6 +308,7 @@ type ListItemsForPrintRow struct {
 	Note         string
 	Code         string
 	Label        string
+	LabelEn      string
 	Weight       int32
 	IsCritical   bool
 	Sort         int32
@@ -325,6 +330,7 @@ func (q *Queries) ListItemsForPrint(ctx context.Context, ids []int64) ([]ListIte
 			&i.Note,
 			&i.Code,
 			&i.Label,
+			&i.LabelEn,
 			&i.Weight,
 			&i.IsCritical,
 			&i.Sort,

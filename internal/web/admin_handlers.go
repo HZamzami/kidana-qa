@@ -36,7 +36,7 @@ func (s *Server) lookupData(r *http.Request, kind string) (views.LookupData, err
 			return d, err
 		}
 		for _, x := range rows {
-			d.Rows = append(d.Rows, views.LookupRow{ID: x.ID, Name: x.Name, Sort: x.Sort, Active: x.Active})
+			d.Rows = append(d.Rows, views.LookupRow{ID: x.ID, Name: x.Name, NameEn: x.NameEn, Sort: x.Sort, Active: x.Active})
 		}
 	case "systems":
 		rows, err := s.q.ListSystems(ctx)
@@ -44,7 +44,7 @@ func (s *Server) lookupData(r *http.Request, kind string) (views.LookupData, err
 			return d, err
 		}
 		for _, x := range rows {
-			d.Rows = append(d.Rows, views.LookupRow{ID: x.ID, Name: x.Name, Sort: x.Sort, Active: x.Active})
+			d.Rows = append(d.Rows, views.LookupRow{ID: x.ID, Name: x.Name, NameEn: x.NameEn, Sort: x.Sort, Active: x.Active})
 		}
 	case "asset-groups":
 		rows, err := s.q.ListAssetGroups(ctx)
@@ -52,7 +52,7 @@ func (s *Server) lookupData(r *http.Request, kind string) (views.LookupData, err
 			return d, err
 		}
 		for _, x := range rows {
-			d.Rows = append(d.Rows, views.LookupRow{ID: x.ID, Name: x.Name, Sort: x.Sort, Active: x.Active})
+			d.Rows = append(d.Rows, views.LookupRow{ID: x.ID, Name: x.Name, NameEn: x.NameEn, Sort: x.Sort, Active: x.Active})
 		}
 	case "contractors":
 		rows, err := s.q.ListContractors(ctx)
@@ -60,7 +60,7 @@ func (s *Server) lookupData(r *http.Request, kind string) (views.LookupData, err
 			return d, err
 		}
 		for _, x := range rows {
-			d.Rows = append(d.Rows, views.LookupRow{ID: x.ID, Name: x.Name, Active: x.Active, ContactName: x.ContactName, Phone: x.Phone})
+			d.Rows = append(d.Rows, views.LookupRow{ID: x.ID, Name: x.Name, NameEn: x.NameEn, Active: x.Active, ContactName: x.ContactName, Phone: x.Phone})
 		}
 	}
 	return d, nil
@@ -88,8 +88,10 @@ func (s *Server) lookupCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := newForm(r)
-	name := f.Required("name", "الاسم")
+	name := f.Required("name", appctx.T(ctx, "الاسم"))
+	nameEn := f.Str("name_en")
 	f.MaxLen("name", 120)
+	f.MaxLen("name_en", 120)
 	sort := int32(f.Int("sort", 0)) //nolint:gosec // small admin-entered number
 	var err error
 	var id int64
@@ -97,23 +99,23 @@ func (s *Server) lookupCreate(w http.ResponseWriter, r *http.Request) {
 		switch kind {
 		case "sites":
 			var x gen.Site
-			x, err = s.q.CreateSite(ctx, gen.CreateSiteParams{Name: name, Sort: sort})
+			x, err = s.q.CreateSite(ctx, gen.CreateSiteParams{Name: name, NameEn: nameEn, Sort: sort})
 			id = x.ID
 		case "systems":
 			var x gen.System
-			x, err = s.q.CreateSystem(ctx, gen.CreateSystemParams{Name: name, Sort: sort})
+			x, err = s.q.CreateSystem(ctx, gen.CreateSystemParams{Name: name, NameEn: nameEn, Sort: sort})
 			id = x.ID
 		case "asset-groups":
 			var x gen.AssetGroup
-			x, err = s.q.CreateAssetGroup(ctx, gen.CreateAssetGroupParams{Name: name, Sort: sort})
+			x, err = s.q.CreateAssetGroup(ctx, gen.CreateAssetGroupParams{Name: name, NameEn: nameEn, Sort: sort})
 			id = x.ID
 		case "contractors":
 			var x gen.Contractor
-			x, err = s.q.CreateContractor(ctx, gen.CreateContractorParams{Name: name, ContactName: f.Str("contact_name"), Phone: f.Str("phone")})
+			x, err = s.q.CreateContractor(ctx, gen.CreateContractorParams{Name: name, NameEn: nameEn, ContactName: f.Str("contact_name"), Phone: f.Str("phone")})
 			id = x.ID
 		}
 		if isUniqueViolation(err) {
-			f.Errors["name"] = "الاسم مسجل مسبقاً"
+			f.Errors["name"] = appctx.T(ctx, "الاسم مسجل مسبقاً")
 			err = nil
 		}
 	}
@@ -132,7 +134,7 @@ func (s *Server) lookupCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(ctx, s.q, kind, id, "created", map[string]any{"name": name})
-	s.flash(ctx, "تمت الإضافة", "ok")
+	s.flash(ctx, appctx.T(ctx, "تمت الإضافة"), "ok")
 	http.Redirect(w, r, "/admin/lookups/"+kind, http.StatusSeeOther)
 }
 
@@ -145,9 +147,9 @@ func (s *Server) lookupUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := newForm(r)
-	name := f.Str("name")
-	if name == "" || len([]rune(name)) > 120 {
-		s.flash(ctx, "الاسم مطلوب (120 حرفاً كحد أقصى)", "warn")
+	name, nameEn := f.Str("name"), f.Str("name_en")
+	if name == "" || len([]rune(name)) > 120 || len([]rune(nameEn)) > 120 {
+		s.flash(ctx, appctx.T(ctx, "الاسم مطلوب (120 حرفاً كحد أقصى)"), "warn")
 		http.Redirect(w, r, "/admin/lookups/"+kind, http.StatusSeeOther)
 		return
 	}
@@ -156,23 +158,23 @@ func (s *Server) lookupUpdate(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch kind {
 	case "sites":
-		_, err = s.q.UpdateSite(ctx, gen.UpdateSiteParams{ID: id, Name: name, Sort: sort, Active: active})
+		_, err = s.q.UpdateSite(ctx, gen.UpdateSiteParams{ID: id, Name: name, NameEn: nameEn, Sort: sort, Active: active})
 	case "systems":
-		_, err = s.q.UpdateSystem(ctx, gen.UpdateSystemParams{ID: id, Name: name, Sort: sort, Active: active})
+		_, err = s.q.UpdateSystem(ctx, gen.UpdateSystemParams{ID: id, Name: name, NameEn: nameEn, Sort: sort, Active: active})
 	case "asset-groups":
-		_, err = s.q.UpdateAssetGroup(ctx, gen.UpdateAssetGroupParams{ID: id, Name: name, Sort: sort, Active: active})
+		_, err = s.q.UpdateAssetGroup(ctx, gen.UpdateAssetGroupParams{ID: id, Name: name, NameEn: nameEn, Sort: sort, Active: active})
 	case "contractors":
-		_, err = s.q.UpdateContractor(ctx, gen.UpdateContractorParams{ID: id, Name: name, ContactName: f.Str("contact_name"), Phone: f.Str("phone"), Active: active})
+		_, err = s.q.UpdateContractor(ctx, gen.UpdateContractorParams{ID: id, Name: name, NameEn: nameEn, ContactName: f.Str("contact_name"), Phone: f.Str("phone"), Active: active})
 	}
 	switch {
 	case isUniqueViolation(err):
-		s.flash(ctx, "الاسم مسجل مسبقاً", "warn")
+		s.flash(ctx, appctx.T(ctx, "الاسم مسجل مسبقاً"), "warn")
 	case err != nil:
 		s.dbError(w, r, err)
 		return
 	default:
 		s.audit(ctx, s.q, kind, id, "updated", map[string]any{"name": name, "active": active})
-		s.flash(ctx, "تم الحفظ", "ok")
+		s.flash(ctx, appctx.T(ctx, "تم الحفظ"), "ok")
 	}
 	http.Redirect(w, r, "/admin/lookups/"+kind, http.StatusSeeOther)
 }
@@ -197,25 +199,25 @@ func (s *Server) userCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	f := newForm(r)
 	var d views.UsersData
-	d.New.Name = f.Required("name", "الاسم")
-	d.New.Email = strings.ToLower(f.Required("email", "البريد الإلكتروني"))
+	d.New.Name = f.Required("name", appctx.T(ctx, "الاسم"))
+	d.New.Email = strings.ToLower(f.Required("email", appctx.T(ctx, "البريد الإلكتروني")))
 	d.New.Role = f.Str("role")
 	f.MaxLen("name", 80)
 	if d.New.Email != "" {
 		if _, err := mail.ParseAddress(d.New.Email); err != nil {
-			f.Errors["email"] = "بريد إلكتروني غير صالح"
+			f.Errors["email"] = appctx.T(ctx, "بريد إلكتروني غير صالح")
 		}
 	}
 	role := gen.UserRole(d.New.Role)
 	if !role.Valid() {
-		f.Errors["role"] = "اختر الصلاحية"
+		f.Errors["role"] = appctx.T(ctx, "اختر الصلاحية")
 	}
 	password := r.PostFormValue("password")
 	generated := false
 	if password == "" {
 		password, generated = tempPassword(), true
 	} else if len([]rune(password)) < auth.MinPasswordLength {
-		f.Errors["password"] = "10 أحرف على الأقل"
+		f.Errors["password"] = appctx.T(ctx, "10 أحرف على الأقل")
 	}
 	if !f.Valid() {
 		d.Errors = f.Errors
@@ -229,7 +231,7 @@ func (s *Server) userCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := s.q.CreateUser(ctx, gen.CreateUserParams{Email: d.New.Email, Name: d.New.Name, Role: role, PasswordHash: hash})
 	if isUniqueViolation(err) {
-		d.Errors = map[string]string{"email": "البريد مسجل لمستخدم آخر"}
+		d.Errors = map[string]string{"email": appctx.T(ctx, "البريد مسجل لمستخدم آخر")}
 		s.usersPage(w, r, http.StatusUnprocessableEntity, d)
 		return
 	}
@@ -238,9 +240,9 @@ func (s *Server) userCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(ctx, s.q, "user", u.ID, "created", map[string]any{"role": role})
-	info := "تمت إضافة " + u.Name + "."
+	info := appctx.T(ctx, "تمت إضافة ") + u.Name + "."
 	if generated {
-		info += " كلمة المرور المؤقتة: " + password + " — سلّمها للمستخدم واطلب تغييرها بعد الدخول. لن تظهر مرة أخرى."
+		info += appctx.T(ctx, " كلمة المرور المؤقتة: ") + password + appctx.T(ctx, " — سلّمها للمستخدم واطلب تغييرها بعد الدخول. لن تظهر مرة أخرى.")
 	}
 	s.usersPage(w, r, http.StatusOK, views.UsersData{Info: info})
 }
@@ -257,26 +259,26 @@ func (s *Server) userUpdate(w http.ResponseWriter, r *http.Request) {
 	role := gen.UserRole(f.Str("role"))
 	active := f.Bool("active")
 	if _, err := mail.ParseAddress(email); err != nil || name == "" || !role.Valid() {
-		s.flash(ctx, "بيانات غير صالحة: تحقق من الاسم والبريد والصلاحية", "warn")
+		s.flash(ctx, appctx.T(ctx, "بيانات غير صالحة: تحقق من الاسم والبريد والصلاحية"), "warn")
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 		return
 	}
 	me := appctx.User(ctx)
 	if me.ID == id && (!active || role != gen.UserRoleAdmin) {
-		s.flash(ctx, "لا يمكنك إلغاء تفعيل حسابك أو إزالة صلاحية المدير عن نفسك", "warn")
+		s.flash(ctx, appctx.T(ctx, "لا يمكنك إلغاء تفعيل حسابك أو إزالة صلاحية المدير عن نفسك"), "warn")
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 		return
 	}
 	_, err := s.q.UpdateUser(ctx, gen.UpdateUserParams{ID: id, Email: email, Name: name, Role: role, Active: active})
 	switch {
 	case isUniqueViolation(err):
-		s.flash(ctx, "البريد مسجل لمستخدم آخر", "warn")
+		s.flash(ctx, appctx.T(ctx, "البريد مسجل لمستخدم آخر"), "warn")
 	case err != nil:
 		s.dbError(w, r, err)
 		return
 	default:
 		s.audit(ctx, s.q, "user", id, "updated", map[string]any{"role": role, "active": active})
-		s.flash(ctx, "تم حفظ المستخدم", "ok")
+		s.flash(ctx, appctx.T(ctx, "تم حفظ المستخدم"), "ok")
 	}
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
@@ -305,7 +307,7 @@ func (s *Server) userResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(ctx, s.q, "user", id, "password_reset", nil)
 	s.usersPage(w, r, http.StatusOK, views.UsersData{
-		Info: "كلمة المرور المؤقتة الجديدة لـ " + u.Name + ": " + pw + " — سلّمها للمستخدم. لن تظهر مرة أخرى.",
+		Info: appctx.T(ctx, "كلمة المرور المؤقتة الجديدة لـ ") + u.Name + ": " + pw + appctx.T(ctx, " — سلّمها للمستخدم. لن تظهر مرة أخرى."),
 	})
 }
 
@@ -370,9 +372,9 @@ func (s *Server) checklistNewVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(strings.Split(t.Name, " — ")[0])
-	d := views.ChecklistFormData{Stage: string(t.Stage), Name: fmt.Sprintf("%s — الإصدار %d", name, next), Activate: true}
+	d := views.ChecklistFormData{Stage: string(t.Stage), Name: appctx.Tf(ctx, "%s — الإصدار %d", name, next), Activate: true}
 	for _, c := range crits {
-		d.Rows = append(d.Rows, views.CriterionInput{Code: c.Code, Label: c.Label, Description: c.Description, Weight: strconv.Itoa(int(c.Weight)), Critical: c.IsCritical})
+		d.Rows = append(d.Rows, views.CriterionInput{Code: c.Code, Label: c.Label, Description: c.Description, LabelEn: c.LabelEn, DescriptionEn: c.DescriptionEn, Weight: strconv.Itoa(int(c.Weight)), Critical: c.IsCritical})
 	}
 	for i := 0; i < blankCriterionRows; i++ {
 		d.Rows = append(d.Rows, views.CriterionInput{})
@@ -386,16 +388,17 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 	d := views.ChecklistFormData{Stage: f.Str("stage"), Name: f.Str("name"), Activate: f.Bool("activate")}
 	stage := gen.InspectionStage(d.Stage)
 	if !stage.Valid() {
-		s.badRequest(w, r, "مرحلة غير صالحة")
+		s.badRequest(w, r, appctx.T(ctx, "مرحلة غير صالحة"))
 		return
 	}
 	n := f.Int("rows", 0)
 	if n < 0 || n > 60 {
-		s.badRequest(w, r, "عدد بنود غير صالح")
+		s.badRequest(w, r, appctx.T(ctx, "عدد بنود غير صالح"))
 		return
 	}
 	type crit struct {
 		code, label, desc string
+		labelEn, descEn   string
 		weight            int
 		critical          bool
 	}
@@ -405,6 +408,7 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 		in := views.CriterionInput{
 			Code: f.Str(fmt.Sprintf("code_%d", i)), Label: f.Str(fmt.Sprintf("label_%d", i)),
 			Description: f.Str(fmt.Sprintf("desc_%d", i)), Weight: f.Str(fmt.Sprintf("weight_%d", i)),
+			LabelEn: f.Str(fmt.Sprintf("label_en_%d", i)), DescriptionEn: f.Str(fmt.Sprintf("desc_en_%d", i)),
 			Critical: f.Bool(fmt.Sprintf("critical_%d", i)),
 		}
 		d.Rows = append(d.Rows, in)
@@ -415,28 +419,28 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 		wt, err := strconv.Atoi(in.Weight)
 		var rowErrs []string
 		if in.Code == "" || in.Label == "" {
-			rowErrs = append(rowErrs, "الرمز والبند مطلوبان")
+			rowErrs = append(rowErrs, appctx.T(ctx, "الرمز والبند مطلوبان"))
 		}
 		if err != nil || wt < 1 || wt > 100 {
-			rowErrs = append(rowErrs, "الوزن رقم من 1 إلى 100")
+			rowErrs = append(rowErrs, appctx.T(ctx, "الوزن رقم من 1 إلى 100"))
 		}
 		if in.Code != "" && seen[strings.ToUpper(in.Code)] {
-			rowErrs = append(rowErrs, "الرمز "+in.Code+" مكرر")
+			rowErrs = append(rowErrs, appctx.T(ctx, "الرمز ")+in.Code+appctx.T(ctx, " مكرر"))
 		}
 		if in.Code != "" {
 			seen[strings.ToUpper(in.Code)] = true
 		}
 		if len(rowErrs) > 0 {
-			d.Errors = append(d.Errors, fmt.Sprintf("الصف %d: %s", row, strings.Join(rowErrs, "، ")))
+			d.Errors = append(d.Errors, appctx.Tf(ctx, "الصف %d: %s", row, strings.Join(rowErrs, appctx.T(ctx, "، "))))
 			continue
 		}
-		crits = append(crits, crit{in.Code, in.Label, in.Description, wt, in.Critical})
+		crits = append(crits, crit{in.Code, in.Label, in.Description, in.LabelEn, in.DescriptionEn, wt, in.Critical})
 	}
 	if d.Name == "" {
-		d.Errors = append(d.Errors, "اسم القائمة مطلوب")
+		d.Errors = append(d.Errors, appctx.T(ctx, "اسم القائمة مطلوب"))
 	}
 	if len(crits) == 0 {
-		d.Errors = append(d.Errors, "أضف بنداً واحداً على الأقل")
+		d.Errors = append(d.Errors, appctx.T(ctx, "أضف بنداً واحداً على الأقل"))
 	}
 	if len(d.Errors) > 0 {
 		s.render(w, r, http.StatusUnprocessableEntity, views.ChecklistForm(d))
@@ -455,7 +459,7 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		for i, c := range crits {
 			if _, err := q.CreateCriterion(ctx, gen.CreateCriterionParams{
-				TemplateID: t.ID, Code: c.code, Label: c.label, Description: c.desc,
+				TemplateID: t.ID, Code: c.code, Label: c.label, Description: c.desc, LabelEn: c.labelEn, DescriptionEn: c.descEn,
 				Weight: int32(c.weight), IsCritical: c.critical, Sort: int32(i + 1), //nolint:gosec // validated 1..100, ≤60 rows
 			}); err != nil {
 				return err
@@ -477,6 +481,6 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	s.flash(ctx, "تم حفظ الإصدار الجديد", "ok")
+	s.flash(ctx, appctx.T(ctx, "تم حفظ الإصدار الجديد"), "ok")
 	http.Redirect(w, r, "/admin/checklists/"+idStr(newID), http.StatusSeeOther)
 }

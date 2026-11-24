@@ -297,6 +297,27 @@ func TestInspectionFlow(t *testing.T) {
 			t.Fatalf("GET %s: %d", p, res.StatusCode)
 		}
 	}
+	// English: the toggle switches the UI and its direction, and is remembered.
+	if res := e.post(c, "/lang", url.Values{"lang": {"en"}, "next": {"/work-orders"}}); res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/work-orders" {
+		t.Fatalf("POST /lang: %d %s", res.StatusCode, res.Header.Get("Location"))
+	}
+	for _, p := range []string{"/", "/work-orders", "/work-orders/" + idStr(wo.ID), "/inspections/" + idStr(during), "/findings?scope=all", "/reports/print", "/data", "/work-orders/" + idStr(wo.ID) + "/print"} {
+		res, body := e.get(c, p)
+		if res.StatusCode != http.StatusOK || !strings.Contains(body, `dir="ltr"`) || !strings.Contains(body, `lang="en"`) {
+			t.Fatalf("GET %s in English: %d", p, res.StatusCode)
+		}
+	}
+	if _, body := e.get(c, "/work-orders"); !strings.Contains(body, "Work orders") || strings.Contains(body, "أوامر العمل") {
+		t.Fatal("work order list not in English")
+	}
+	if u := must(e.q.GetUserByEmail(ctx, "inspector@test.local")); u.Lang != "en" {
+		t.Fatalf("language not saved on the user: %q", u.Lang)
+	}
+	e.post(c, "/lang", url.Values{"lang": {"ar"}})
+	if _, body := e.get(c, "/work-orders"); !strings.Contains(body, `dir="rtl"`) || !strings.Contains(body, "أوامر العمل") {
+		t.Fatal("switching back to Arabic failed")
+	}
+
 	res2, _ := e.get(c, "/reports/export.xlsx")
 	if res2.StatusCode != http.StatusOK || !strings.Contains(res2.Header.Get("Content-Type"), "spreadsheetml") {
 		t.Fatalf("export: %d %s", res2.StatusCode, res2.Header.Get("Content-Type"))

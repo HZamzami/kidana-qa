@@ -8,6 +8,7 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"github.com/HZamzami/kidana-quality/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/i18n"
 )
 
 func TestParseDate(t *testing.T) {
@@ -58,7 +59,7 @@ func TestParseRatingAndType(t *testing.T) {
 }
 
 func TestTemplateRoundTrip(t *testing.T) {
-	f, err := WorkOrderTemplate([]string{"منى"}, []string{"الكهرباء"}, []string{"لوحات التوزيع"}, nil)
+	f, err := WorkOrderTemplate(i18n.AR, []string{"منى"}, []string{"الكهرباء"}, []string{"لوحات التوزيع"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +71,7 @@ func TestTemplateRoundTrip(t *testing.T) {
 	if err := f.Write(&buf); err != nil {
 		t.Fatal(err)
 	}
-	res, err := Parse(&buf)
+	res, err := Parse(&buf, i18n.AR)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,43 +1,46 @@
 package views
 
 templ LoginPage(email, errMsg string) {
-	@Base("تسجيل الدخول") {
+	@Base(t(ctx, "تسجيل الدخول")) {
+		<div class="fixed top-3 end-3 z-10">
+			@LangToggle()
+		</div>
 		<main class="min-h-dvh grid place-items-center px-4 py-10">
 			<div class="w-full max-w-sm">
 				<div class="text-center mb-6">
-					<img src={ asset("/static/img/kidana-logo.png") } alt="كدانة" class="h-11 w-auto mx-auto"/>
-					<h1 class="mt-5 text-lg font-semibold">نظام جودة الصيانة</h1>
-					<p class="text-sm text-ink-80">فحص أثناء التنفيذ وفحص بعد التنفيذ لأوامر العمل</p>
+					<img src={ asset("/static/img/kidana-logo.png") } alt={ t(ctx, "كدانة") } class="h-11 w-auto mx-auto"/>
+					<h1 class="mt-5 text-lg font-semibold">{ t(ctx, "نظام جودة الصيانة") }</h1>
+					<p class="text-sm text-ink-80">{ t(ctx, "فحص أثناء التنفيذ وفحص بعد التنفيذ لأوامر العمل") }</p>
 				</div>
 				<form method="post" action="/login" class="card p-6 space-y-4">
 					if errMsg != "" {
-						<div role="alert" class="rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2">{ errMsg }</div>
+						<div role="alert" class="rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2">{ t(ctx, errMsg) }</div>
 					}
 					<div>
-						<label class="label" for="email">البريد الإلكتروني</label>
+						<label class="label" for="email">{ t(ctx, "البريد الإلكتروني") }</label>
 						<input class="input" id="email" name="email" type="email" autocomplete="username" required value={ email } dir="ltr"/>
 					</div>
 					<div>
-						<label class="label" for="password">كلمة المرور</label>
+						<label class="label" for="password">{ t(ctx, "كلمة المرور") }</label>
 						<input class="input" id="password" name="password" type="password" autocomplete="current-password" required dir="ltr"/>
 					</div>
-					<button type="submit" class="btn btn-primary w-full py-2.5">دخول</button>
+					<button type="submit" class="btn btn-primary w-full py-2.5">{ t(ctx, "دخول") }</button>
 				</form>
-				<p class="mt-6 text-center text-xs text-ink-60">شركة كدانة للتنمية والتطوير · إدارة جودة العمليات</p>
+				<p class="mt-6 text-center text-xs text-ink-60">{ t(ctx, "شركة كدانة للتنمية والتطوير · إدارة جودة العمليات") }</p>
 			</div>
 		</main>
 	}
 }
 
 templ PasswordPage(errs map[string]string) {
-	@App("تغيير كلمة المرور") {
-		@PageHeader("تغيير كلمة المرور", "")
+	@App(t(ctx, "تغيير كلمة المرور")) {
+		@PageHeader(t(ctx, "تغيير كلمة المرور"), "")
 		<form method="post" action="/account/password" class="card p-6 max-w-md space-y-4">
-			@TextField("current", "كلمة المرور الحالية", "", true, errs, templ.Attributes{"type": "password", "autocomplete": "current-password", "dir": "ltr"})
-			@TextField("new", "كلمة المرور الجديدة", "", true, errs, templ.Attributes{"type": "password", "autocomplete": "new-password", "dir": "ltr", "minlength": "10"})
-			@TextField("confirm", "تأكيد كلمة المرور الجديدة", "", true, errs, templ.Attributes{"type": "password", "autocomplete": "new-password", "dir": "ltr"})
-			<p class="text-xs text-ink-60">10 أحرف على الأقل.</p>
-			<button type="submit" class="btn btn-primary">حفظ</button>
+			@TextField("current", t(ctx, "كلمة المرور الحالية"), "", true, errs, templ.Attributes{"type": "password", "autocomplete": "current-password", "dir": "ltr"})
+			@TextField("new", t(ctx, "كلمة المرور الجديدة"), "", true, errs, templ.Attributes{"type": "password", "autocomplete": "new-password", "dir": "ltr", "minlength": "10"})
+			@TextField("confirm", t(ctx, "تأكيد كلمة المرور الجديدة"), "", true, errs, templ.Attributes{"type": "password", "autocomplete": "new-password", "dir": "ltr"})
+			<p class="text-xs text-ink-60">{ t(ctx, "10 أحرف على الأقل.") }</p>
+			<button type="submit" class="btn btn-primary">{ t(ctx, "حفظ") }</button>
 		</form>
 	}
 }

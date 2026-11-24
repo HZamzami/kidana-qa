@@ -5,7 +5,7 @@ SELECT i.id, i.stage, i.attempt, i.inspected_on, i.score, i.passed, i.critical_f
        u.name AS inspector_name, t.name AS template_name,
        w.id AS work_order_id, w.ref, w.type, w.asset, w.location, w.technician, w.priority,
        w.planned_date, w.actual_date, w.status AS wo_status,
-       s.name AS site_name, sy.name AS system_name, ag.name AS asset_group_name, COALESCE(c.name, '')::text AS contractor_name
+       s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en, COALESCE(c.name, '')::text AS contractor_name, COALESCE(c.name_en, '')::text AS contractor_name_en
 FROM inspections i
 JOIN work_orders w ON w.id = i.work_order_id
 JOIN users u ON u.id = i.inspector_id
@@ -28,7 +28,7 @@ ORDER BY i.inspected_on DESC, i.id DESC;
 
 -- Ratings of the given inspections, for per-criterion compliance.
 -- name: ListItemsForInspections :many
-SELECT it.inspection_id, it.rating, c.code, c.label, c.weight, c.is_critical, c.sort, t.stage
+SELECT it.inspection_id, it.rating, c.code, c.label, c.label_en, c.weight, c.is_critical, c.sort, t.stage
 FROM inspection_items it
 JOIN template_criteria c ON c.id = it.criterion_id
 JOIN checklist_templates t ON t.id = c.template_id
@@ -49,8 +49,8 @@ WHERE (sqlc.narg(site_id)::bigint IS NULL OR w.site_id = sqlc.narg(site_id))
   AND (sqlc.narg(type)::wo_type IS NULL OR w.type = sqlc.narg(type));
 
 -- name: ListAllFindingsForExport :many
-SELECT f.*, w.ref AS wo_ref, s.name AS site_name, COALESCE(ct.name, '')::text AS contractor_name,
-       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label
+SELECT f.*, w.ref AS wo_ref, s.name AS site_name, s.name_en AS site_name_en, COALESCE(ct.name, '')::text AS contractor_name, COALESCE(ct.name_en, '')::text AS contractor_name_en,
+       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
 FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id
 JOIN sites s ON s.id = w.site_id
@@ -61,8 +61,8 @@ ORDER BY f.created_at;
 -- Open findings in the report scope (same work-order filters as FindingStats).
 -- name: ListOpenFindingsScoped :many
 SELECT f.id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status,
-       w.ref AS wo_ref, s.name AS site_name, COALESCE(ct.name, '')::text AS contractor_name,
-       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label,
+       w.ref AS wo_ref, s.name AS site_name, s.name_en AS site_name_en, COALESCE(ct.name, '')::text AS contractor_name, COALESCE(ct.name_en, '')::text AS contractor_name_en,
+       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en,
        COALESCE(i.stage::text, '')::text AS inspection_stage
 FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id

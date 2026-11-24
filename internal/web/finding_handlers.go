@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/HZamzami/kidana-quality/internal/appctx"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/HZamzami/kidana-quality/internal/db"
@@ -72,12 +74,12 @@ func (s *Server) findingUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cur.Status == gen.FindingStatusClosed {
-		s.badRequest(w, r, "الملاحظة مغلقة. أعد فتحها أولاً.")
+		s.badRequest(w, r, appctx.T(ctx, "الملاحظة مغلقة. أعد فتحها أولاً."))
 		return
 	}
 	f := newForm(r)
 	v := views.FindingFormValues{
-		Description: f.Required("description", "وصف الملاحظة"), CorrectiveAction: f.Required("corrective_action", "الإجراء التصحيحي"),
+		Description: f.Required("description", appctx.T(ctx, "وصف الملاحظة")), CorrectiveAction: f.Required("corrective_action", appctx.T(ctx, "الإجراء التصحيحي")),
 		Owner: f.Str("owner"), DueDate: f.Str("due_date"), Severity: f.Str("severity"), Status: f.Str("status"),
 	}
 	due := f.OptDate("due_date")
@@ -86,10 +88,10 @@ func (s *Server) findingUpdate(w http.ResponseWriter, r *http.Request) {
 	f.MaxLen("owner", 80)
 	sev, st := gen.FindingSeverity(v.Severity), gen.FindingStatus(v.Status)
 	if !sev.Valid() {
-		f.Errors["severity"] = "قيمة غير صالحة"
+		f.Errors["severity"] = appctx.T(ctx, "قيمة غير صالحة")
 	}
 	if !st.Valid() || st == gen.FindingStatusClosed {
-		f.Errors["status"] = "قيمة غير صالحة"
+		f.Errors["status"] = appctx.T(ctx, "قيمة غير صالحة")
 	}
 	if !f.Valid() {
 		s.render(w, r, http.StatusUnprocessableEntity, views.FindingEdit(views.FindingEditData{F: cur, V: v, Errors: f.Errors}))
@@ -103,7 +105,7 @@ func (s *Server) findingUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(ctx, s.q, "finding", id, "updated", nil)
-	s.flash(ctx, "تم حفظ الملاحظة", "ok")
+	s.flash(ctx, appctx.T(ctx, "تم حفظ الملاحظة"), "ok")
 	http.Redirect(w, r, "/findings/"+idStr(id)+"/edit", http.StatusSeeOther)
 }
 
@@ -120,7 +122,7 @@ func (s *Server) findingClose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := newForm(r)
-	note := f.Required("closure_note", "كيف تمت المعالجة")
+	note := f.Required("closure_note", appctx.T(ctx, "كيف تمت المعالجة"))
 	f.MaxLen("closure_note", 1000)
 	if !f.Valid() {
 		s.render(w, r, http.StatusUnprocessableEntity, views.FindingEdit(views.FindingEditData{F: cur, V: findingValues(cur), Errors: f.Errors}))
@@ -138,7 +140,7 @@ func (s *Server) findingClose(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	s.flash(ctx, "تم إغلاق الملاحظة", "ok")
+	s.flash(ctx, appctx.T(ctx, "تم إغلاق الملاحظة"), "ok")
 	http.Redirect(w, r, "/work-orders/"+idStr(cur.WorkOrderID), http.StatusSeeOther)
 }
 
@@ -166,7 +168,7 @@ func (s *Server) findingReopen(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	s.flash(ctx, "أُعيد فتح الملاحظة", "")
+	s.flash(ctx, appctx.T(ctx, "أُعيد فتح الملاحظة"), "")
 	http.Redirect(w, r, "/findings/"+idStr(id)+"/edit", http.StatusSeeOther)
 }
 
@@ -186,7 +188,7 @@ func (s *Server) findingDelete(w http.ResponseWriter, r *http.Request) {
 		in, err := s.q.GetInspection(ctx, *cur.InspectionID)
 		if err == nil && in.Status == gen.InspectionStatusSubmitted && cur.Status != gen.FindingStatusClosed {
 			// Deleting it could make a failed inspection look unsupported; keep the record.
-			s.badRequest(w, r, "هذه الملاحظة مرتبطة بفحص مرسل. أغلقها بدلاً من حذفها.")
+			s.badRequest(w, r, appctx.T(ctx, "هذه الملاحظة مرتبطة بفحص مرسل. أغلقها بدلاً من حذفها."))
 			return
 		}
 	}
@@ -202,6 +204,6 @@ func (s *Server) findingDelete(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	s.flash(ctx, "تم حذف الملاحظة", "")
+	s.flash(ctx, appctx.T(ctx, "تم حذف الملاحظة"), "")
 	http.Redirect(w, r, "/work-orders/"+idStr(cur.WorkOrderID), http.StatusSeeOther)
 }

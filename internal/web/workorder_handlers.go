@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/HZamzami/kidana-quality/internal/appctx"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/HZamzami/kidana-quality/internal/db"
@@ -131,14 +133,14 @@ func (s *Server) parseWO(r *http.Request, id int64) (woInput, views.WOFormValues
 		PlannedDate: f.Str("planned_date"), ActualDate: f.Str("actual_date"), Status: f.Str("status"),
 	}
 	in := woInput{
-		Ref:          f.Required("ref", "رقم أمر العمل"),
+		Ref:          f.Required("ref", appctx.T(r.Context(), "رقم أمر العمل")),
 		Location:     v.Location,
 		Asset:        v.Asset,
 		Technician:   v.Technician,
 		Description:  v.Description,
-		SiteID:       f.ReqID("site_id", "الموقع"),
-		SystemID:     f.ReqID("system_id", "المنظومة"),
-		AssetGroupID: f.ReqID("asset_group_id", "مجموعة الأصل"),
+		SiteID:       f.ReqID("site_id", appctx.T(r.Context(), "الموقع")),
+		SystemID:     f.ReqID("system_id", appctx.T(r.Context(), "المنظومة")),
+		AssetGroupID: f.ReqID("asset_group_id", appctx.T(r.Context(), "مجموعة الأصل")),
 		ContractorID: f.OptID("contractor_id"),
 		PlannedDate:  f.OptDate("planned_date"),
 		ActualDate:   f.OptDate("actual_date"),
@@ -148,18 +150,18 @@ func (s *Server) parseWO(r *http.Request, id int64) (woInput, views.WOFormValues
 	}
 	in.Type = gen.WoType(v.Type)
 	if !in.Type.Valid() {
-		f.Errors["type"] = "اختر النوع"
+		f.Errors["type"] = appctx.T(r.Context(), "اختر النوع")
 	}
 	if v.Priority == "" {
 		v.Priority = string(gen.WoPriorityNormal) // the column default
 	}
 	in.Priority = gen.WoPriority(v.Priority)
 	if !in.Priority.Valid() {
-		f.Errors["priority"] = "اختر الأولوية"
+		f.Errors["priority"] = appctx.T(r.Context(), "اختر الأولوية")
 	}
 	in.Status = gen.WoStatus(v.Status)
 	if id != 0 && (!in.Status.Valid()) {
-		f.Errors["status"] = "اختر الحالة"
+		f.Errors["status"] = appctx.T(r.Context(), "اختر الحالة")
 	}
 	if in.Ref != "" {
 		exists, err := s.q.GetWorkOrderRefExists(r.Context(), gen.GetWorkOrderRefExistsParams{Ref: in.Ref, ExcludeID: id})
@@ -167,7 +169,7 @@ func (s *Server) parseWO(r *http.Request, id int64) (woInput, views.WOFormValues
 			return in, v, nil, err
 		}
 		if exists {
-			f.Errors["ref"] = "يوجد أمر عمل مسجل بهذا الرقم"
+			f.Errors["ref"] = appctx.T(r.Context(), "يوجد أمر عمل مسجل بهذا الرقم")
 		}
 	}
 	return in, v, f.Errors, nil
@@ -199,7 +201,7 @@ func (s *Server) workOrderCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(ctx, s.q, "work_order", wo.ID, "created", map[string]any{"ref": wo.Ref})
-	s.flash(ctx, "تم إنشاء أمر العمل "+wo.Ref, "ok")
+	s.flash(ctx, appctx.T(ctx, "تم إنشاء أمر العمل ")+wo.Ref, "ok")
 	if r.PostFormValue("next") == "new" {
 		// "save and add another": keep type, site, system, asset group and contractor
 		http.Redirect(w, r, "/work-orders/new?keep=ctx&from="+idStr(wo.ID), http.StatusSeeOther)
@@ -306,7 +308,7 @@ func (s *Server) workOrderUpdate(w http.ResponseWriter, r *http.Request) {
 		s.dbError(w, r, err)
 		return
 	}
-	s.flash(ctx, "تم حفظ أمر العمل", "ok")
+	s.flash(ctx, appctx.T(ctx, "تم حفظ أمر العمل"), "ok")
 	http.Redirect(w, r, "/work-orders/"+idStr(id), http.StatusSeeOther)
 }
 
@@ -338,7 +340,7 @@ func (s *Server) workOrderDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if facts.HasSubmitted {
-		s.badRequest(w, r, "لا يمكن حذف أمر عمل عليه فحص مرسل. غيّر حالته إلى «ملغى» بدلاً من ذلك.")
+		s.badRequest(w, r, appctx.T(ctx, "لا يمكن حذف أمر عمل عليه فحص مرسل. غيّر حالته إلى «ملغى» بدلاً من ذلك."))
 		return
 	}
 	photos, err := s.q.ListAttachmentsByWorkOrder(ctx, id)
@@ -361,6 +363,6 @@ func (s *Server) workOrderDelete(w http.ResponseWriter, r *http.Request) {
 	for _, p := range photos {
 		_ = s.store.Delete(ctx, p.StorageKey)
 	}
-	s.flash(ctx, "تم حذف أمر العمل "+wo.Ref, "")
+	s.flash(ctx, appctx.T(ctx, "تم حذف أمر العمل ")+wo.Ref, "")
 	http.Redirect(w, r, "/work-orders", http.StatusSeeOther)
 }

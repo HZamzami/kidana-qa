@@ -21,8 +21,8 @@ VALUES ($1, $2, $3, false, $4)
 RETURNING *;
 
 -- name: CreateCriterion :one
-INSERT INTO template_criteria (template_id, code, label, description, weight, is_critical, sort)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO template_criteria (template_id, code, label, description, weight, is_critical, sort, label_en, description_en)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: DeactivateStageTemplates :exec

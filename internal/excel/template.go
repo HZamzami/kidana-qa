@@ -6,6 +6,7 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"github.com/HZamzami/kidana-quality/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/i18n"
 )
 
 // woColumns of the work order import template, in order.
@@ -31,17 +32,17 @@ var woColumns = []struct {
 
 // WorkOrderTemplate builds the bulk work order import template with
 // drop-down lists for the reference values.
-func WorkOrderTemplate(sites, systems, assetGroups, contractors []string) (*excelize.File, error) {
+func WorkOrderTemplate(l i18n.Lang, sites, systems, assetGroups, contractors []string) (*excelize.File, error) {
 	f := excelize.NewFile()
 	st, err := newStyles(f)
 	if err != nil {
 		return nil, err
 	}
-	sh := SheetWorkOrders
+	sh := i18n.T(l, SheetWorkOrders)
 	if err := f.SetSheetName("Sheet1", sh); err != nil {
 		return nil, err
 	}
-	rtl := true
+	rtl := l != i18n.EN
 	_ = f.SetSheetView(sh, 0, &excelize.ViewOptions{RightToLeft: &rtl})
 	for i, c := range woColumns {
 		a := axis(i+1, 1)
@@ -83,10 +84,10 @@ func WorkOrderTemplate(sites, systems, assetGroups, contractors []string) (*exce
 		dv.Sqref = fmt.Sprintf("%s2:%s%d", col, col, last)
 		dv.SetSqrefDropList(fmt.Sprintf("%s!$%s$1:$%s$%d", lists, listCol, listCol, n))
 		if strict {
-			dv.SetError(excelize.DataValidationErrorStyleStop, "قيمة غير صحيحة", "اختر من القائمة")
+			dv.SetError(excelize.DataValidationErrorStyleStop, i18n.T(l, "قيمة غير صحيحة"), i18n.T(l, "اختر من القائمة"))
 		} else {
 			// sites/systems/asset groups/contractors accept new names (they are created on import)
-			dv.SetError(excelize.DataValidationErrorStyleInformation, "قيمة جديدة", "سيُضاف الاسم الجديد عند الاستيراد")
+			dv.SetError(excelize.DataValidationErrorStyleInformation, i18n.T(l, "قيمة جديدة"), i18n.T(l, "سيُضاف الاسم الجديد عند الاستيراد"))
 		}
 		_ = f.AddDataValidation(sh, dv)
 	}
@@ -106,26 +107,26 @@ func WorkOrderTemplate(sites, systems, assetGroups, contractors []string) (*exce
 	dv := excelize.NewDataValidation(true)
 	dv.Sqref = fmt.Sprintf("K2:L%d", last)
 	if err := dv.SetRange(36526, 73050, excelize.DataValidationTypeDate, excelize.DataValidationOperatorBetween); err == nil { // 2000-01-01 … 2099-12-31
-		dv.SetError(excelize.DataValidationErrorStyleStop, "تاريخ غير صالح", "أدخل تاريخاً صحيحاً بصيغة dd/mm/yyyy، مثال 18/11/2026")
-		dv.SetInput("التاريخ", "dd/mm/yyyy — تأكد أن التاريخ المعروض يطابق ما تقصده")
+		dv.SetError(excelize.DataValidationErrorStyleStop, i18n.T(l, "تاريخ غير صالح"), i18n.T(l, "أدخل تاريخاً صحيحاً بصيغة dd/mm/yyyy، مثال 18/11/2026"))
+		dv.SetInput(i18n.T(l, "التاريخ"), i18n.T(l, "dd/mm/yyyy — تأكد أن التاريخ المعروض يطابق ما تقصده"))
 		_ = f.AddDataValidation(sh, dv)
 	}
 
 	// Instructions
-	const help = "التعليمات"
+	help := i18n.T(l, "التعليمات")
 	if _, err := f.NewSheet(help); err != nil {
 		return nil, err
 	}
 	_ = f.SetSheetView(help, 0, &excelize.ViewOptions{RightToLeft: &rtl})
 	_ = f.SetColWidth(help, "A", "A", 110)
 	lines := []string{
-		"استيراد أوامر العمل — نظام جودة الصيانة",
-		"1) صف لكل أمر عمل في ورقة «أوامر العمل» بدءاً من الصف الثاني. الأعمدة المعلّمة بـ * إلزامية.",
-		"2) لا تغيّر عناوين الأعمدة — الاستيراد يعتمد عليها.",
-		"3) أعمدة التاريخ خلايا تاريخ حقيقية بصيغة dd/mm/yyyy (مثال 18/11/2026)، ويرفض Excel أي قيمة ليست تاريخاً. تأكد أن التاريخ المعروض يطابق ما تقصده. التاريخ الهجري يُعرض في النظام تلقائياً ولا يُدخل هنا.",
-		"4) أوامر العمل الموجودة مسبقاً (بنفس الرقم) تُتجاهل ولا تُعدَّل.",
-		"5) المواقع والمنظومات ومجموعات الأصول والمقاولون غير المسجلين يُضافون تلقائياً — راجعهم بعد الاستيراد من الإعدادات.",
-		"6) الأولوية: عادي أو عالي أو طارئ. إن تُركت فارغة تُعتبر «عادي».",
+		i18n.T(l, "استيراد أوامر العمل — نظام جودة الصيانة"),
+		i18n.T(l, "1) صف لكل أمر عمل في ورقة «أوامر العمل» بدءاً من الصف الثاني. الأعمدة المعلّمة بـ * إلزامية."),
+		i18n.T(l, "2) لا تغيّر عناوين الأعمدة — الاستيراد يعتمد عليها."),
+		i18n.T(l, "3) أعمدة التاريخ خلايا تاريخ حقيقية بصيغة dd/mm/yyyy (مثال 18/11/2026)، ويرفض Excel أي قيمة ليست تاريخاً. تأكد أن التاريخ المعروض يطابق ما تقصده. التاريخ الهجري يُعرض في النظام تلقائياً ولا يُدخل هنا."),
+		i18n.T(l, "4) أوامر العمل الموجودة مسبقاً (بنفس الرقم) تُتجاهل ولا تُعدَّل."),
+		i18n.T(l, "5) المواقع والمنظومات ومجموعات الأصول والمقاولون غير المسجلين يُضافون تلقائياً — راجعهم بعد الاستيراد من الإعدادات."),
+		i18n.T(l, "6) الأولوية: عادي أو عالي أو طارئ. إن تُركت فارغة تُعتبر «عادي»."),
 	}
 	for i, l := range lines {
 		_ = f.SetCellValue(help, fmt.Sprintf("A%d", i+1), l)

@@ -43,11 +43,11 @@ func (d WOListData) Pages() int {
 }
 
 templ WorkOrdersPage(d WOListData) {
-	@App("أوامر العمل") {
-		@PageHeader("أوامر العمل", "كل أمر عمل يجمع الفحص أثناء التنفيذ والفحص بعد التنفيذ والملاحظات") {
-			<a href="/work-orders" class="btn btn-ghost">إعادة ضبط الفلاتر</a>
+	@App(t(ctx, "أوامر العمل")) {
+		@PageHeader(t(ctx, "أوامر العمل"), t(ctx, "كل أمر عمل يجمع الفحص أثناء التنفيذ والفحص بعد التنفيذ والملاحظات")) {
+			<a href="/work-orders" class="btn btn-ghost">{ t(ctx, "إعادة ضبط الفلاتر") }</a>
 			if appctx.CanEdit(ctx) {
-				<a href="/work-orders/new" class="btn btn-primary">＋ أمر عمل جديد</a>
+				<a href="/work-orders/new" class="btn btn-primary">{ t(ctx, "＋ أمر عمل جديد") }</a>
 			}
 		}
 		<form
@@ -62,20 +62,20 @@ templ WorkOrdersPage(d WOListData) {
 			hx-push-url="true"
 		>
 			<div class="col-span-2 min-w-0">
-				<label class="label" for="flt_q">بحث</label>
-				<input class="input h-9" type="search" id="flt_q" name="q" value={ d.val("q") } placeholder="رقم أمر العمل، الأصل، الموقع التفصيلي، الفني…"/>
+				<label class="label" for="flt_q">{ t(ctx, "بحث") }</label>
+				<input class="input h-9" type="search" id="flt_q" name="q" value={ d.val("q") } placeholder={ t(ctx, "رقم أمر العمل، الأصل، الموقع التفصيلي، الفني…") }/>
 			</div>
 			<!-- 9 cells: search spans two; contractor spans on phone so no straggler -->
-			@FilterSelect("type", "النوع", d.val("type"), TypeOptions)
-			@FilterSelect("status", "الحالة", d.val("status"), d.Statuses)
-			@FilterSelect("priority", "الأولوية", d.val("priority"), d.Priorities)
-			@FilterSelect("site", "الموقع", d.val("site"), d.Sites)
-			@FilterSelect("system", "المنظومة", d.val("system"), d.Systems)
-			@FilterSelect("group", "مجموعة الأصل", d.val("group"), d.AssetGroups)
+			@FilterSelect("type", t(ctx, "النوع"), d.val("type"), TypeOptions)
+			@FilterSelect("status", t(ctx, "الحالة"), d.val("status"), d.Statuses)
+			@FilterSelect("priority", t(ctx, "الأولوية"), d.val("priority"), d.Priorities)
+			@FilterSelect("site", t(ctx, "الموقع"), d.val("site"), d.Sites)
+			@FilterSelect("system", t(ctx, "المنظومة"), d.val("system"), d.Systems)
+			@FilterSelect("group", t(ctx, "مجموعة الأصل"), d.val("group"), d.AssetGroups)
 			<div class="col-span-2 md:col-span-1 min-w-0">
-				@FilterSelect("contractor", "المقاول", d.val("contractor"), d.Contractors)
+				@FilterSelect("contractor", t(ctx, "المقاول"), d.val("contractor"), d.Contractors)
 			</div>
-			<noscript><button class="btn btn-primary">تطبيق</button></noscript>
+			<noscript><button class="btn btn-primary">{ t(ctx, "تطبيق") }</button></noscript>
 		</form>
 		@WorkOrdersResults(d)
 	}
@@ -84,36 +84,36 @@ templ WorkOrdersPage(d WOListData) {
 templ WorkOrdersResults(d WOListData) {
 	<div id="wo-results" class="card overflow-hidden">
 		if len(d.Rows) == 0 {
-			@EmptyState("لا توجد أوامر عمل مطابقة", "غيّر الفلاتر أو أضف أمر عمل جديداً.")
+			@EmptyState(t(ctx, "لا توجد أوامر عمل مطابقة"), t(ctx, "غيّر الفلاتر أو أضف أمر عمل جديداً."))
 		} else {
 			<div class="flex flex-wrap items-center gap-3 px-3 py-2.5 border-b border-ink-10">
-				<span class="text-xs text-ink-80">{ domain.Count(int(d.Total), domain.NounWorkOrder) }</span>
+				<span class="text-xs text-ink-80">{ count(ctx, int(d.Total), domain.NounWorkOrder) }</span>
 				<a
 					class="btn btn-outline ms-auto py-1.5"
 					href={ d.printURL() }
 					target="_blank"
 					rel="noopener"
-					title="كل أمر عمل مطابق للفلاتر في صفحة A4 مستقلة"
+					title={ t(ctx, "كل أمر عمل مطابق للفلاتر في صفحة A4 مستقلة") }
 				>
 					@PrintIcon()
-					{ "طباعة النتائج PDF (" + itoa(int(d.Total)) + ")" }
+					{ t(ctx, "طباعة النتائج PDF (") + itoa(int(d.Total)) + ")" }
 				</a>
 			</div>
 			<div class="overflow-x-auto">
 				<table class="table">
 					<thead>
 						<tr>
-							<th>رقم أمر العمل</th>
-							<th>النوع</th>
-							<th>الموقع</th>
-							<th>المنظومة / مجموعة الأصل</th>
-							<th>الأصل</th>
-							<th>المقاول</th>
-							<th>أثناء التنفيذ</th>
-							<th>بعد التنفيذ</th>
-							<th>ملاحظات مفتوحة</th>
-							<th>الحالة</th>
-							<th class="relative w-0"><span class="sr-only">إجراءات</span></th>
+							<th>{ t(ctx, "رقم أمر العمل") }</th>
+							<th>{ t(ctx, "النوع") }</th>
+							<th>{ t(ctx, "الموقع") }</th>
+							<th>{ t(ctx, "المنظومة / مجموعة الأصل") }</th>
+							<th>{ t(ctx, "الأصل") }</th>
+							<th>{ t(ctx, "المقاول") }</th>
+							<th>{ t(ctx, "أثناء التنفيذ") }</th>
+							<th>{ t(ctx, "بعد التنفيذ") }</th>
+							<th>{ t(ctx, "ملاحظات مفتوحة") }</th>
+							<th>{ t(ctx, "الحالة") }</th>
+							<th class="relative w-0"><span class="sr-only">{ t(ctx, "إجراءات") }</span></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -127,19 +127,19 @@ templ WorkOrdersResults(d WOListData) {
 										</span>
 									}
 									if w.DraftInspections > 0 {
-										<span class="pill bg-sky-15 text-ink-80 ms-1">مسودة</span>
+										<span class="pill bg-sky-15 text-ink-80 ms-1">{ t(ctx, "مسودة") }</span>
 									}
 								</td>
 								<td>
 									@TypePill(string(w.Type))
 								</td>
-								<td class="whitespace-nowrap">{ w.SiteName }</td>
+								<td class="whitespace-nowrap">{ nm(ctx, w.SiteName, w.SiteNameEn) }</td>
 								<td class="whitespace-nowrap">
-									{ w.SystemName }
-									<span class="block text-xs text-ink-60">{ w.AssetGroupName }</span>
+									{ nm(ctx, w.SystemName, w.SystemNameEn) }
+									<span class="block text-xs text-ink-60">{ nm(ctx, w.AssetGroupName, w.AssetGroupNameEn) }</span>
 								</td>
 								<td class="max-w-40 truncate" title={ w.Asset }>{ orDash(w.Asset) }</td>
-								<td class="max-w-40 truncate" title={ w.ContractorName }>{ orDash(w.ContractorName) }</td>
+								<td class="max-w-40 truncate" title={ nm(ctx, w.ContractorName, w.ContractorNameEn) }>{ orDash(nm(ctx, w.ContractorName, w.ContractorNameEn)) }</td>
 								<td>
 									@ScoreBar(w.DuringScore, w.DuringScore >= domain.PassThreshold)
 								</td>
@@ -162,8 +162,8 @@ templ WorkOrdersResults(d WOListData) {
 										href={ u("/work-orders/%d/print", w.ID) }
 										target="_blank"
 										rel="noopener"
-										title={ "طباعة " + w.Ref }
-										aria-label={ "طباعة أمر العمل " + w.Ref }
+										title={ t(ctx, "طباعة ") + w.Ref }
+										aria-label={ t(ctx, "طباعة أمر العمل ") + w.Ref }
 									>
 										@PrintIcon()
 									</a>
@@ -177,11 +177,11 @@ templ WorkOrdersResults(d WOListData) {
 				<div class="flex items-center gap-3 px-3 py-2.5 text-xs text-ink-80 border-t border-ink-10">
 					<span class="ms-auto flex items-center gap-1">
 						if d.Page > 1 {
-							<a class="btn btn-ghost px-2 py-1" href={ templ.URL(withQuery("/work-orders", d.Query, "page", itoa(d.Page-1))) }>السابق</a>
+							<a class="btn btn-ghost px-2 py-1" href={ templ.URL(withQuery("/work-orders", d.Query, "page", itoa(d.Page-1))) }>{ t(ctx, "السابق") }</a>
 						}
 						<span class="num">{ fmt.Sprintf("%d / %d", d.Page, d.Pages()) }</span>
 						if d.Page < d.Pages() {
-							<a class="btn btn-ghost px-2 py-1" href={ templ.URL(withQuery("/work-orders", d.Query, "page", itoa(d.Page+1))) }>التالي</a>
+							<a class="btn btn-ghost px-2 py-1" href={ templ.URL(withQuery("/work-orders", d.Query, "page", itoa(d.Page+1))) }>{ t(ctx, "التالي") }</a>
 						}
 					</span>
 				</div>
@@ -210,48 +210,48 @@ type WOFormData struct {
 }
 
 templ WorkOrderForm(d WOFormData) {
-	@App(tern(d.ID == 0, "أمر عمل جديد", "تعديل أمر العمل")) {
+	@App(tern(d.ID == 0, t(ctx, "أمر عمل جديد"), t(ctx, "تعديل أمر العمل"))) {
 		if d.ID == 0 {
-			@PageHeader("أمر عمل جديد", "سجّل أمر العمل أو الصيانة الوقائية كما هو في نظام إدارة الصيانة")
+			@PageHeader(t(ctx, "أمر عمل جديد"), t(ctx, "سجّل أمر العمل أو الصيانة الوقائية كما هو في نظام إدارة الصيانة"))
 		} else {
-			@PageHeader("تعديل أمر العمل "+d.V.Ref, "") {
-				<a href={ u("/work-orders/%d", d.ID) } class="btn btn-ghost">رجوع</a>
+			@PageHeader(t(ctx, "تعديل أمر العمل ")+d.V.Ref, "") {
+				<a href={ u("/work-orders/%d", d.ID) } class="btn btn-ghost">{ t(ctx, "رجوع") }</a>
 			}
 		}
 		<form method="post" action={ templ.SafeURL(tern(d.ID == 0, "/work-orders", path("/work-orders/%d", d.ID))) } class="card p-5 sm:p-6" novalidate>
 			if len(d.Errors) > 0 {
-				<div role="alert" class="mb-5 rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2">يرجى مراجعة الحقول المعلّمة.</div>
+				<div role="alert" class="mb-5 rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2">{ t(ctx, "يرجى مراجعة الحقول المعلّمة.") }</div>
 			}
 			<fieldset class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-				<legend class="sr-only">بيانات العمل</legend>
-				@SelectField("type", "النوع", d.V.Type, TypeOptions, "", true, d.Errors)
-				@TextField("ref", "رقم أمر العمل / الصيانة", d.V.Ref, true, d.Errors, templ.Attributes{"maxlength": "60", "dir": "auto"})
-				@SelectField("priority", "الأولوية", d.V.Priority, d.Priorities, "", true, d.Errors)
-				@SelectField("site_id", "الموقع", d.V.SiteID, d.Sites, "اختر الموقع", true, d.Errors)
-				@TextField("location", "الموقع التفصيلي", d.V.Location, false, d.Errors, templ.Attributes{"maxlength": "120", "placeholder": "المبنى / الدور / الغرفة"})
-				@SelectField("system_id", "المنظومة", d.V.SystemID, d.Systems, "اختر المنظومة", true, d.Errors)
-				@SelectField("asset_group_id", "مجموعة الأصل", d.V.AssetGroupID, d.AssetGroups, "اختر مجموعة الأصل", true, d.Errors)
-				@TextField("asset", "الأصل / المعدة", d.V.Asset, false, d.Errors, templ.Attributes{"maxlength": "120", "placeholder": "رمز أو اسم الأصل"})
-				@SelectField("contractor_id", "المقاول / الجهة المنفذة", d.V.ContractorID, d.Contractors, "—", false, d.Errors)
-				@TextField("technician", "الفني", d.V.Technician, false, d.Errors, templ.Attributes{"maxlength": "80"})
-				@TextField("planned_date", "التاريخ المجدول / استحقاق SLA", d.V.PlannedDate, false, d.Errors, templ.Attributes{"type": "date"})
-				@TextField("actual_date", "تاريخ التنفيذ الفعلي", d.V.ActualDate, false, d.Errors, templ.Attributes{"type": "date"})
+				<legend class="sr-only">{ t(ctx, "بيانات العمل") }</legend>
+				@SelectField("type", t(ctx, "النوع"), d.V.Type, TypeOptions, "", true, d.Errors)
+				@TextField("ref", t(ctx, "رقم أمر العمل / الصيانة"), d.V.Ref, true, d.Errors, templ.Attributes{"maxlength": "60", "dir": "auto"})
+				@SelectField("priority", t(ctx, "الأولوية"), d.V.Priority, d.Priorities, "", true, d.Errors)
+				@SelectField("site_id", t(ctx, "الموقع"), d.V.SiteID, d.Sites, t(ctx, "اختر الموقع"), true, d.Errors)
+				@TextField("location", t(ctx, "الموقع التفصيلي"), d.V.Location, false, d.Errors, templ.Attributes{"maxlength": "120", "placeholder": t(ctx, "المبنى / الدور / الغرفة")})
+				@SelectField("system_id", t(ctx, "المنظومة"), d.V.SystemID, d.Systems, t(ctx, "اختر المنظومة"), true, d.Errors)
+				@SelectField("asset_group_id", t(ctx, "مجموعة الأصل"), d.V.AssetGroupID, d.AssetGroups, t(ctx, "اختر مجموعة الأصل"), true, d.Errors)
+				@TextField("asset", t(ctx, "الأصل / المعدة"), d.V.Asset, false, d.Errors, templ.Attributes{"maxlength": "120", "placeholder": t(ctx, "رمز أو اسم الأصل")})
+				@SelectField("contractor_id", t(ctx, "المقاول / الجهة المنفذة"), d.V.ContractorID, d.Contractors, "—", false, d.Errors)
+				@TextField("technician", t(ctx, "الفني"), d.V.Technician, false, d.Errors, templ.Attributes{"maxlength": "80"})
+				@TextField("planned_date", t(ctx, "التاريخ المجدول / استحقاق SLA"), d.V.PlannedDate, false, d.Errors, templ.Attributes{"type": "date"})
+				@TextField("actual_date", t(ctx, "تاريخ التنفيذ الفعلي"), d.V.ActualDate, false, d.Errors, templ.Attributes{"type": "date"})
 				if d.ID != 0 {
-					@SelectField("status", "الحالة", d.V.Status, d.Statuses, "", true, d.Errors)
+					@SelectField("status", t(ctx, "الحالة"), d.V.Status, d.Statuses, "", true, d.Errors)
 				}
 				<div class="sm:col-span-2 lg:col-span-3">
-					@TextArea("description", "وصف العمل", d.V.Description, 3, d.Errors)
+					@TextArea("description", t(ctx, "وصف العمل"), d.V.Description, 3, d.Errors)
 				</div>
 			</fieldset>
 			if d.ID != 0 {
-				<p class="mt-3 text-xs text-ink-60">«معتمد» يُحدَّد تلقائياً عندما ينجح آخر فحص بعد التنفيذ ولا توجد ملاحظات مفتوحة.</p>
+				<p class="mt-3 text-xs text-ink-60">{ t(ctx, "«معتمد» يُحدَّد تلقائياً عندما ينجح آخر فحص بعد التنفيذ ولا توجد ملاحظات مفتوحة.") }</p>
 			}
 			<div class="mt-6 flex gap-2">
-				<button type="submit" class="btn btn-primary">حفظ</button>
+				<button type="submit" class="btn btn-primary">{ t(ctx, "حفظ") }</button>
 				if d.ID == 0 {
-					<button type="submit" name="next" value="new" class="btn btn-outline">حفظ وإضافة آخر</button>
+					<button type="submit" name="next" value="new" class="btn btn-outline">{ t(ctx, "حفظ وإضافة آخر") }</button>
 				}
-				<a href={ templ.SafeURL(tern(d.ID == 0, "/work-orders", path("/work-orders/%d", d.ID))) } class="btn btn-ghost">إلغاء</a>
+				<a href={ templ.SafeURL(tern(d.ID == 0, "/work-orders", path("/work-orders/%d", d.ID))) } class="btn btn-ghost">{ t(ctx, "إلغاء") }</a>
 			</div>
 		</form>
 	}
@@ -286,9 +286,9 @@ func (d WOShowData) hasDraft(stage string) int64 {
 }
 
 templ WorkOrderShow(d WOShowData) {
-	@App("أمر العمل " + d.WO.Ref) {
+	@App(t(ctx, "أمر العمل ") + d.WO.Ref) {
 		<div class="mb-4 text-sm">
-			<a href="/work-orders" class="text-ink-80 hover:text-ink">أوامر العمل</a>
+			<a href="/work-orders" class="text-ink-80 hover:text-ink">{ t(ctx, "أوامر العمل") }</a>
 			<span class="text-ink-30 mx-1">/</span>
 			<span class="num">{ d.WO.Ref }</span>
 		</div>
@@ -308,44 +308,44 @@ templ WorkOrderShow(d WOShowData) {
 				<div class="ms-auto flex flex-wrap gap-2">
 					<a href={ u("/work-orders/%d/print", d.WO.ID) } class="btn btn-ghost" target="_blank" rel="noopener">
 						@PrintIcon()
-						طباعة
+						{ t(ctx, "طباعة") }
 					</a>
 					if appctx.CanEdit(ctx) {
-						<a href={ u("/work-orders/new?from=%d", d.WO.ID) } class="btn btn-ghost">نسخ كأمر جديد</a>
-						<a href={ u("/work-orders/%d/edit", d.WO.ID) } class="btn btn-outline">تعديل</a>
+						<a href={ u("/work-orders/new?from=%d", d.WO.ID) } class="btn btn-ghost">{ t(ctx, "نسخ كأمر جديد") }</a>
+						<a href={ u("/work-orders/%d/edit", d.WO.ID) } class="btn btn-outline">{ t(ctx, "تعديل") }</a>
 					}
 				</div>
 			</div>
 			<dl class="mt-5 grid gap-x-6 gap-y-4 grid-cols-2 md:grid-cols-4">
-				@Fact("الموقع") {
-					{ d.WO.SiteName }
+				@Fact(t(ctx, "الموقع")) {
+					{ nm(ctx, d.WO.SiteName, d.WO.SiteNameEn) }
 					if d.WO.Location != "" {
 						<span class="block text-xs text-ink-80 font-normal">{ d.WO.Location }</span>
 					}
 				}
-				@Fact("المنظومة") {
-					{ d.WO.SystemName }
-					<span class="block text-xs text-ink-80 font-normal">{ "مجموعة الأصل: " + d.WO.AssetGroupName }</span>
+				@Fact(t(ctx, "المنظومة")) {
+					{ nm(ctx, d.WO.SystemName, d.WO.SystemNameEn) }
+					<span class="block text-xs text-ink-80 font-normal">{ t(ctx, "مجموعة الأصل: ") + nm(ctx, d.WO.AssetGroupName, d.WO.AssetGroupNameEn) }</span>
 				}
-				@Fact("الأصل / المعدة") {
+				@Fact(t(ctx, "الأصل / المعدة")) {
 					{ orDash(d.WO.Asset) }
 				}
-				@Fact("المقاول") {
-					{ orDash(d.WO.ContractorName) }
+				@Fact(t(ctx, "المقاول")) {
+					{ orDash(nm(ctx, d.WO.ContractorName, d.WO.ContractorNameEn)) }
 					if d.WO.Technician != "" {
-						<span class="block text-xs text-ink-80 font-normal">{ "الفني: " + d.WO.Technician }</span>
+						<span class="block text-xs text-ink-80 font-normal">{ t(ctx, "الفني: ") + d.WO.Technician }</span>
 					}
 				}
-				@Fact(tern(d.WO.Type == gen.WoTypeWO, "استحقاق SLA", "التاريخ المجدول")) {
+				@Fact(tern(d.WO.Type == gen.WoTypeWO, t(ctx, "استحقاق SLA"), t(ctx, "التاريخ المجدول"))) {
 					@DateText(d.WO.PlannedDate)
 				}
-				@Fact("التنفيذ الفعلي") {
+				@Fact(t(ctx, "التنفيذ الفعلي")) {
 					@DateText(d.WO.ActualDate)
 				}
-				@Fact("الالتزام بالموعد") {
-					{ delayText(d.WO.PlannedDate, d.WO.ActualDate) }
+				@Fact(t(ctx, "الالتزام بالموعد")) {
+					{ delayText(ctx, d.WO.PlannedDate, d.WO.ActualDate) }
 				}
-				@Fact("أُنشئ") {
+				@Fact(t(ctx, "أُنشئ")) {
 					<span class="num">{ dateTime(d.WO.CreatedAt) }</span>
 					if d.WO.CreatedByName != "" {
 						<span class="block text-xs text-ink-80 font-normal">{ d.WO.CreatedByName }</span>
@@ -354,11 +354,11 @@ templ WorkOrderShow(d WOShowData) {
 			</dl>
 			if appctx.IsAdmin(ctx) && d.deletable() {
 				<div class="mt-5 border-t border-ink-10 pt-3" x-data="confirmAction">
-					<button type="button" class="btn btn-ghost text-fail px-2" x-on:click="ask" x-show="!asking">حذف أمر العمل</button>
+					<button type="button" class="btn btn-ghost text-fail px-2" x-on:click="ask" x-show="!asking">{ t(ctx, "حذف أمر العمل") }</button>
 					<form method="post" action={ u("/work-orders/%d/delete", d.WO.ID) } x-show="asking" x-cloak class="flex flex-wrap items-center gap-2">
-						<span class="text-sm">حذف أمر العمل نهائياً مع مسوداته وملاحظاته وصوره؟ استخدمه فقط لما أُدخل بالخطأ.</span>
-						<button type="submit" class="btn btn-danger">نعم، احذف</button>
-						<button type="button" class="btn btn-ghost" x-on:click="cancel">تراجع</button>
+						<span class="text-sm">{ t(ctx, "حذف أمر العمل نهائياً مع مسوداته وملاحظاته وصوره؟ استخدمه فقط لما أُدخل بالخطأ.") }</span>
+						<button type="submit" class="btn btn-danger">{ t(ctx, "نعم، احذف") }</button>
+						<button type="button" class="btn btn-ghost" x-on:click="cancel">{ t(ctx, "تراجع") }</button>
 					</form>
 				</div>
 			}
@@ -366,18 +366,18 @@ templ WorkOrderShow(d WOShowData) {
 		<div class="mt-5 grid gap-5 lg:grid-cols-5">
 			<section class="lg:col-span-3">
 				<div class="flex items-center gap-2 mb-3">
-					<h2 class="font-semibold">الفحوصات</h2>
-					<span class="text-xs text-ink-60">أثناء التنفيذ ← بعد التنفيذ</span>
+					<h2 class="font-semibold">{ t(ctx, "الفحوصات") }</h2>
+					<span class="text-xs text-ink-60">{ t(ctx, "أثناء التنفيذ ← بعد التنفيذ") }</span>
 				</div>
 				if appctx.CanEdit(ctx) && d.WO.Status != gen.WoStatusCancelled {
 					<div class="grid gap-3 sm:grid-cols-2 mb-4">
-						@startCard(d, "during", "فحص أثناء التنفيذ", "مرافقة المقاول أثناء العمل: السلامة، الإجراء، المواد، كفاءة الفني.")
-						@startCard(d, "after", "فحص بعد التنفيذ", "التحقق من النتيجة: جودة العمل، القراءات، التوثيق، النظافة، الإغلاق.")
+						@startCard(d, "during", t(ctx, "فحص أثناء التنفيذ"), t(ctx, "مرافقة المقاول أثناء العمل: السلامة، الإجراء، المواد، كفاءة الفني."))
+						@startCard(d, "after", t(ctx, "فحص بعد التنفيذ"), t(ctx, "التحقق من النتيجة: جودة العمل، القراءات، التوثيق، النظافة، الإغلاق."))
 					</div>
 				}
 				if len(d.Inspections) == 0 {
 					<div class="card">
-						@EmptyState("لم يُسجَّل أي فحص بعد", "ابدأ بفحص أثناء التنفيذ إن كان العمل جارياً، أو بفحص بعد التنفيذ إن انتهى.")
+						@EmptyState(t(ctx, "لم يُسجَّل أي فحص بعد"), t(ctx, "ابدأ بفحص أثناء التنفيذ إن كان العمل جارياً، أو بفحص بعد التنفيذ إن انتهى."))
 					</div>
 				} else {
 					<ol class="relative border-s-2 border-ink-10 ms-3 space-y-3">
@@ -392,7 +392,7 @@ templ WorkOrderShow(d WOShowData) {
 									<div class="flex items-center gap-2">
 										@StagePill(string(in.Stage))
 										if in.Attempt > 1 {
-											<span class="pill bg-ink-5 text-ink-80">{ fmt.Sprintf("محاولة %d", in.Attempt) }</span>
+											<span class="pill bg-ink-5 text-ink-80">{ fmt.Sprintf(t(ctx, "محاولة %d"), in.Attempt) }</span>
 										}
 									</div>
 									<div class="text-xs text-ink-80">
@@ -401,7 +401,7 @@ templ WorkOrderShow(d WOShowData) {
 									</div>
 									<div class="ms-auto flex items-center gap-2">
 										if in.FindingsCount > 0 {
-											<span class="text-xs text-ink-80">{ domain.Count(int(in.FindingsCount), domain.NounFinding) }</span>
+											<span class="text-xs text-ink-80">{ count(ctx, int(in.FindingsCount), domain.NounFinding) }</span>
 										}
 										@ResultPill(in.Score, in.Passed, in.CriticalFailed)
 									</div>
@@ -413,7 +413,7 @@ templ WorkOrderShow(d WOShowData) {
 			</section>
 			<section class="lg:col-span-2">
 				<div class="flex items-center gap-2 mb-3">
-					<h2 class="font-semibold">الملاحظات والإجراءات التصحيحية</h2>
+					<h2 class="font-semibold">{ t(ctx, "الملاحظات والإجراءات التصحيحية") }</h2>
 				</div>
 				@FindingsCards(d.Findings, d.Today)
 			</section>
@@ -428,12 +428,12 @@ templ startCard(d WOShowData, stage, title, hint string) {
 		</div>
 		<p class="text-xs text-ink-80 mt-1 mb-3">{ hint }</p>
 		if draft := d.hasDraft(stage); draft != 0 {
-			<a href={ u("/inspections/%d", draft) } class="btn btn-gold w-full">متابعة المسودة</a>
+			<a href={ u("/inspections/%d", draft) } class="btn btn-gold w-full">{ t(ctx, "متابعة المسودة") }</a>
 		} else {
 			<form method="post" action={ u("/work-orders/%d/inspections", d.WO.ID) }>
 				<input type="hidden" name="stage" value={ stage }/>
 				<button type="submit" class={ "btn w-full", templ.KV("btn-primary", stage == "during"), templ.KV("btn-gold", stage == "after") }>
-					{ tern(stage == "during", "بدء فحص أثناء التنفيذ", "بدء فحص بعد التنفيذ") }
+					{ tern(stage == "during", t(ctx, "بدء فحص أثناء التنفيذ"), t(ctx, "بدء فحص بعد التنفيذ")) }
 				</button>
 			</form>
 		}
@@ -444,7 +444,7 @@ templ startCard(d WOShowData, stage, title, hint string) {
 templ FindingsCards(items []gen.ListFindingsByWorkOrderRow, today string) {
 	if len(items) == 0 {
 		<div class="card">
-			@EmptyState("لا توجد ملاحظات", "")
+			@EmptyState(t(ctx, "لا توجد ملاحظات"), "")
 		</div>
 	} else {
 		<ul class="space-y-3">
@@ -454,32 +454,32 @@ templ FindingsCards(items []gen.ListFindingsByWorkOrderRow, today string) {
 						@FindingStatusPill(string(f.Status), f.Status != gen.FindingStatusClosed && f.DueDate != nil && isoDate(f.DueDate) < today)
 						@SeverityPill(string(f.Severity))
 						if f.CriterionCode != "" {
-							<span class="text-xs text-ink-60">{ f.CriterionCode + " · " + f.CriterionLabel }</span>
+							<span class="text-xs text-ink-60">{ f.CriterionCode + " · " + nm(ctx, f.CriterionLabel, f.CriterionLabelEn) }</span>
 						}
 						if f.InspectionStage != "" {
-							<span class="text-xs text-ink-60 ms-auto">{ fmt.Sprintf("%s · محاولة %d", domain.Stage(f.InspectionStage).Short(), f.InspectionAttempt) }</span>
+							<span class="text-xs text-ink-60 ms-auto">{ fmt.Sprintf(t(ctx, "%s · محاولة %d"), t(ctx, domain.Stage(f.InspectionStage).Short()), f.InspectionAttempt) }</span>
 						}
 					</div>
 					<p class="mt-2">{ f.Description }</p>
-					<p class="mt-1 text-sm text-ink-80"><span class="text-ink-60">الإجراء التصحيحي:</span> { f.CorrectiveAction }</p>
+					<p class="mt-1 text-sm text-ink-80"><span class="text-ink-60">{ t(ctx, "الإجراء التصحيحي:") }</span> { f.CorrectiveAction }</p>
 					<div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-80">
 						if f.Owner != "" {
-							<span>{ "المسؤول: " + f.Owner }</span>
+							<span>{ t(ctx, "المسؤول: ") + f.Owner }</span>
 						}
 						if f.DueDate != nil {
 							<span>
-								{ "الإغلاق المستهدف: " }
+								{ t(ctx, "الإغلاق المستهدف: ") }
 								@DateInline(*f.DueDate)
 							</span>
 						}
 						if f.Status == gen.FindingStatusClosed && f.ClosureNote != "" {
-							<span>{ "الإغلاق: " + f.ClosureNote }</span>
+							<span>{ t(ctx, "الإغلاق: ") + f.ClosureNote }</span>
 						}
 					</div>
 					if appctx.CanEdit(ctx) {
 						<div class="mt-3 flex gap-2">
 							<a href={ u("/findings/%d/edit", f.ID) } class="btn btn-outline py-1 text-xs">
-								{ tern(f.Status == gen.FindingStatusClosed, "عرض", "تحديث / إغلاق") }
+								{ tern(f.Status == gen.FindingStatusClosed, t(ctx, "عرض"), t(ctx, "تحديث / إغلاق")) }
 							</a>
 						</div>
 					}

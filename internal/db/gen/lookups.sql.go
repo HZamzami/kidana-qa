@@ -10,38 +10,47 @@ import (
 )
 
 const createAssetGroup = `-- name: CreateAssetGroup :one
-INSERT INTO asset_groups (name, sort) VALUES ($1, $2) RETURNING id, name, active, sort
+INSERT INTO asset_groups (name, name_en, sort) VALUES ($1, $2, $3) RETURNING id, name, active, sort, name_en
 `
 
 type CreateAssetGroupParams struct {
-	Name string
-	Sort int32
+	Name   string
+	NameEn string
+	Sort   int32
 }
 
 func (q *Queries) CreateAssetGroup(ctx context.Context, arg CreateAssetGroupParams) (AssetGroup, error) {
-	row := q.db.QueryRow(ctx, createAssetGroup, arg.Name, arg.Sort)
+	row := q.db.QueryRow(ctx, createAssetGroup, arg.Name, arg.NameEn, arg.Sort)
 	var i AssetGroup
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Active,
 		&i.Sort,
+		&i.NameEn,
 	)
 	return i, err
 }
 
 const createContractor = `-- name: CreateContractor :one
-INSERT INTO contractors (name, contact_name, phone) VALUES ($1, $2, $3) RETURNING id, name, contact_name, phone, active
+INSERT INTO contractors (name, name_en, contact_name, phone)
+VALUES ($1, $2, $3, $4) RETURNING id, name, contact_name, phone, active, name_en
 `
 
 type CreateContractorParams struct {
 	Name        string
+	NameEn      string
 	ContactName string
 	Phone       string
 }
 
 func (q *Queries) CreateContractor(ctx context.Context, arg CreateContractorParams) (Contractor, error) {
-	row := q.db.QueryRow(ctx, createContractor, arg.Name, arg.ContactName, arg.Phone)
+	row := q.db.QueryRow(ctx, createContractor,
+		arg.Name,
+		arg.NameEn,
+		arg.ContactName,
+		arg.Phone,
+	)
 	var i Contractor
 	err := row.Scan(
 		&i.ID,
@@ -49,54 +58,59 @@ func (q *Queries) CreateContractor(ctx context.Context, arg CreateContractorPara
 		&i.ContactName,
 		&i.Phone,
 		&i.Active,
+		&i.NameEn,
 	)
 	return i, err
 }
 
 const createSite = `-- name: CreateSite :one
-INSERT INTO sites (name, sort) VALUES ($1, $2) RETURNING id, name, active, sort
+INSERT INTO sites (name, name_en, sort) VALUES ($1, $2, $3) RETURNING id, name, active, sort, name_en
 `
 
 type CreateSiteParams struct {
-	Name string
-	Sort int32
+	Name   string
+	NameEn string
+	Sort   int32
 }
 
 func (q *Queries) CreateSite(ctx context.Context, arg CreateSiteParams) (Site, error) {
-	row := q.db.QueryRow(ctx, createSite, arg.Name, arg.Sort)
+	row := q.db.QueryRow(ctx, createSite, arg.Name, arg.NameEn, arg.Sort)
 	var i Site
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Active,
 		&i.Sort,
+		&i.NameEn,
 	)
 	return i, err
 }
 
 const createSystem = `-- name: CreateSystem :one
-INSERT INTO systems (name, sort) VALUES ($1, $2) RETURNING id, name, active, sort
+INSERT INTO systems (name, name_en, sort) VALUES ($1, $2, $3) RETURNING id, name, active, sort, name_en
 `
 
 type CreateSystemParams struct {
-	Name string
-	Sort int32
+	Name   string
+	NameEn string
+	Sort   int32
 }
 
 func (q *Queries) CreateSystem(ctx context.Context, arg CreateSystemParams) (System, error) {
-	row := q.db.QueryRow(ctx, createSystem, arg.Name, arg.Sort)
+	row := q.db.QueryRow(ctx, createSystem, arg.Name, arg.NameEn, arg.Sort)
 	var i System
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Active,
 		&i.Sort,
+		&i.NameEn,
 	)
 	return i, err
 }
 
 const getAssetGroupByName = `-- name: GetAssetGroupByName :one
-SELECT id, name, active, sort FROM asset_groups WHERE name = $1
+SELECT id, name, active, sort, name_en FROM asset_groups WHERE name = $1
 `
 
 func (q *Queries) GetAssetGroupByName(ctx context.Context, name string) (AssetGroup, error) {
@@ -107,12 +121,13 @@ func (q *Queries) GetAssetGroupByName(ctx context.Context, name string) (AssetGr
 		&i.Name,
 		&i.Active,
 		&i.Sort,
+		&i.NameEn,
 	)
 	return i, err
 }
 
 const getContractorByName = `-- name: GetContractorByName :one
-SELECT id, name, contact_name, phone, active FROM contractors WHERE name = $1
+SELECT id, name, contact_name, phone, active, name_en FROM contractors WHERE name = $1
 `
 
 func (q *Queries) GetContractorByName(ctx context.Context, name string) (Contractor, error) {
@@ -124,12 +139,13 @@ func (q *Queries) GetContractorByName(ctx context.Context, name string) (Contrac
 		&i.ContactName,
 		&i.Phone,
 		&i.Active,
+		&i.NameEn,
 	)
 	return i, err
 }
 
 const getSiteByName = `-- name: GetSiteByName :one
-SELECT id, name, active, sort FROM sites WHERE name = $1
+SELECT id, name, active, sort, name_en FROM sites WHERE name = $1
 `
 
 func (q *Queries) GetSiteByName(ctx context.Context, name string) (Site, error) {
@@ -140,12 +156,13 @@ func (q *Queries) GetSiteByName(ctx context.Context, name string) (Site, error) 
 		&i.Name,
 		&i.Active,
 		&i.Sort,
+		&i.NameEn,
 	)
 	return i, err
 }
 
 const getSystemByName = `-- name: GetSystemByName :one
-SELECT id, name, active, sort FROM systems WHERE name = $1
+SELECT id, name, active, sort, name_en FROM systems WHERE name = $1
 `
 
 func (q *Queries) GetSystemByName(ctx context.Context, name string) (System, error) {
@@ -156,12 +173,13 @@ func (q *Queries) GetSystemByName(ctx context.Context, name string) (System, err
 		&i.Name,
 		&i.Active,
 		&i.Sort,
+		&i.NameEn,
 	)
 	return i, err
 }
 
 const listActiveAssetGroups = `-- name: ListActiveAssetGroups :many
-SELECT id, name, active, sort FROM asset_groups WHERE active ORDER BY sort, name
+SELECT id, name, active, sort, name_en FROM asset_groups WHERE active ORDER BY sort, name
 `
 
 func (q *Queries) ListActiveAssetGroups(ctx context.Context) ([]AssetGroup, error) {
@@ -178,6 +196,7 @@ func (q *Queries) ListActiveAssetGroups(ctx context.Context) ([]AssetGroup, erro
 			&i.Name,
 			&i.Active,
 			&i.Sort,
+			&i.NameEn,
 		); err != nil {
 			return nil, err
 		}
@@ -190,7 +209,7 @@ func (q *Queries) ListActiveAssetGroups(ctx context.Context) ([]AssetGroup, erro
 }
 
 const listActiveContractors = `-- name: ListActiveContractors :many
-SELECT id, name, contact_name, phone, active FROM contractors WHERE active ORDER BY name
+SELECT id, name, contact_name, phone, active, name_en FROM contractors WHERE active ORDER BY name
 `
 
 func (q *Queries) ListActiveContractors(ctx context.Context) ([]Contractor, error) {
@@ -208,6 +227,7 @@ func (q *Queries) ListActiveContractors(ctx context.Context) ([]Contractor, erro
 			&i.ContactName,
 			&i.Phone,
 			&i.Active,
+			&i.NameEn,
 		); err != nil {
 			return nil, err
 		}
@@ -220,7 +240,7 @@ func (q *Queries) ListActiveContractors(ctx context.Context) ([]Contractor, erro
 }
 
 const listActiveSites = `-- name: ListActiveSites :many
-SELECT id, name, active, sort FROM sites WHERE active ORDER BY sort, name
+SELECT id, name, active, sort, name_en FROM sites WHERE active ORDER BY sort, name
 `
 
 func (q *Queries) ListActiveSites(ctx context.Context) ([]Site, error) {
@@ -237,6 +257,7 @@ func (q *Queries) ListActiveSites(ctx context.Context) ([]Site, error) {
 			&i.Name,
 			&i.Active,
 			&i.Sort,
+			&i.NameEn,
 		); err != nil {
 			return nil, err
 		}
@@ -249,7 +270,7 @@ func (q *Queries) ListActiveSites(ctx context.Context) ([]Site, error) {
 }
 
 const listActiveSystems = `-- name: ListActiveSystems :many
-SELECT id, name, active, sort FROM systems WHERE active ORDER BY sort, name
+SELECT id, name, active, sort, name_en FROM systems WHERE active ORDER BY sort, name
 `
 
 func (q *Queries) ListActiveSystems(ctx context.Context) ([]System, error) {
@@ -266,6 +287,7 @@ func (q *Queries) ListActiveSystems(ctx context.Context) ([]System, error) {
 			&i.Name,
 			&i.Active,
 			&i.Sort,
+			&i.NameEn,
 		); err != nil {
 			return nil, err
 		}
@@ -278,7 +300,7 @@ func (q *Queries) ListActiveSystems(ctx context.Context) ([]System, error) {
 }
 
 const listAssetGroups = `-- name: ListAssetGroups :many
-SELECT id, name, active, sort FROM asset_groups ORDER BY active DESC, sort, name
+SELECT id, name, active, sort, name_en FROM asset_groups ORDER BY active DESC, sort, name
 `
 
 // ---------------------------------------------------------------- asset_groups
@@ -296,6 +318,7 @@ func (q *Queries) ListAssetGroups(ctx context.Context) ([]AssetGroup, error) {
 			&i.Name,
 			&i.Active,
 			&i.Sort,
+			&i.NameEn,
 		); err != nil {
 			return nil, err
 		}
@@ -308,7 +331,7 @@ func (q *Queries) ListAssetGroups(ctx context.Context) ([]AssetGroup, error) {
 }
 
 const listContractors = `-- name: ListContractors :many
-SELECT id, name, contact_name, phone, active FROM contractors ORDER BY active DESC, name
+SELECT id, name, contact_name, phone, active, name_en FROM contractors ORDER BY active DESC, name
 `
 
 // ---------------------------------------------------------------- contractors
@@ -327,6 +350,7 @@ func (q *Queries) ListContractors(ctx context.Context) ([]Contractor, error) {
 			&i.ContactName,
 			&i.Phone,
 			&i.Active,
+			&i.NameEn,
 		); err != nil {
 			return nil, err
 		}
@@ -339,7 +363,7 @@ func (q *Queries) ListContractors(ctx context.Context) ([]Contractor, error) {
 }
 
 const listSites = `-- name: ListSites :many
-SELECT id, name, active, sort FROM sites ORDER BY active DESC, sort, name
+SELECT id, name, active, sort, name_en FROM sites ORDER BY active DESC, sort, name
 `
 
 // ---------------------------------------------------------------- sites
@@ -357,6 +381,7 @@ func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
 			&i.Name,
 			&i.Active,
 			&i.Sort,
+			&i.NameEn,
 		); err != nil {
 			return nil, err
 		}
@@ -369,7 +394,7 @@ func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
 }
 
 const listSystems = `-- name: ListSystems :many
-SELECT id, name, active, sort FROM systems ORDER BY active DESC, sort, name
+SELECT id, name, active, sort, name_en FROM systems ORDER BY active DESC, sort, name
 `
 
 // ---------------------------------------------------------------- systems
@@ -387,6 +412,7 @@ func (q *Queries) ListSystems(ctx context.Context) ([]System, error) {
 			&i.Name,
 			&i.Active,
 			&i.Sort,
+			&i.NameEn,
 		); err != nil {
 			return nil, err
 		}
@@ -399,22 +425,25 @@ func (q *Queries) ListSystems(ctx context.Context) ([]System, error) {
 }
 
 const updateAssetGroup = `-- name: UpdateAssetGroup :one
-UPDATE asset_groups SET name = $2, sort = $3, active = $4 WHERE id = $1 RETURNING id, name, active, sort
+UPDATE asset_groups SET name = $1, name_en = $2, sort = $3, active = $4
+WHERE id = $5 RETURNING id, name, active, sort, name_en
 `
 
 type UpdateAssetGroupParams struct {
-	ID     int64
 	Name   string
+	NameEn string
 	Sort   int32
 	Active bool
+	ID     int64
 }
 
 func (q *Queries) UpdateAssetGroup(ctx context.Context, arg UpdateAssetGroupParams) (AssetGroup, error) {
 	row := q.db.QueryRow(ctx, updateAssetGroup,
-		arg.ID,
 		arg.Name,
+		arg.NameEn,
 		arg.Sort,
 		arg.Active,
+		arg.ID,
 	)
 	var i AssetGroup
 	err := row.Scan(
@@ -422,29 +451,34 @@ func (q *Queries) UpdateAssetGroup(ctx context.Context, arg UpdateAssetGroupPara
 		&i.Name,
 		&i.Active,
 		&i.Sort,
+		&i.NameEn,
 	)
 	return i, err
 }
 
 const updateContractor = `-- name: UpdateContractor :one
-UPDATE contractors SET name = $2, contact_name = $3, phone = $4, active = $5 WHERE id = $1 RETURNING id, name, contact_name, phone, active
+UPDATE contractors SET name = $1, name_en = $2, contact_name = $3,
+    phone = $4, active = $5
+WHERE id = $6 RETURNING id, name, contact_name, phone, active, name_en
 `
 
 type UpdateContractorParams struct {
-	ID          int64
 	Name        string
+	NameEn      string
 	ContactName string
 	Phone       string
 	Active      bool
+	ID          int64
 }
 
 func (q *Queries) UpdateContractor(ctx context.Context, arg UpdateContractorParams) (Contractor, error) {
 	row := q.db.QueryRow(ctx, updateContractor,
-		arg.ID,
 		arg.Name,
+		arg.NameEn,
 		arg.ContactName,
 		arg.Phone,
 		arg.Active,
+		arg.ID,
 	)
 	var i Contractor
 	err := row.Scan(
@@ -453,27 +487,31 @@ func (q *Queries) UpdateContractor(ctx context.Context, arg UpdateContractorPara
 		&i.ContactName,
 		&i.Phone,
 		&i.Active,
+		&i.NameEn,
 	)
 	return i, err
 }
 
 const updateSite = `-- name: UpdateSite :one
-UPDATE sites SET name = $2, sort = $3, active = $4 WHERE id = $1 RETURNING id, name, active, sort
+UPDATE sites SET name = $1, name_en = $2, sort = $3, active = $4
+WHERE id = $5 RETURNING id, name, active, sort, name_en
 `
 
 type UpdateSiteParams struct {
-	ID     int64
 	Name   string
+	NameEn string
 	Sort   int32
 	Active bool
+	ID     int64
 }
 
 func (q *Queries) UpdateSite(ctx context.Context, arg UpdateSiteParams) (Site, error) {
 	row := q.db.QueryRow(ctx, updateSite,
-		arg.ID,
 		arg.Name,
+		arg.NameEn,
 		arg.Sort,
 		arg.Active,
+		arg.ID,
 	)
 	var i Site
 	err := row.Scan(
@@ -481,27 +519,31 @@ func (q *Queries) UpdateSite(ctx context.Context, arg UpdateSiteParams) (Site, e
 		&i.Name,
 		&i.Active,
 		&i.Sort,
+		&i.NameEn,
 	)
 	return i, err
 }
 
 const updateSystem = `-- name: UpdateSystem :one
-UPDATE systems SET name = $2, sort = $3, active = $4 WHERE id = $1 RETURNING id, name, active, sort
+UPDATE systems SET name = $1, name_en = $2, sort = $3, active = $4
+WHERE id = $5 RETURNING id, name, active, sort, name_en
 `
 
 type UpdateSystemParams struct {
-	ID     int64
 	Name   string
+	NameEn string
 	Sort   int32
 	Active bool
+	ID     int64
 }
 
 func (q *Queries) UpdateSystem(ctx context.Context, arg UpdateSystemParams) (System, error) {
 	row := q.db.QueryRow(ctx, updateSystem,
-		arg.ID,
 		arg.Name,
+		arg.NameEn,
 		arg.Sort,
 		arg.Active,
+		arg.ID,
 	)
 	var i System
 	err := row.Scan(
@@ -509,6 +551,7 @@ func (q *Queries) UpdateSystem(ctx context.Context, arg UpdateSystemParams) (Sys
 		&i.Name,
 		&i.Active,
 		&i.Sort,
+		&i.NameEn,
 	)
 	return i, err
 }

@@ -9,10 +9,11 @@ SELECT * FROM sites WHERE active ORDER BY sort, name;
 SELECT * FROM sites WHERE name = $1;
 
 -- name: CreateSite :one
-INSERT INTO sites (name, sort) VALUES ($1, $2) RETURNING *;
+INSERT INTO sites (name, name_en, sort) VALUES (sqlc.arg(name), sqlc.arg(name_en), sqlc.arg(sort)) RETURNING *;
 
 -- name: UpdateSite :one
-UPDATE sites SET name = $2, sort = $3, active = $4 WHERE id = $1 RETURNING *;
+UPDATE sites SET name = sqlc.arg(name), name_en = sqlc.arg(name_en), sort = sqlc.arg(sort), active = sqlc.arg(active)
+WHERE id = sqlc.arg(id) RETURNING *;
 
 -- ---------------------------------------------------------------- systems
 -- name: ListSystems :many
@@ -25,10 +26,11 @@ SELECT * FROM systems WHERE active ORDER BY sort, name;
 SELECT * FROM systems WHERE name = $1;
 
 -- name: CreateSystem :one
-INSERT INTO systems (name, sort) VALUES ($1, $2) RETURNING *;
+INSERT INTO systems (name, name_en, sort) VALUES (sqlc.arg(name), sqlc.arg(name_en), sqlc.arg(sort)) RETURNING *;
 
 -- name: UpdateSystem :one
-UPDATE systems SET name = $2, sort = $3, active = $4 WHERE id = $1 RETURNING *;
+UPDATE systems SET name = sqlc.arg(name), name_en = sqlc.arg(name_en), sort = sqlc.arg(sort), active = sqlc.arg(active)
+WHERE id = sqlc.arg(id) RETURNING *;
 
 -- ---------------------------------------------------------------- asset_groups
 -- name: ListAssetGroups :many
@@ -41,10 +43,11 @@ SELECT * FROM asset_groups WHERE active ORDER BY sort, name;
 SELECT * FROM asset_groups WHERE name = $1;
 
 -- name: CreateAssetGroup :one
-INSERT INTO asset_groups (name, sort) VALUES ($1, $2) RETURNING *;
+INSERT INTO asset_groups (name, name_en, sort) VALUES (sqlc.arg(name), sqlc.arg(name_en), sqlc.arg(sort)) RETURNING *;
 
 -- name: UpdateAssetGroup :one
-UPDATE asset_groups SET name = $2, sort = $3, active = $4 WHERE id = $1 RETURNING *;
+UPDATE asset_groups SET name = sqlc.arg(name), name_en = sqlc.arg(name_en), sort = sqlc.arg(sort), active = sqlc.arg(active)
+WHERE id = sqlc.arg(id) RETURNING *;
 
 -- ---------------------------------------------------------------- contractors
 -- name: ListContractors :many
@@ -57,7 +60,10 @@ SELECT * FROM contractors WHERE active ORDER BY name;
 SELECT * FROM contractors WHERE name = $1;
 
 -- name: CreateContractor :one
-INSERT INTO contractors (name, contact_name, phone) VALUES ($1, $2, $3) RETURNING *;
+INSERT INTO contractors (name, name_en, contact_name, phone)
+VALUES (sqlc.arg(name), sqlc.arg(name_en), sqlc.arg(contact_name), sqlc.arg(phone)) RETURNING *;
 
 -- name: UpdateContractor :one
-UPDATE contractors SET name = $2, contact_name = $3, phone = $4, active = $5 WHERE id = $1 RETURNING *;
+UPDATE contractors SET name = sqlc.arg(name), name_en = sqlc.arg(name_en), contact_name = sqlc.arg(contact_name),
+    phone = sqlc.arg(phone), active = sqlc.arg(active)
+WHERE id = sqlc.arg(id) RETURNING *;

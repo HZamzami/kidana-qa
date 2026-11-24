@@ -71,15 +71,15 @@ func asciiJSON(b []byte) string {
 
 func (s *Server) serverError(w http.ResponseWriter, r *http.Request, err error) {
 	s.log.Error("server error", slog.String("method", r.Method), slog.String("path", r.URL.Path), slog.Any("err", err))
-	s.render(w, r, http.StatusInternalServerError, views.ErrorPage(http.StatusInternalServerError, "حدث خطأ غير متوقع. حاول مرة أخرى، وإن تكرر الخطأ أبلغ مدير النظام."))
+	s.render(w, r, http.StatusInternalServerError, views.ErrorPage(http.StatusInternalServerError, appctx.T(r.Context(), "حدث خطأ غير متوقع. حاول مرة أخرى، وإن تكرر الخطأ أبلغ مدير النظام.")))
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, http.StatusNotFound, views.ErrorPage(http.StatusNotFound, "الصفحة أو السجل المطلوب غير موجود."))
+	s.render(w, r, http.StatusNotFound, views.ErrorPage(http.StatusNotFound, appctx.T(r.Context(), "الصفحة أو السجل المطلوب غير موجود.")))
 }
 
 func (s *Server) forbidden(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, http.StatusForbidden, views.ErrorPage(http.StatusForbidden, "ليست لديك صلاحية لهذا الإجراء."))
+	s.render(w, r, http.StatusForbidden, views.ErrorPage(http.StatusForbidden, appctx.T(r.Context(), "ليست لديك صلاحية لهذا الإجراء.")))
 }
 
 func (s *Server) badRequest(w http.ResponseWriter, r *http.Request, msg string) {
@@ -141,14 +141,14 @@ func (f *form) Str(name string) string { return strings.TrimSpace(f.r.PostFormVa
 func (f *form) Required(name, label string) string {
 	v := f.Str(name)
 	if v == "" {
-		f.Errors[name] = "حقل «" + label + "» مطلوب"
+		f.Errors[name] = appctx.Tf(f.r.Context(), "حقل «%s» مطلوب", label)
 	}
 	return v
 }
 
 func (f *form) MaxLen(name string, n int) {
 	if len([]rune(f.Str(name))) > n {
-		f.Errors[name] = "النص أطول من المسموح (" + strconv.Itoa(n) + " حرفاً)"
+		f.Errors[name] = appctx.Tf(f.r.Context(), "النص أطول من المسموح (%d حرفاً)", n)
 	}
 }
 
@@ -160,7 +160,7 @@ func (f *form) OptID(name string) *int64 {
 	}
 	id, err := strconv.ParseInt(v, 10, 64)
 	if err != nil || id <= 0 {
-		f.Errors[name] = "قيمة غير صالحة"
+		f.Errors[name] = appctx.T(f.r.Context(), "قيمة غير صالحة")
 		return nil
 	}
 	return &id
@@ -170,7 +170,7 @@ func (f *form) ReqID(name, label string) int64 {
 	id := f.OptID(name)
 	if id == nil {
 		if _, bad := f.Errors[name]; !bad {
-			f.Errors[name] = "حقل «" + label + "» مطلوب"
+			f.Errors[name] = appctx.Tf(f.r.Context(), "حقل «%s» مطلوب", label)
 		}
 		return 0
 	}
@@ -184,7 +184,7 @@ func (f *form) Int(name string, def int) int {
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil {
-		f.Errors[name] = "أدخل رقماً صحيحاً"
+		f.Errors[name] = appctx.T(f.r.Context(), "أدخل رقماً صحيحاً")
 		return def
 	}
 	return n
@@ -198,7 +198,7 @@ func (f *form) OptDate(name string) *time.Time {
 	}
 	t, err := time.Parse(time.DateOnly, v)
 	if err != nil {
-		f.Errors[name] = "تاريخ غير صالح"
+		f.Errors[name] = appctx.T(f.r.Context(), "تاريخ غير صالح")
 		return nil
 	}
 	return &t

@@ -21,28 +21,28 @@ type ImportOutcome struct {
 }
 
 templ DataPage(out *ImportOutcome) {
-	@App("البيانات والتقارير") {
-		@PageHeader("البيانات والتقارير", "تصدير التقارير واستيراد أوامر العمل")
+	@App(t(ctx, "البيانات والتقارير")) {
+		@PageHeader(t(ctx, "البيانات والتقارير"), t(ctx, "تصدير التقارير واستيراد أوامر العمل"))
 		<div class="grid gap-4 lg:grid-cols-3">
 			<section class="card p-5">
-				<h2 class="font-semibold">تصدير</h2>
-				<p class="text-sm text-ink-80 mt-1 mb-4">لتصدير نطاق محدد استخدم الفلاتر في لوحة المؤشرات ثم «تصدير Excel» أو «تقرير للطباعة».</p>
+				<h2 class="font-semibold">{ t(ctx, "تصدير") }</h2>
+				<p class="text-sm text-ink-80 mt-1 mb-4">{ t(ctx, "لتصدير نطاق محدد استخدم الفلاتر في لوحة المؤشرات ثم «تصدير Excel» أو «تقرير للطباعة».") }</p>
 				<div class="flex flex-col gap-2">
-					<a href="/reports/export.xlsx" class="btn btn-gold">تصدير كل البيانات (Excel)</a>
-					<a href="/reports/print" target="_blank" rel="noopener" class="btn btn-outline">تقرير للطباعة / PDF</a>
+					<a href="/reports/export.xlsx" class="btn btn-gold">{ t(ctx, "تصدير كل البيانات (Excel)") }</a>
+					<a href="/reports/print" target="_blank" rel="noopener" class="btn btn-outline">{ t(ctx, "تقرير للطباعة / PDF") }</a>
 				</div>
 			</section>
 			if appctx.CanEdit(ctx) {
 				<section class="card p-5 lg:col-span-2">
-					<h2 class="font-semibold">استيراد من Excel</h2>
-					<p class="text-sm text-ink-80 mt-1 mb-4">أدخل أوامر العمل دفعة واحدة من نظام إدارة الصيانة: نزّل القالب، عبّئه، ثم استورده. أوامر العمل الموجودة مسبقاً تُتجاهل.</p>
+					<h2 class="font-semibold">{ t(ctx, "استيراد من Excel") }</h2>
+					<p class="text-sm text-ink-80 mt-1 mb-4">{ t(ctx, "أدخل أوامر العمل دفعة واحدة من نظام إدارة الصيانة: نزّل القالب، عبّئه، ثم استورده. أوامر العمل الموجودة مسبقاً تُتجاهل.") }</p>
 					<form method="post" action="/data/import" enctype="multipart/form-data" class="flex flex-wrap items-end gap-3">
 						<div class="flex-1 min-w-56">
-							<label class="label" for="import_file">ملف ‎.xlsx</label>
+							<label class="label" for="import_file">{ t(ctx, "ملف ‎.xlsx") }</label>
 							<input class="input py-1.5" type="file" id="import_file" name="file" accept=".xlsx" required/>
 						</div>
-						<button type="submit" class="btn btn-primary">استيراد</button>
-						<a href="/data/work-orders-template.xlsx" class="btn btn-outline">تنزيل قالب أوامر العمل</a>
+						<button type="submit" class="btn btn-primary">{ t(ctx, "استيراد") }</button>
+						<a href="/data/work-orders-template.xlsx" class="btn btn-outline">{ t(ctx, "تنزيل قالب أوامر العمل") }</a>
 					</form>
 				</section>
 			}
@@ -50,14 +50,14 @@ templ DataPage(out *ImportOutcome) {
 		if out != nil {
 			<section class="card p-5 mt-4" role="status">
 				if out.Error != "" {
-					<h2 class="font-semibold text-fail">تعذّر الاستيراد</h2>
+					<h2 class="font-semibold text-fail">{ t(ctx, "تعذّر الاستيراد") }</h2>
 					<p class="mt-1 text-sm">{ out.Error }</p>
 				} else {
-					<h2 class="font-semibold">{ "نتيجة الاستيراد — " + out.KindLabel }</h2>
+					<h2 class="font-semibold">{ t(ctx, "نتيجة الاستيراد — ") + out.KindLabel }</h2>
 					<p class="text-sm text-ink-80 mt-1">{ out.FileName }</p>
 					<div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
-						<div class="rounded-lg bg-green-10 p-3"><div class="num text-2xl font-semibold text-green">{ itoa(out.Created) }</div><div class="text-xs">أُضيف</div></div>
-						<div class="rounded-lg bg-ink-5 p-3"><div class="num text-2xl font-semibold">{ itoa(out.Skipped) }</div><div class="text-xs">تُجوهل</div></div>
+						<div class="rounded-lg bg-green-10 p-3"><div class="num text-2xl font-semibold text-green">{ itoa(out.Created) }</div><div class="text-xs">{ t(ctx, "أُضيف") }</div></div>
+						<div class="rounded-lg bg-ink-5 p-3"><div class="num text-2xl font-semibold">{ itoa(out.Skipped) }</div><div class="text-xs">{ t(ctx, "تُجوهل") }</div></div>
 					</div>
 					for _, x := range out.Extra {
 						<p class="text-sm mt-2">{ x }</p>
@@ -65,7 +65,7 @@ templ DataPage(out *ImportOutcome) {
 				}
 				if len(out.Warnings) > 0 {
 					<details class="mt-4" open?={ out.Created == 0 }>
-						<summary class="cursor-pointer text-sm font-medium">{ fmt.Sprintf("ملاحظات على الملف (%d)", len(out.Warnings)) }</summary>
+						<summary class="cursor-pointer text-sm font-medium">{ fmt.Sprintf(t(ctx, "ملاحظات على الملف (%d)"), len(out.Warnings)) }</summary>
 						<ul class="mt-2 max-h-72 overflow-auto text-xs text-ink-80 space-y-1 list-disc ps-5">
 							for _, w := range out.Warnings {
 								<li>{ w }</li>
@@ -98,62 +98,62 @@ type ReportData struct {
 }
 
 templ ReportPrint(d ReportData) {
-	@Base("تقرير جودة الصيانة") {
+	@Base(t(ctx, "تقرير جودة الصيانة")) {
 		<main class="mx-auto max-w-5xl px-6 py-6 bg-white text-[12px]">
 			<div class="no-print mb-4 flex items-center gap-2 rounded-lg bg-gold-10 border border-gold-50 px-3 py-2 text-sm">
-				<span>للحفظ PDF: اطبع الصفحة (Ctrl+P) واختر «حفظ بتنسيق PDF».</span>
-				<a href="/" class="btn btn-ghost ms-auto">رجوع</a>
+				<span>{ t(ctx, "للحفظ PDF: اطبع الصفحة (Ctrl+P) واختر «حفظ بتنسيق PDF».") }</span>
+				<a href="/" class="btn btn-ghost ms-auto">{ t(ctx, "رجوع") }</a>
 			</div>
 			<header class="flex items-start gap-4 border-b-2 border-gold pb-3">
 				<div>
-					<h1 class="text-xl font-semibold">تقرير جودة الصيانة</h1>
-					<p class="text-ink-80">فحص أثناء التنفيذ وفحص بعد التنفيذ — إدارة جودة العمليات · قطاع العمليات</p>
+					<h1 class="text-xl font-semibold">{ t(ctx, "تقرير جودة الصيانة") }</h1>
+					<p class="text-ink-80">{ t(ctx, "فحص أثناء التنفيذ وفحص بعد التنفيذ — إدارة جودة العمليات · قطاع العمليات") }</p>
 				</div>
-				<img src={ asset("/static/img/kidana-logo.png") } alt="كدانة" class="h-12 w-auto ms-auto"/>
+				<img src={ asset("/static/img/kidana-logo.png") } alt={ t(ctx, "كدانة") } class="h-12 w-auto ms-auto"/>
 			</header>
-			<p class="mt-2 text-ink-80">تاريخ التقرير: <b>{ d.Generated }</b> · النطاق: <b>{ d.Scope }</b> · عدد الفحوصات: <b class="num">{ itoa(d.S.Total) }</b></p>
+			<p class="mt-2 text-ink-80">{ t(ctx, "تاريخ التقرير:") } <b>{ d.Generated }</b> { t(ctx, "· النطاق:") } <b>{ d.Scope }</b> { t(ctx, "· عدد الفحوصات:") } <b class="num">{ itoa(d.S.Total) }</b></p>
 			<div class="mt-4 grid grid-cols-3 gap-2 print-avoid-break">
-				@reportKPI("متوسط أثناء التنفيذ", domain.Pct(d.S.AvgDuring), domain.Count(d.S.DuringCount, domain.NounInspection))
-				@reportKPI("متوسط بعد التنفيذ", domain.Pct(d.S.AvgAfter), domain.Count(d.S.AfterCount, domain.NounInspection))
-				@reportKPI("نسبة المطابقة", domain.Pct(d.S.PassRate), fmt.Sprintf("%d غير مطابق · %d حرج", d.S.FailCount, d.S.CriticalFails))
-				@reportKPI("أوامر العمل", itoa(d.S.WorkOrders), "ضمن النطاق")
-				@reportKPI("ملاحظات مفتوحة", itoa(d.S.Findings.Open), fmt.Sprintf("متأخرة %d", d.S.Findings.Overdue))
-				@reportKPI("الالتزام بالموعد", domain.Pct(d.S.OnTimeRate), "متوسط التأخير "+avgDelay(d.S.AvgDelay)+" يوم")
+				@reportKPI(t(ctx, "متوسط أثناء التنفيذ"), domain.Pct(d.S.AvgDuring), count(ctx, d.S.DuringCount, domain.NounInspection))
+				@reportKPI(t(ctx, "متوسط بعد التنفيذ"), domain.Pct(d.S.AvgAfter), count(ctx, d.S.AfterCount, domain.NounInspection))
+				@reportKPI(t(ctx, "نسبة المطابقة"), domain.Pct(d.S.PassRate), fmt.Sprintf(t(ctx, "%d غير مطابق · %d حرج"), d.S.FailCount, d.S.CriticalFails))
+				@reportKPI(t(ctx, "أوامر العمل"), itoa(d.S.WorkOrders), t(ctx, "ضمن النطاق"))
+				@reportKPI(t(ctx, "ملاحظات مفتوحة"), itoa(d.S.Findings.Open), fmt.Sprintf(t(ctx, "متأخرة %d"), d.S.Findings.Overdue))
+				@reportKPI(t(ctx, "الالتزام بالموعد"), domain.Pct(d.S.OnTimeRate), t(ctx, "متوسط التأخير ")+avgDelay(d.S.AvgDelay)+t(ctx, " يوم"))
 			</div>
 			<div class="mt-5 grid grid-cols-2 gap-3">
-				@reportChart("نسبة المطابقة لكل معيار — أثناء التنفيذ") {
+				@reportChart(t(ctx, "نسبة المطابقة لكل معيار — أثناء التنفيذ")) {
 					@criteriaRows(d.S.CriteriaFor(domain.StageDuring))
 				}
-				@reportChart("نسبة المطابقة لكل معيار — بعد التنفيذ") {
+				@reportChart(t(ctx, "نسبة المطابقة لكل معيار — بعد التنفيذ")) {
 					@criteriaRows(d.S.CriteriaFor(domain.StageAfter))
 				}
 			</div>
 			<div class="mt-3 grid grid-cols-3 gap-3">
-				@reportChart("متوسط النتيجة حسب الموقع") {
+				@reportChart(t(ctx, "متوسط النتيجة حسب الموقع")) {
 					@groupBars(d.S.BySite, 6)
 				}
-				@reportChart("توزيع التقديرات") {
+				@reportChart(t(ctx, "توزيع التقديرات")) {
 					@gradeDonut(d.S.Grades)
 				}
-				@reportChart("حسب المقاول") {
+				@reportChart(t(ctx, "حسب المقاول")) {
 					@groupBars(d.S.ByContractor, 6)
 				}
 			</div>
-			<h2 class="mt-5 mb-2 font-semibold text-sm">الأنماط والمخاطر والتوصيات</h2>
+			<h2 class="mt-5 mb-2 font-semibold text-sm">{ t(ctx, "الأنماط والمخاطر والتوصيات") }</h2>
 			<ul class="space-y-1">
 				for _, in := range d.Insights {
 					<li class={ "border-s-4 ps-2 py-0.5 print-avoid-break", templ.KV("border-fail", in.Tone == "risk"), templ.KV("border-green", in.Tone == "good"), templ.KV("border-ink-30", in.Tone == "info") }>{ in.Text }</li>
 				}
 			</ul>
 			<div class="mt-5 grid grid-cols-2 gap-4">
-				@reportGroup("الأداء حسب الموقع", d.S.BySite)
-				@reportGroup("الأداء حسب المقاول", d.S.ByContractor)
-				@reportGroup("الأداء حسب المنظومة", d.S.BySystem)
-				@reportGroup("الأداء حسب مجموعة الأصل", d.S.ByAssetGroup)
+				@reportGroup(t(ctx, "الأداء حسب الموقع"), d.S.BySite)
+				@reportGroup(t(ctx, "الأداء حسب المقاول"), d.S.ByContractor)
+				@reportGroup(t(ctx, "الأداء حسب المنظومة"), d.S.BySystem)
+				@reportGroup(t(ctx, "الأداء حسب مجموعة الأصل"), d.S.ByAssetGroup)
 			</div>
-			<h2 class="mt-5 mb-2 font-semibold text-sm">نسبة المطابقة لكل معيار</h2>
+			<h2 class="mt-5 mb-2 font-semibold text-sm">{ t(ctx, "نسبة المطابقة لكل معيار") }</h2>
 			<table class="w-full border-collapse">
-				<thead><tr class="bg-ink text-white"><th class="p-1.5 text-start">المعيار</th><th class="p-1.5">التقييمات</th><th class="p-1.5">المطابقة</th><th class="p-1.5">غير مطابق</th></tr></thead>
+				<thead><tr class="bg-ink text-white"><th class="p-1.5 text-start">{ t(ctx, "المعيار") }</th><th class="p-1.5">{ t(ctx, "التقييمات") }</th><th class="p-1.5">{ t(ctx, "المطابقة") }</th><th class="p-1.5">{ t(ctx, "غير مطابق") }</th></tr></thead>
 				<tbody>
 					for _, c := range d.S.Criteria {
 						<tr class="border-b border-ink-10">
@@ -165,21 +165,21 @@ templ ReportPrint(d ReportData) {
 					}
 				</tbody>
 			</table>
-			<h2 class="mt-5 mb-2 font-semibold text-sm">{ "الملاحظات المفتوحة — " + domain.Count(len(d.Findings), domain.NounFinding) }</h2>
+			<h2 class="mt-5 mb-2 font-semibold text-sm">{ t(ctx, "الملاحظات المفتوحة — ") + count(ctx, len(d.Findings), domain.NounFinding) }</h2>
 			if len(d.Findings) == 0 {
-				<p class="text-ink-80">لا توجد ملاحظات مفتوحة ضمن النطاق.</p>
+				<p class="text-ink-80">{ t(ctx, "لا توجد ملاحظات مفتوحة ضمن النطاق.") }</p>
 			} else {
 				<table class="w-full border-collapse">
 					<thead>
 						<tr class="bg-ink text-white">
-							<th class="p-1.5 text-start">أمر العمل</th>
-							<th class="p-1.5 text-start">الموقع</th>
-							<th class="p-1.5 text-start">المعيار</th>
-							<th class="p-1.5 text-start">الملاحظة</th>
-							<th class="p-1.5 text-start">الإجراء التصحيحي</th>
-							<th class="p-1.5 text-start">المسؤول</th>
-							<th class="p-1.5">الإغلاق المستهدف</th>
-							<th class="p-1.5">الحالة</th>
+							<th class="p-1.5 text-start">{ t(ctx, "أمر العمل") }</th>
+							<th class="p-1.5 text-start">{ t(ctx, "الموقع") }</th>
+							<th class="p-1.5 text-start">{ t(ctx, "المعيار") }</th>
+							<th class="p-1.5 text-start">{ t(ctx, "الملاحظة") }</th>
+							<th class="p-1.5 text-start">{ t(ctx, "الإجراء التصحيحي") }</th>
+							<th class="p-1.5 text-start">{ t(ctx, "المسؤول") }</th>
+							<th class="p-1.5">{ t(ctx, "الإغلاق المستهدف") }</th>
+							<th class="p-1.5">{ t(ctx, "الحالة") }</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -187,9 +187,9 @@ templ ReportPrint(d ReportData) {
 							<tr class="border-b border-ink-10 align-top print-avoid-break">
 								<td class="p-1.5 num whitespace-nowrap">{ f.WoRef }</td>
 								<td class="p-1.5">
-									{ f.SiteName }
+									{ nm(ctx, f.SiteName, f.SiteNameEn) }
 									if f.ContractorName != "" {
-										<span class="block text-[10px] text-ink-60">{ f.ContractorName }</span>
+										<span class="block text-[10px] text-ink-60">{ nm(ctx, f.ContractorName, f.ContractorNameEn) }</span>
 									}
 								</td>
 								<td class="p-1.5">
@@ -199,7 +199,7 @@ templ ReportPrint(d ReportData) {
 										{ "—" }
 									}
 									if f.InspectionStage != "" {
-										<span class="block text-[10px] text-ink-60">{ domain.Stage(f.InspectionStage).Short() }</span>
+										<span class="block text-[10px] text-ink-60">{ t(ctx, domain.Stage(f.InspectionStage).Short()) }</span>
 									}
 								</td>
 								<td class="p-1.5">{ f.Description }</td>
@@ -217,18 +217,18 @@ templ ReportPrint(d ReportData) {
 					</tbody>
 				</table>
 			}
-			<h2 class="mt-5 mb-2 font-semibold text-sm">سجل الفحوصات</h2>
+			<h2 class="mt-5 mb-2 font-semibold text-sm">{ t(ctx, "سجل الفحوصات") }</h2>
 			<table class="w-full border-collapse">
 				<thead>
 					<tr class="bg-ink text-white">
-						<th class="p-1.5 text-start">أمر العمل</th>
-						<th class="p-1.5">المرحلة</th>
-						<th class="p-1.5">التاريخ</th>
-						<th class="p-1.5">الموقع</th>
-						<th class="p-1.5">المنظومة / مجموعة الأصل</th>
-						<th class="p-1.5">المقاول</th>
-						<th class="p-1.5">المدقق</th>
-						<th class="p-1.5">النتيجة</th>
+						<th class="p-1.5 text-start">{ t(ctx, "أمر العمل") }</th>
+						<th class="p-1.5">{ t(ctx, "المرحلة") }</th>
+						<th class="p-1.5">{ t(ctx, "التاريخ") }</th>
+						<th class="p-1.5">{ t(ctx, "الموقع") }</th>
+						<th class="p-1.5">{ t(ctx, "المنظومة / مجموعة الأصل") }</th>
+						<th class="p-1.5">{ t(ctx, "المقاول") }</th>
+						<th class="p-1.5">{ t(ctx, "المدقق") }</th>
+						<th class="p-1.5">{ t(ctx, "النتيجة") }</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -236,7 +236,7 @@ templ ReportPrint(d ReportData) {
 						<tr class="border-b border-ink-10 print-avoid-break">
 							<td class="p-1.5 num">{ r.Ref }</td>
 							<td class="p-1.5 text-center">
-								{ domain.Stage(r.Stage).Short() }
+								{ t(ctx, domain.Stage(r.Stage).Short()) }
 								if r.Attempt > 1 {
 									{ fmt.Sprintf(" (%d)", r.Attempt) }
 								}
@@ -258,9 +258,9 @@ templ ReportPrint(d ReportData) {
 				</tbody>
 			</table>
 			<div class="mt-10 grid grid-cols-3 gap-6 text-center print-avoid-break">
-				<div class="border-t border-ink-30 pt-2">أعدّه</div>
-				<div class="border-t border-ink-30 pt-2">راجعه</div>
-				<div class="border-t border-ink-30 pt-2">اعتمده — مدير إدارة جودة العمليات</div>
+				<div class="border-t border-ink-30 pt-2">{ t(ctx, "أعدّه") }</div>
+				<div class="border-t border-ink-30 pt-2">{ t(ctx, "راجعه") }</div>
+				<div class="border-t border-ink-30 pt-2">{ t(ctx, "اعتمده — مدير إدارة جودة العمليات") }</div>
 			</div>
 		</main>
 	}
@@ -278,7 +278,7 @@ templ reportGroup(title string, gs []domain.Group) {
 	<div class="print-avoid-break">
 		<h2 class="mb-2 font-semibold text-sm">{ title }</h2>
 		<table class="w-full border-collapse">
-			<thead><tr class="bg-ink text-white"><th class="p-1.5 text-start">البيان</th><th class="p-1.5">العدد</th><th class="p-1.5">المتوسط</th><th class="p-1.5">المطابقة</th></tr></thead>
+			<thead><tr class="bg-ink text-white"><th class="p-1.5 text-start">{ t(ctx, "البيان") }</th><th class="p-1.5">{ t(ctx, "العدد") }</th><th class="p-1.5">{ t(ctx, "المتوسط") }</th><th class="p-1.5">{ t(ctx, "المطابقة") }</th></tr></thead>
 			<tbody>
 				for _, g := range gs {
 					<tr class="border-b border-ink-10">
@@ -303,7 +303,7 @@ templ reportChart(title string) {
 
 templ criteriaRows(items []domain.CriterionStat) {
 	if len(items) == 0 {
-		<p class="text-ink-60">لا توجد بيانات</p>
+		<p class="text-ink-60">{ t(ctx, "لا توجد بيانات") }</p>
 	} else {
 		<div class="space-y-2">
 			for _, c := range items {

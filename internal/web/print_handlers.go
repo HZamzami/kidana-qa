@@ -107,7 +107,7 @@ func (s *Server) loadPrintCards(ctx context.Context, rows []gen.ListWorkOrdersFo
 
 	itemsBy := map[int64][]views.PrintItem{}
 	for _, it := range items {
-		pi := views.PrintItem{Code: it.Code, Label: it.Label, Weight: int(it.Weight), Critical: it.IsCritical, Note: it.Note}
+		pi := views.PrintItem{Code: it.Code, Label: it.Label, LabelEn: it.LabelEn, Weight: int(it.Weight), Critical: it.IsCritical, Note: it.Note}
 		if it.Rating != nil {
 			pi.Rating = domain.Rating(*it.Rating)
 		}
@@ -187,28 +187,28 @@ func (s *Server) describeWOFilter(ctx context.Context, q url.Values) string {
 		}
 	}
 	if v := q.Get("q"); v != "" {
-		add("بحث", "«"+v+"»")
+		add(appctx.T(ctx, "بحث"), "«"+v+"»")
 	}
 	if v := q.Get("type"); v != "" {
-		add("النوع", domain.Label(domain.WOTypeLabels, v))
+		add(appctx.T(ctx, "النوع"), domain.Label(domain.WOTypeLabels, v))
 	}
 	if v := q.Get("status"); v != "" {
-		add("الحالة", domain.WOStatus(v).Label())
+		add(appctx.T(ctx, "الحالة"), domain.WOStatus(v).Label())
 	}
 	if v := q.Get("priority"); v != "" {
-		add("الأولوية", domain.Label(domain.PriorityLabels, v))
+		add(appctx.T(ctx, "الأولوية"), domain.Label(domain.PriorityLabels, v))
 	}
 	if v := q.Get("site"); v != "" {
-		add("الموقع", find(lk.Sites, v))
+		add(appctx.T(ctx, "الموقع"), find(lk.Sites, v))
 	}
 	if v := q.Get("system"); v != "" {
-		add("المنظومة", find(lk.Systems, v))
+		add(appctx.T(ctx, "المنظومة"), find(lk.Systems, v))
 	}
 	if v := q.Get("group"); v != "" {
-		add("مجموعة الأصل", find(lk.AssetGroups, v))
+		add(appctx.T(ctx, "مجموعة الأصل"), find(lk.AssetGroups, v))
 	}
 	if v := q.Get("contractor"); v != "" {
-		add("المقاول", find(lk.Contractors, v))
+		add(appctx.T(ctx, "المقاول"), find(lk.Contractors, v))
 	}
 	return strings.Join(parts, " · ")
 }

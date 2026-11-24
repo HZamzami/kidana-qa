@@ -62,6 +62,7 @@ func (s *Server) Handler() http.Handler {
 	app := http.NewServeMux()
 	app.HandleFunc("GET /login", s.loginPage)
 	app.HandleFunc("POST /login", s.loginSubmit)
+	app.HandleFunc("POST /lang", s.setLang)
 
 	authed := http.NewServeMux()
 	s.routes(authed)

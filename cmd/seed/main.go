@@ -230,17 +230,17 @@ func (s *seeder) createPeople(ctx context.Context) error {
 		s.inspectors = append(s.inspectors, u.ID)
 	}
 	for _, c := range []struct {
-		name, contact, phone string
-		quality              float64
+		name, nameEn, contact, phone string
+		quality                      float64
 	}{
-		{"شركة الأنظمة المتكاملة للصيانة", "خالد العتيبي", "0551234567", 0.90},
-		{"مؤسسة الريان للمقاولات", "أحمد الشهري", "0559876543", 0.82},
-		{"شركة البيئة الحديثة", "ناصر المالكي", "0504567890", 0.76},
-		{"مجموعة الإتقان الفنية", "تركي الدوسري", "0532345678", 0.86},
-		{"شركة الصيانة الشاملة", "يوسف البقمي", "0546543210", 0.70},
-		{"مؤسسة أركان التشغيل", "سلطان العمري", "0567890123", 0.80},
+		{"شركة الأنظمة المتكاملة للصيانة", "Integrated Systems Maintenance Co.", "خالد العتيبي", "0551234567", 0.90},
+		{"مؤسسة الريان للمقاولات", "Al-Rayyan Contracting Est.", "أحمد الشهري", "0559876543", 0.82},
+		{"شركة البيئة الحديثة", "Modern Environment Co.", "ناصر المالكي", "0504567890", 0.76},
+		{"مجموعة الإتقان الفنية", "Al-Itqan Technical Group", "تركي الدوسري", "0532345678", 0.86},
+		{"شركة الصيانة الشاملة", "Comprehensive Maintenance Co.", "يوسف البقمي", "0546543210", 0.70},
+		{"مؤسسة أركان التشغيل", "Arkan Operations Est.", "سلطان العمري", "0567890123", 0.80},
 	} {
-		x, err := s.q.CreateContractor(ctx, gen.CreateContractorParams{Name: c.name, ContactName: c.contact, Phone: c.phone})
+		x, err := s.q.CreateContractor(ctx, gen.CreateContractorParams{Name: c.name, NameEn: c.nameEn, ContactName: c.contact, Phone: c.phone})
 		if err != nil {
 			return err
 		}

@@ -22,8 +22,8 @@ SELECT EXISTS (SELECT 1 FROM work_orders WHERE lower(ref) = lower(sqlc.arg(ref))
 SELECT * FROM work_orders WHERE lower(ref) = lower($1);
 
 -- name: GetWorkOrder :one
-SELECT w.*, s.name AS site_name, sy.name AS system_name, ag.name AS asset_group_name,
-       COALESCE(c.name, '')::text AS contractor_name,
+SELECT w.*, s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en,
+       COALESCE(c.name, '')::text AS contractor_name, COALESCE(c.name_en, '')::text AS contractor_name_en,
        COALESCE(u.name, '')::text AS created_by_name
 FROM work_orders w
 JOIN sites s ON s.id = w.site_id
@@ -37,7 +37,7 @@ WHERE w.id = $1;
 -- Latest submitted during/after scores are reported as -1 when there is none.
 -- name: ListWorkOrders :many
 SELECT w.id, w.ref, w.type, w.asset, w.location, w.status, w.priority, w.planned_date, w.actual_date, w.created_at,
-       s.name AS site_name, sy.name AS system_name, ag.name AS asset_group_name, COALESCE(c.name, '')::text AS contractor_name,
+       s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en, COALESCE(c.name, '')::text AS contractor_name, COALESCE(c.name_en, '')::text AS contractor_name_en,
        COALESCE(dur.score, -1)::double precision AS during_score,
        COALESCE(aft.score, -1)::double precision AS after_score,
        COALESCE(aft.passed, false)::boolean      AS after_passed,
@@ -97,8 +97,8 @@ DELETE FROM work_orders WHERE id = $1;
 -- Work orders for printing: the list filters (or one id), full detail, newest
 -- first, capped by lim. Inspections and findings are loaded in batches below.
 -- name: ListWorkOrdersForPrint :many
-SELECT w.*, s.name AS site_name, sy.name AS system_name, ag.name AS asset_group_name,
-       COALESCE(c.name, '')::text AS contractor_name
+SELECT w.*, s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en,
+       COALESCE(c.name, '')::text AS contractor_name, COALESCE(c.name_en, '')::text AS contractor_name_en
 FROM work_orders w
 JOIN sites s ON s.id = w.site_id
 JOIN systems sy ON sy.id = w.system_id

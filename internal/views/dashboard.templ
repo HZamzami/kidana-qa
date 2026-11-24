@@ -29,11 +29,11 @@ var ResultOptions = []Option{{"pass", "مطابق"}, {"fail", "غير مطابق
 // Dashboard layout scales with data: one compact criteria card per stage (side
 // by side, similar heights), then three equal-height summary cards.
 templ Dashboard(d DashboardData) {
-	@App("لوحة المؤشرات") {
-		@PageHeader("لوحة المؤشرات", "أداء الفحص أثناء التنفيذ وبعده") {
-			<a class="btn btn-ghost" href="/">إعادة ضبط الفلاتر</a>
-			<a class="btn btn-outline" href={ templ.URL("/reports/print?" + d.Query) } target="_blank" rel="noopener">تقرير للطباعة</a>
-			<a class="btn btn-gold" href={ templ.URL("/reports/export.xlsx?" + d.Query) }>تصدير Excel</a>
+	@App(t(ctx, "لوحة المؤشرات")) {
+		@PageHeader(t(ctx, "لوحة المؤشرات"), t(ctx, "أداء الفحص أثناء التنفيذ وبعده")) {
+			<a class="btn btn-ghost" href="/">{ t(ctx, "إعادة ضبط الفلاتر") }</a>
+			<a class="btn btn-outline" href={ templ.URL("/reports/print?" + d.Query) } target="_blank" rel="noopener">{ t(ctx, "تقرير للطباعة") }</a>
+			<a class="btn btn-gold" href={ templ.URL("/reports/export.xlsx?" + d.Query) }>{ t(ctx, "تصدير Excel") }</a>
 		}
 		<form
 			class="card p-3 mb-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 items-end gap-3 no-print"
@@ -47,24 +47,24 @@ templ Dashboard(d DashboardData) {
 			hx-push-url="true"
 		>
 			<!-- 9 cells: pairs on phone (contractor spans), 3×3 on tablet, one row wide; dates stay together -->
-			@FilterSelect("stage", "المرحلة", d.F.Stage, StageOptions)
-			@FilterSelect("type", "النوع", d.F.Type, TypeOptions)
-			@FilterSelect("site", "الموقع", d.F.Site, d.Sites)
-			@FilterSelect("result", "النتيجة", d.F.Result, ResultOptions)
-			@FilterSelect("system", "المنظومة", d.F.System, d.Systems)
-			@FilterSelect("group", "مجموعة الأصل", d.F.AssetGroup, d.AssetGroups)
+			@FilterSelect("stage", t(ctx, "المرحلة"), d.F.Stage, StageOptions)
+			@FilterSelect("type", t(ctx, "النوع"), d.F.Type, TypeOptions)
+			@FilterSelect("site", t(ctx, "الموقع"), d.F.Site, d.Sites)
+			@FilterSelect("result", t(ctx, "النتيجة"), d.F.Result, ResultOptions)
+			@FilterSelect("system", t(ctx, "المنظومة"), d.F.System, d.Systems)
+			@FilterSelect("group", t(ctx, "مجموعة الأصل"), d.F.AssetGroup, d.AssetGroups)
 			<div class="col-span-2 md:col-span-1 min-w-0">
-				@FilterSelect("contractor", "المقاول", d.F.Contractor, d.Contractors)
+				@FilterSelect("contractor", t(ctx, "المقاول"), d.F.Contractor, d.Contractors)
 			</div>
 			<div class="min-w-0">
-				<label class="label" for="flt_from">من تاريخ</label>
+				<label class="label" for="flt_from">{ t(ctx, "من تاريخ") }</label>
 				<input class="input h-9 w-full" type="date" id="flt_from" name="from" value={ d.F.From }/>
 			</div>
 			<div class="min-w-0">
-				<label class="label" for="flt_to">إلى تاريخ</label>
+				<label class="label" for="flt_to">{ t(ctx, "إلى تاريخ") }</label>
 				<input class="input h-9 w-full" type="date" id="flt_to" name="to" value={ d.F.To }/>
 			</div>
-			<noscript><button class="btn btn-primary">تطبيق</button></noscript>
+			<noscript><button class="btn btn-primary">{ t(ctx, "تطبيق") }</button></noscript>
 		</form>
 		<div id="dash">
 			@dashKPIs(d.S)
@@ -78,21 +78,21 @@ templ Dashboard(d DashboardData) {
 			</div>
 			<div class="mt-4 grid gap-4 md:grid-cols-3">
 				<section class="card p-4">
-					<h2 class="font-semibold mb-4">متوسط النتيجة حسب الموقع</h2>
+					<h2 class="font-semibold mb-4">{ t(ctx, "متوسط النتيجة حسب الموقع") }</h2>
 					@groupBars(d.S.BySite, 6)
 				</section>
 				<section class="card p-4">
-					<h2 class="font-semibold mb-4">توزيع التقديرات</h2>
+					<h2 class="font-semibold mb-4">{ t(ctx, "توزيع التقديرات") }</h2>
 					@gradeDonut(d.S.Grades)
 				</section>
 				<section class="card p-4">
-					<h2 class="font-semibold mb-4">حسب المقاول</h2>
+					<h2 class="font-semibold mb-4">{ t(ctx, "حسب المقاول") }</h2>
 					@groupBars(d.S.ByContractor, 6)
 				</section>
 			</div>
 			<div class="mt-4">
 				<section class="card p-4">
-					<h2 class="font-semibold mb-3">أبرز الملاحظات والتوصيات</h2>
+					<h2 class="font-semibold mb-3">{ t(ctx, "أبرز الملاحظات والتوصيات") }</h2>
 					<ul class="grid gap-2 lg:grid-cols-2">
 						for _, in := range d.Insights {
 							<li
@@ -111,12 +111,12 @@ templ Dashboard(d DashboardData) {
 
 templ dashKPIs(S domain.Summary) {
 	<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-		@kpi("الفحوصات المرسلة", itoa(S.Total), fmt.Sprintf("أثناء %d · بعد %d · %s", S.DuringCount, S.AfterCount, domain.Count(S.WorkOrders, domain.NounWorkOrder)), "")
-		@kpi("متوسط أثناء التنفيذ", domain.Pct(S.AvgDuring), "فحص أثناء التنفيذ", "sky")
-		@kpi("متوسط بعد التنفيذ", domain.Pct(S.AvgAfter), "فحص بعد التنفيذ", "gold")
-		@kpi("نسبة المطابقة", domain.Pct(S.PassRate), fmt.Sprintf("حد المطابقة %s · %d إخفاق حرج", domain.PctVal(domain.PassThreshold), S.CriticalFails), "green")
-		@kpi("ملاحظات مفتوحة", itoa(S.Findings.Open), fmt.Sprintf("متأخرة %d · حرجة %d", S.Findings.Overdue, S.Findings.OpenCritical), tern(S.Findings.Overdue > 0, "fail", ""))
-		@kpi("الالتزام بالموعد", domain.Pct(S.OnTimeRate), "متوسط التأخير "+avgDelay(S.AvgDelay)+" يوم", "")
+		@kpi(t(ctx, "الفحوصات المرسلة"), itoa(S.Total), fmt.Sprintf(t(ctx, "أثناء %d · بعد %d · %s"), S.DuringCount, S.AfterCount, count(ctx, S.WorkOrders, domain.NounWorkOrder)), "")
+		@kpi(t(ctx, "متوسط أثناء التنفيذ"), domain.Pct(S.AvgDuring), t(ctx, "فحص أثناء التنفيذ"), "sky")
+		@kpi(t(ctx, "متوسط بعد التنفيذ"), domain.Pct(S.AvgAfter), t(ctx, "فحص بعد التنفيذ"), "gold")
+		@kpi(t(ctx, "نسبة المطابقة"), domain.Pct(S.PassRate), fmt.Sprintf(t(ctx, "حد المطابقة %s · %d إخفاق حرج"), domain.PctVal(domain.PassThreshold), S.CriticalFails), "green")
+		@kpi(t(ctx, "ملاحظات مفتوحة"), itoa(S.Findings.Open), fmt.Sprintf(t(ctx, "متأخرة %d · حرجة %d"), S.Findings.Overdue, S.Findings.OpenCritical), tern(S.Findings.Overdue > 0, "fail", ""))
+		@kpi(t(ctx, "الالتزام بالموعد"), domain.Pct(S.OnTimeRate), t(ctx, "متوسط التأخير ")+avgDelay(S.AvgDelay)+t(ctx, " يوم"), "")
 	</div>
 }
 
@@ -143,7 +143,7 @@ templ barRow(label string, value float64, sub string, critical bool) {
 		<div class="flex items-baseline gap-2 text-sm">
 			<span class="truncate">{ label }</span>
 			if critical {
-				<span class="pill border border-fail text-fail text-[10px] px-1.5">حرج</span>
+				<span class="pill border border-fail text-fail text-[10px] px-1.5">{ t(ctx, "حرج") }</span>
 			}
 			<span class="num ms-auto font-medium">{ scoreVal(value) }</span>
 		</div>
@@ -159,15 +159,15 @@ templ barRow(label string, value float64, sub string, critical bool) {
 // groupBars shows the first max groups (best first) and a "+N" line for the rest.
 templ groupBars(groups []domain.Group, max int) {
 	if len(groups) == 0 {
-		@EmptyState("لا توجد بيانات", "")
+		@EmptyState(t(ctx, "لا توجد بيانات"), "")
 	} else {
 		<div class="space-y-3">
 			for _, g := range topN(groups, max) {
-				@barRow(g.Name, g.Avg, domain.Count(g.Count, domain.NounInspection)+" · مطابقة "+domain.PctVal(g.PassRate), false)
+				@barRow(g.Name, g.Avg, count(ctx, g.Count, domain.NounInspection)+t(ctx, " · مطابقة ")+domain.PctVal(g.PassRate), false)
 			}
 		</div>
 		if len(groups) > max {
-			<p class="mt-3 text-xs text-ink-60">{ fmt.Sprintf("و%d أخرى — راجع تقرير Excel للقائمة الكاملة", len(groups)-max) }</p>
+			<p class="mt-3 text-xs text-ink-60">{ fmt.Sprintf(t(ctx, "و%d أخرى — راجع تقرير Excel للقائمة الكاملة"), len(groups)-max) }</p>
 		}
 	}
 }
@@ -177,12 +177,12 @@ templ groupBars(groups []domain.Group, max int) {
 templ criteriaCard(stage domain.Stage, items []domain.CriterionStat, wide bool) {
 	<section class={ "card p-4", templ.KV("lg:col-span-2", wide) }>
 		<div class="flex flex-wrap items-baseline gap-x-2 mb-3">
-			<h2 class="font-semibold">نسبة المطابقة لكل معيار</h2>
+			<h2 class="font-semibold">{ t(ctx, "نسبة المطابقة لكل معيار") }</h2>
 			@StagePill(string(stage))
-			<p class="w-full text-xs text-ink-60 mt-0.5">المطابق 100%، الجزئي 50%، و«لا ينطبق» مستبعد.<span class="hidden sm:inline">مرّر المؤشر على البند للتفاصيل.</span></p>
+			<p class="w-full text-xs text-ink-60 mt-0.5">{ t(ctx, "المطابق 100%، الجزئي 50%، و«لا ينطبق» مستبعد.") }<span class="hidden sm:inline">{ t(ctx, "مرّر المؤشر على البند للتفاصيل.") }</span></p>
 		</div>
 		if len(items) == 0 {
-			@EmptyState("لا توجد فحوصات مرسلة لهذه المرحلة ضمن النطاق", "")
+			@EmptyState(t(ctx, "لا توجد فحوصات مرسلة لهذه المرحلة ضمن النطاق"), "")
 		} else {
 			<div class={ "grid gap-y-2.5", templ.KV("lg:grid-cols-2 lg:gap-x-8", wide) }>
 				for _, c := range items {
@@ -199,13 +199,13 @@ templ criteriaCard(stage domain.Stage, items []domain.CriterionStat, wide bool) 
 templ compactBarRow(c domain.CriterionStat) {
 	<div
 		class="grid grid-cols-[minmax(0,1fr)_3.25rem] sm:grid-cols-[minmax(0,1fr)_minmax(5rem,38%)_3.25rem] items-center gap-x-3 gap-y-1 text-sm"
-		title={ c.Code + " · " + c.Label + " — " + domain.Count(c.N, domain.NounRating) + " · غير مطابق: " + itoa(c.Fails) }
+		title={ c.Code + " · " + c.Label + " — " + count(ctx, c.N, domain.NounRating) + t(ctx, " · غير مطابق: ") + itoa(c.Fails) }
 	>
 		<div class="flex items-center gap-1.5 min-w-0">
 			<span class="num text-xs text-ink-60 shrink-0">{ c.Code }</span>
 			<span class="sm:truncate print:whitespace-normal print:overflow-visible">{ c.Label }</span>
 			if c.Critical {
-				<span class="pill border border-fail text-fail text-[10px] px-1.5 shrink-0">حرج</span>
+				<span class="pill border border-fail text-fail text-[10px] px-1.5 shrink-0">{ t(ctx, "حرج") }</span>
 			}
 			if c.Fails > 0 {
 				<span class="text-[11px] text-fail shrink-0 whitespace-nowrap">{ fmt.Sprintf("✕ %d", c.Fails) }</span>
@@ -222,10 +222,10 @@ var gradeColors = []string{"#627D4C", "#93BBCA", "#B59666", "#DACBB3", "#94959A"
 
 templ gradeDonut(grades []domain.GradeCount) {
 	if gradeTotal(grades) == 0 {
-		@EmptyState("لا توجد بيانات", "")
+		@EmptyState(t(ctx, "لا توجد بيانات"), "")
 	} else {
 		<div class="flex items-center gap-4">
-			<svg viewBox="0 0 42 42" class="size-28 shrink-0 -rotate-90" role="img" aria-label="توزيع التقديرات">
+			<svg viewBox="0 0 42 42" class="size-28 shrink-0 -rotate-90" role="img" aria-label={ t(ctx, "توزيع التقديرات") }>
 				<circle cx="21" cy="21" r="15.915" fill="none" stroke="#EDEDEE" stroke-width="6"></circle>
 				for i, seg := range donutSegments(grades) {
 					if seg.len > 0 {
@@ -237,7 +237,7 @@ templ gradeDonut(grades []domain.GradeCount) {
 				for i, g := range grades {
 					<li class="flex items-center gap-2">
 						<span class="size-2.5 rounded-sm shrink-0" style={ "background:" + gradeColors[i] }></span>
-						<span class="truncate">{ g.Label }</span>
+						<span class="truncate">{ t(ctx, g.Label) }</span>
 						<span class="num text-ink-80 ms-auto ps-3">{ itoa(g.Count) }</span>
 					</li>
 				}

@@ -2,15 +2,19 @@
 package views
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/a-h/templ"
 
+	"github.com/HZamzami/kidana-quality/internal/appctx"
 	"github.com/HZamzami/kidana-quality/internal/dates"
 	"github.com/HZamzami/kidana-quality/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/i18n"
 )
 
 // AssetVersion is appended to static URLs to bust caches after a deploy.
@@ -76,18 +80,29 @@ func pctWidth(v float64) string {
 	return fmt.Sprintf("width:%.1f%%", v)
 }
 
-func delayText(planned, actual *time.Time) string {
+func delayText(ctx context.Context, planned, actual *time.Time) string {
 	d, ok := domain.DelayDays(planned, actual)
-	switch {
-	case !ok:
+	if !ok {
 		return "—"
-	case d > 0:
-		return "متأخر " + domain.Count(d, domain.NounDay)
-	case d < 0:
-		return "مبكر " + domain.Count(-d, domain.NounDay)
 	}
-	return "في الموعد"
+	return domain.DelayPhrase(appctx.Lang(ctx), d)
 }
+
+// t translates a UI string into the request's language.
+func t(ctx context.Context, s string) string { return appctx.T(ctx, s) }
+
+// tf translates a format string and formats it.
+func tf(ctx context.Context, format string, args ...any) string {
+	return appctx.Tf(ctx, format, args...)
+}
+
+// count is domain.Count in the request's language.
+func count(ctx context.Context, n int, w domain.Noun) string {
+	return domain.CountIn(appctx.Lang(ctx), n, w)
+}
+
+// nm picks the English name of a record in the English UI when one is set.
+func nm(ctx context.Context, ar, en string) string { return i18n.Pick(appctx.Lang(ctx), ar, en) }
 
 // Option is a select option.
 type Option struct {
@@ -117,4 +132,25 @@ func isActive(current, prefix string) bool {
 		return current == "/"
 	}
 	return len(current) >= len(prefix) && current[:len(prefix)] == prefix
+}
+
+// backArrow points toward the start of the line: → in Arabic, ← in English.
+func backArrow(ctx context.Context) string {
+	if appctx.Lang(ctx) == i18n.EN {
+		return "←"
+	}
+	return "→"
+}
+
+// checklistName shows a checklist's name in the UI language. Names follow
+// "<stage name> — الإصدار N" unless an admin typed something else, which is
+// shown as entered.
+func checklistName(ctx context.Context, name string) string {
+	if appctx.Lang(ctx) != i18n.EN {
+		return name
+	}
+	if base, ver, ok := strings.Cut(name, " — الإصدار "); ok {
+		return t(ctx, base) + " — version " + ver
+	}
+	return t(ctx, name)
 }

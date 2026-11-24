@@ -28,7 +28,7 @@ func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	password := r.PostFormValue("password")
 
 	if !s.limiter.Allow(clientIP(r) + "|" + email) {
-		s.render(w, r, http.StatusTooManyRequests, views.LoginPage(email, "محاولات كثيرة. انتظر دقيقة ثم حاول مرة أخرى."))
+		s.render(w, r, http.StatusTooManyRequests, views.LoginPage(email, appctx.T(ctx, "محاولات كثيرة. انتظر دقيقة ثم حاول مرة أخرى.")))
 		return
 	}
 
@@ -42,7 +42,7 @@ func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !auth.CheckPasswordOrDummy(hash, password) {
-		s.render(w, r, http.StatusUnauthorized, views.LoginPage(email, "البريد الإلكتروني أو كلمة المرور غير صحيحة."))
+		s.render(w, r, http.StatusUnauthorized, views.LoginPage(email, appctx.T(ctx, "البريد الإلكتروني أو كلمة المرور غير صحيحة.")))
 		return
 	}
 
@@ -76,13 +76,13 @@ func (s *Server) passwordSubmit(w http.ResponseWriter, r *http.Request) {
 	next := r.PostFormValue("new")
 
 	if ok, _ := auth.CheckPassword(u.PasswordHash, current); !ok {
-		f.Errors["current"] = "كلمة المرور الحالية غير صحيحة"
+		f.Errors["current"] = appctx.T(ctx, "كلمة المرور الحالية غير صحيحة")
 	}
 	if len([]rune(next)) < auth.MinPasswordLength {
-		f.Errors["new"] = "10 أحرف على الأقل"
+		f.Errors["new"] = appctx.T(ctx, "10 أحرف على الأقل")
 	}
 	if next != r.PostFormValue("confirm") {
-		f.Errors["confirm"] = "كلمتا المرور غير متطابقتين"
+		f.Errors["confirm"] = appctx.T(ctx, "كلمتا المرور غير متطابقتين")
 	}
 	if !f.Valid() {
 		s.render(w, r, http.StatusUnprocessableEntity, views.PasswordPage(f.Errors))
@@ -99,7 +99,7 @@ func (s *Server) passwordSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.sm.RenewToken(ctx)
 	s.audit(ctx, s.q, "user", u.ID, "password_changed", nil)
-	s.flash(ctx, "تم تغيير كلمة المرور", "ok")
+	s.flash(ctx, appctx.T(ctx, "تم تغيير كلمة المرور"), "ok")
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

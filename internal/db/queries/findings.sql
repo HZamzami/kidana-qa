@@ -5,14 +5,14 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: GetFinding :one
-SELECT f.*, w.ref AS wo_ref, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label
+SELECT f.*, w.ref AS wo_ref, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
 FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id
 LEFT JOIN template_criteria c ON c.id = f.criterion_id
 WHERE f.id = $1;
 
 -- name: ListFindingsByWorkOrder :many
-SELECT f.*, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label,
+SELECT f.*, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en,
        COALESCE(i.stage::text, '')::text AS inspection_stage, COALESCE(i.attempt, 0)::int AS inspection_attempt
 FROM findings f
 LEFT JOIN template_criteria c ON c.id = f.criterion_id
@@ -21,7 +21,7 @@ WHERE f.work_order_id = $1
 ORDER BY f.status <> 'closed' DESC, f.created_at DESC;
 
 -- name: ListFindingsByInspection :many
-SELECT f.*, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label
+SELECT f.*, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
 FROM findings f
 LEFT JOIN template_criteria c ON c.id = f.criterion_id
 WHERE f.inspection_id = $1
@@ -31,8 +31,8 @@ ORDER BY f.created_at;
 SELECT count(*)::int FROM findings WHERE inspection_id = $1;
 
 -- name: ListFindings :many
-SELECT f.*, w.ref AS wo_ref, s.name AS site_name, COALESCE(ct.name, '')::text AS contractor_name,
-       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label
+SELECT f.*, w.ref AS wo_ref, s.name AS site_name, s.name_en AS site_name_en, COALESCE(ct.name, '')::text AS contractor_name, COALESCE(ct.name_en, '')::text AS contractor_name_en,
+       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
 FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id
 JOIN sites s ON s.id = w.site_id
@@ -71,7 +71,7 @@ DELETE FROM findings WHERE id = $1;
 -- name: ListFindingsForWorkOrders :many
 SELECT f.id, f.work_order_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date,
        f.status, f.closed_at, f.created_at,
-       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label,
+       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en,
        COALESCE(i.stage::text, '')::text AS inspection_stage
 FROM findings f
 LEFT JOIN template_criteria c ON c.id = f.criterion_id

@@ -24,9 +24,9 @@ var findingScopeOptions = []Option{
 }
 
 templ FindingsPage(d FindingsListData) {
-	@App("الملاحظات") {
-		@PageHeader("الملاحظات والإجراءات التصحيحية", "متابعة عدم المطابقة حتى الإغلاق. لا يُعتمد أمر العمل وفيه ملاحظة مفتوحة.") {
-			<a href="/findings" class="btn btn-ghost">إعادة ضبط الفلاتر</a>
+	@App(t(ctx, "الملاحظات")) {
+		@PageHeader(t(ctx, "الملاحظات والإجراءات التصحيحية"), t(ctx, "متابعة عدم المطابقة حتى الإغلاق. لا يُعتمد أمر العمل وفيه ملاحظة مفتوحة.")) {
+			<a href="/findings" class="btn btn-ghost">{ t(ctx, "إعادة ضبط الفلاتر") }</a>
 		}
 		<form
 			class="card p-3 mb-4 grid grid-cols-2 md:grid-cols-5 items-end gap-3"
@@ -40,36 +40,36 @@ templ FindingsPage(d FindingsListData) {
 			hx-push-url="true"
 		>
 			<div class="col-span-2 min-w-0">
-				<label class="label" for="flt_fq">بحث</label>
-				<input class="input h-9" type="search" id="flt_fq" name="q" value={ d.Query.Get("q") } placeholder="رقم أمر العمل، الوصف، المسؤول…"/>
+				<label class="label" for="flt_fq">{ t(ctx, "بحث") }</label>
+				<input class="input h-9" type="search" id="flt_fq" name="q" value={ d.Query.Get("q") } placeholder={ t(ctx, "رقم أمر العمل، الوصف، المسؤول…") }/>
 			</div>
 			<div class="min-w-0">
-				<label class="label" for="flt_scope">العرض</label>
+				<label class="label" for="flt_scope">{ t(ctx, "العرض") }</label>
 				<select class="input h-9" id="flt_scope" name="scope">
 					for _, o := range findingScopeOptions {
-						<option value={ o.Value } selected?={ o.Value == tern(d.Query.Get("scope") == "", "open", d.Query.Get("scope")) }>{ o.Label }</option>
+						<option value={ o.Value } selected?={ o.Value == tern(d.Query.Get("scope") == "", "open", d.Query.Get("scope")) }>{ t(ctx, o.Label) }</option>
 					}
 				</select>
 			</div>
-			@FilterSelect("site", "الموقع", d.Query.Get("site"), d.Sites)
-			@FilterSelect("contractor", "المقاول", d.Query.Get("contractor"), d.Contractors)
-			<noscript><button class="btn btn-primary">تطبيق</button></noscript>
+			@FilterSelect("site", t(ctx, "الموقع"), d.Query.Get("site"), d.Sites)
+			@FilterSelect("contractor", t(ctx, "المقاول"), d.Query.Get("contractor"), d.Contractors)
+			<noscript><button class="btn btn-primary">{ t(ctx, "تطبيق") }</button></noscript>
 		</form>
 		<div id="findings-results" class="card overflow-hidden">
 			if len(d.Rows) == 0 {
-				@EmptyState("لا توجد ملاحظات ضمن هذا العرض", "")
+				@EmptyState(t(ctx, "لا توجد ملاحظات ضمن هذا العرض"), "")
 			} else {
 				<div class="overflow-x-auto">
 					<table class="table">
 						<thead>
 							<tr>
-								<th>الحالة</th>
-								<th>أمر العمل</th>
-								<th>الموقع</th>
-								<th>المقاول</th>
-								<th>الملاحظة</th>
-								<th>المسؤول</th>
-								<th>الإغلاق المستهدف</th>
+								<th>{ t(ctx, "الحالة") }</th>
+								<th>{ t(ctx, "أمر العمل") }</th>
+								<th>{ t(ctx, "الموقع") }</th>
+								<th>{ t(ctx, "المقاول") }</th>
+								<th>{ t(ctx, "الملاحظة") }</th>
+								<th>{ t(ctx, "المسؤول") }</th>
+								<th>{ t(ctx, "الإغلاق المستهدف") }</th>
 								<th></th>
 							</tr>
 						</thead>
@@ -81,11 +81,11 @@ templ FindingsPage(d FindingsListData) {
 										@SeverityPill(string(f.Severity))
 									</td>
 									<td class="whitespace-nowrap"><a class="underline decoration-gold-50 underline-offset-4" href={ u("/work-orders/%d", f.WorkOrderID) }>{ f.WoRef }</a></td>
-									<td class="whitespace-nowrap">{ f.SiteName }</td>
-									<td class="max-w-36 truncate">{ orDash(f.ContractorName) }</td>
+									<td class="whitespace-nowrap">{ nm(ctx, f.SiteName, f.SiteNameEn) }</td>
+									<td class="max-w-36 truncate">{ orDash(nm(ctx, f.ContractorName, f.ContractorNameEn)) }</td>
 									<td class="min-w-64">
 										if f.CriterionCode != "" {
-											<span class="text-xs text-ink-60">{ f.CriterionCode + " · " + f.CriterionLabel }</span>
+											<span class="text-xs text-ink-60">{ f.CriterionCode + " · " + nm(ctx, f.CriterionLabel, f.CriterionLabelEn) }</span>
 										}
 										<div>{ f.Description }</div>
 									</td>
@@ -95,7 +95,7 @@ templ FindingsPage(d FindingsListData) {
 									</td>
 									<td>
 										<a href={ u("/findings/%d/edit", f.ID) } class="btn btn-outline py-1 text-xs">
-											{ tern(f.Status == gen.FindingStatusClosed || !appctx.CanEdit(ctx), "عرض", "تحديث") }
+											{ tern(f.Status == gen.FindingStatusClosed || !appctx.CanEdit(ctx), t(ctx, "عرض"), t(ctx, "تحديث")) }
 										</a>
 									</td>
 								</tr>
@@ -103,7 +103,7 @@ templ FindingsPage(d FindingsListData) {
 						</tbody>
 					</table>
 				</div>
-				<div class="px-3 py-2.5 text-xs text-ink-80 border-t border-ink-10">{ domain.Count(len(d.Rows), domain.NounFinding) }</div>
+				<div class="px-3 py-2.5 text-xs text-ink-80 border-t border-ink-10">{ count(ctx, len(d.Rows), domain.NounFinding) }</div>
 			}
 		</div>
 	}
@@ -120,76 +120,76 @@ type FindingEditData struct {
 }
 
 templ FindingEdit(d FindingEditData) {
-	@App("ملاحظة على " + d.F.WoRef) {
+	@App(t(ctx, "ملاحظة على ") + d.F.WoRef) {
 		<div class="mb-4 text-sm">
-			<a href="/findings" class="text-ink-80 hover:text-ink">الملاحظات</a>
+			<a href="/findings" class="text-ink-80 hover:text-ink">{ t(ctx, "الملاحظات") }</a>
 			<span class="text-ink-30 mx-1">/</span>
 			<a href={ u("/work-orders/%d", d.F.WorkOrderID) } class="text-ink-80 hover:text-ink num">{ d.F.WoRef }</a>
 		</div>
 		<div class="grid gap-5 lg:grid-cols-3">
 			<section class="lg:col-span-2 card p-5">
 				<div class="flex flex-wrap items-center gap-2 mb-4">
-					<h1 class="text-lg font-semibold">ملاحظة #{ idStr(d.F.ID) }</h1>
+					<h1 class="text-lg font-semibold">{ t(ctx, "ملاحظة #") }{ idStr(d.F.ID) }</h1>
 					@FindingStatusPill(string(d.F.Status), false)
 					@SeverityPill(string(d.F.Severity))
 					if d.F.CriterionCode != "" {
-						<span class="text-xs text-ink-60">{ d.F.CriterionCode + " · " + d.F.CriterionLabel }</span>
+						<span class="text-xs text-ink-60">{ d.F.CriterionCode + " · " + nm(ctx, d.F.CriterionLabel, d.F.CriterionLabelEn) }</span>
 					}
 				</div>
 				if d.F.Status == gen.FindingStatusClosed || !appctx.CanEdit(ctx) {
 					<dl class="space-y-3 text-sm">
-						@Fact("الوصف") {
+						@Fact(t(ctx, "الوصف")) {
 							{ d.F.Description }
 						}
-						@Fact("الإجراء التصحيحي") {
+						@Fact(t(ctx, "الإجراء التصحيحي")) {
 							{ d.F.CorrectiveAction }
 						}
-						@Fact("المسؤول") {
+						@Fact(t(ctx, "المسؤول")) {
 							{ orDash(d.F.Owner) }
 						}
-						@Fact("الإغلاق المستهدف") {
+						@Fact(t(ctx, "الإغلاق المستهدف")) {
 							@DateText(d.F.DueDate)
 						}
 						if d.F.ClosedAt != nil {
-							@Fact("أُغلقت") {
+							@Fact(t(ctx, "أُغلقت")) {
 								<span class="num">{ dateTime(*d.F.ClosedAt) }</span> — { orDash(d.F.ClosureNote) }
 							}
 						}
 					</dl>
 					if d.F.Status == gen.FindingStatusClosed && appctx.CanEdit(ctx) {
 						<form method="post" action={ u("/findings/%d/reopen", d.F.ID) } class="mt-5">
-							<button class="btn btn-outline">إعادة فتح الملاحظة</button>
+							<button class="btn btn-outline">{ t(ctx, "إعادة فتح الملاحظة") }</button>
 						</form>
 					}
 				} else {
 					<form method="post" action={ u("/findings/%d", d.F.ID) } class="space-y-4" novalidate>
-						@TextArea("description", "وصف الملاحظة", d.V.Description, 3, d.Errors)
-						@TextArea("corrective_action", "الإجراء التصحيحي المطلوب", d.V.CorrectiveAction, 2, d.Errors)
+						@TextArea("description", t(ctx, "وصف الملاحظة"), d.V.Description, 3, d.Errors)
+						@TextArea("corrective_action", t(ctx, "الإجراء التصحيحي المطلوب"), d.V.CorrectiveAction, 2, d.Errors)
 						<div class="grid gap-4 sm:grid-cols-2">
-							@TextField("owner", "مسؤول المعالجة", d.V.Owner, false, d.Errors, templ.Attributes{"maxlength": "80"})
-							@TextField("due_date", "تاريخ الإغلاق المستهدف", d.V.DueDate, false, d.Errors, templ.Attributes{"type": "date"})
-							@SelectField("severity", "الأهمية", d.V.Severity, []Option{{"normal", "عادية"}, {"critical", "حرجة"}}, "", true, d.Errors)
-							@SelectField("status", "الحالة", d.V.Status, []Option{{"open", "مفتوحة"}, {"in_progress", "قيد المعالجة"}}, "", true, d.Errors)
+							@TextField("owner", t(ctx, "مسؤول المعالجة"), d.V.Owner, false, d.Errors, templ.Attributes{"maxlength": "80"})
+							@TextField("due_date", t(ctx, "تاريخ الإغلاق المستهدف"), d.V.DueDate, false, d.Errors, templ.Attributes{"type": "date"})
+							@SelectField("severity", t(ctx, "الأهمية"), d.V.Severity, []Option{{"normal", t(ctx, "عادية")}, {"critical", t(ctx, "حرجة")}}, "", true, d.Errors)
+							@SelectField("status", t(ctx, "الحالة"), d.V.Status, []Option{{"open", t(ctx, "مفتوحة")}, {"in_progress", t(ctx, "قيد المعالجة")}}, "", true, d.Errors)
 						</div>
-						<button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+						<button type="submit" class="btn btn-primary">{ t(ctx, "حفظ التعديلات") }</button>
 					</form>
 				}
 			</section>
 			if d.F.Status != gen.FindingStatusClosed && appctx.CanEdit(ctx) {
 				<section class="card p-5 h-fit">
-					<h2 class="font-semibold">إغلاق الملاحظة</h2>
-					<p class="text-xs text-ink-80 mt-1 mb-3">بعد التحقق من تنفيذ الإجراء التصحيحي. إن كان الإخفاق في فحص بعد التنفيذ، سجّل فحصاً جديداً ليُعتمد أمر العمل.</p>
+					<h2 class="font-semibold">{ t(ctx, "إغلاق الملاحظة") }</h2>
+					<p class="text-xs text-ink-80 mt-1 mb-3">{ t(ctx, "بعد التحقق من تنفيذ الإجراء التصحيحي. إن كان الإخفاق في فحص بعد التنفيذ، سجّل فحصاً جديداً ليُعتمد أمر العمل.") }</p>
 					<form method="post" action={ u("/findings/%d/close", d.F.ID) } class="space-y-3" novalidate>
-						@TextArea("closure_note", "كيف تمت المعالجة؟", d.V.ClosureNote, 3, d.Errors)
-						<button type="submit" class="btn btn-gold w-full">إغلاق الملاحظة</button>
+						@TextArea("closure_note", t(ctx, "كيف تمت المعالجة؟"), d.V.ClosureNote, 3, d.Errors)
+						<button type="submit" class="btn btn-gold w-full">{ t(ctx, "إغلاق الملاحظة") }</button>
 					</form>
 					<div class="mt-4 border-t border-ink-10 pt-3" x-data="confirmAction">
-						<button type="button" class="btn btn-ghost text-fail px-2" x-on:click="ask" x-show="!asking">حذف الملاحظة</button>
+						<button type="button" class="btn btn-ghost text-fail px-2" x-on:click="ask" x-show="!asking">{ t(ctx, "حذف الملاحظة") }</button>
 						<form method="post" action={ u("/findings/%d/delete", d.F.ID) } x-show="asking" x-cloak class="space-y-2">
-							<p class="text-sm">حذف نهائي؟ استخدم الحذف فقط للملاحظات المسجلة بالخطأ.</p>
+							<p class="text-sm">{ t(ctx, "حذف نهائي؟ استخدم الحذف فقط للملاحظات المسجلة بالخطأ.") }</p>
 							<div class="flex gap-2">
-								<button type="submit" class="btn btn-danger">حذف</button>
-								<button type="button" class="btn btn-ghost" x-on:click="cancel">تراجع</button>
+								<button type="submit" class="btn btn-danger">{ t(ctx, "حذف") }</button>
+								<button type="button" class="btn btn-ghost" x-on:click="cancel">{ t(ctx, "تراجع") }</button>
 							</div>
 						</form>
 					</div>
@@ -197,11 +197,11 @@ templ FindingEdit(d FindingEditData) {
 			}
 		</div>
 		<p class="mt-4 text-xs text-ink-60">
-			{ "سُجّلت " + dateTime(d.F.CreatedAt) }
+			{ t(ctx, "سُجّلت ") + dateTime(d.F.CreatedAt) }
 			if d.F.InspectionID != nil {
-				· <a class="underline" href={ u("/inspections/%d", *d.F.InspectionID) }>عرض الفحص</a>
+				· <a class="underline" href={ u("/inspections/%d", *d.F.InspectionID) }>{ t(ctx, "عرض الفحص") }</a>
 			}
-			{ " · " + domain.Label(domain.SeverityLabels, string(d.F.Severity)) }
+			{ " · " + t(ctx, domain.Label(domain.SeverityLabels, string(d.F.Severity))) }
 		</p>
 	}
 }

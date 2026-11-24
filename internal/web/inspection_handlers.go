@@ -29,7 +29,7 @@ func (s *Server) inspectionStart(w http.ResponseWriter, r *http.Request) {
 	}
 	stage := gen.InspectionStage(r.PostFormValue("stage"))
 	if !stage.Valid() {
-		s.badRequest(w, r, "مرحلة غير صالحة")
+		s.badRequest(w, r, appctx.T(ctx, "مرحلة غير صالحة"))
 		return
 	}
 	wo, err := s.q.GetWorkOrder(ctx, woID)
@@ -38,7 +38,7 @@ func (s *Server) inspectionStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if wo.Status == gen.WoStatusCancelled {
-		s.badRequest(w, r, "لا يمكن فحص أمر عمل ملغى")
+		s.badRequest(w, r, appctx.T(ctx, "لا يمكن فحص أمر عمل ملغى"))
 		return
 	}
 	existing, err := s.q.ListInspectionsByWorkOrder(ctx, woID)
@@ -82,7 +82,7 @@ func (s *Server) inspectionStart(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if errors.Is(err, errNoTemplate) {
-		s.badRequest(w, r, "لا توجد قائمة فحص مفعّلة لهذه المرحلة. فعّل قائمة من الإعدادات.")
+		s.badRequest(w, r, appctx.T(ctx, "لا توجد قائمة فحص مفعّلة لهذه المرحلة. فعّل قائمة من الإعدادات."))
 		return
 	}
 	if err != nil {
@@ -203,7 +203,7 @@ func (s *Server) draftInspection(w http.ResponseWriter, r *http.Request) (gen.Ge
 	}
 	if in.Status != gen.InspectionStatusDraft {
 		w.Header().Set("HX-Refresh", "true")
-		s.badRequest(w, r, "تم إرسال هذا الفحص ولا يمكن تعديله.")
+		s.badRequest(w, r, appctx.T(r.Context(), "تم إرسال هذا الفحص ولا يمكن تعديله."))
 		return in, false
 	}
 	return in, true
@@ -225,7 +225,7 @@ func (s *Server) inspectionItemSave(w http.ResponseWriter, r *http.Request) {
 	if v := f.Str("rating"); v != "" {
 		rt := gen.Rating(v)
 		if !rt.Valid() {
-			s.badRequest(w, r, "تقييم غير صالح")
+			s.badRequest(w, r, appctx.T(ctx, "تقييم غير صالح"))
 			return
 		}
 		rating = &rt
@@ -261,7 +261,7 @@ func (s *Server) inspectionHeaderSave(w http.ResponseWriter, r *http.Request) {
 		on = &in.InspectedOn
 	}
 	if on.After(today()) {
-		toast(w, "تاريخ الفحص لا يمكن أن يكون في المستقبل", "warn")
+		toast(w, appctx.T(r.Context(), "تاريخ الفحص لا يمكن أن يكون في المستقبل"), "warn")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -286,8 +286,8 @@ func (s *Server) inspectionFindingCreate(w http.ResponseWriter, r *http.Request)
 	}
 	f := newForm(r)
 	cid := f.OptID("criterion_id")
-	desc := f.Required("description", "وصف الملاحظة")
-	action := f.Required("corrective_action", "الإجراء التصحيحي")
+	desc := f.Required("description", appctx.T(ctx, "وصف الملاحظة"))
+	action := f.Required("corrective_action", appctx.T(ctx, "الإجراء التصحيحي"))
 	owner := f.Str("owner")
 	due := f.OptDate("due_date")
 	f.MaxLen("description", 1500)
@@ -312,7 +312,7 @@ func (s *Server) inspectionFindingCreate(w http.ResponseWriter, r *http.Request)
 			}
 		}
 		if !found {
-			s.badRequest(w, r, "بند غير موجود في هذا الفحص")
+			s.badRequest(w, r, appctx.T(ctx, "بند غير موجود في هذا الفحص"))
 			return
 		}
 	}
@@ -334,7 +334,7 @@ func (s *Server) inspectionFindingCreate(w http.ResponseWriter, r *http.Request)
 			s.serverError(w, r, err)
 			return
 		}
-		toast(w, "تم تسجيل الملاحظة", "ok")
+		toast(w, appctx.T(ctx, "تم تسجيل الملاحظة"), "ok")
 	}
 
 	all, err := s.q.ListFindingsByInspection(ctx, &in.ID)
@@ -364,7 +364,7 @@ func (s *Server) inspectionPhotoUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxUploadBytes+1<<20)
 	if err := r.ParseMultipartForm(4 << 20); err != nil {
-		s.badRequest(w, r, "الملف كبير جداً أو غير صالح")
+		s.badRequest(w, r, appctx.T(ctx, "الملف كبير جداً أو غير صالح"))
 		return
 	}
 	defer func() { _ = r.MultipartForm.RemoveAll() }()
@@ -373,7 +373,7 @@ func (s *Server) inspectionPhotoUpload(w http.ResponseWriter, r *http.Request) {
 
 	file, hdr, err := r.FormFile("photo")
 	if err != nil {
-		s.badRequest(w, r, "لم يتم اختيار صورة")
+		s.badRequest(w, r, appctx.T(ctx, "لم يتم اختيار صورة"))
 		return
 	}
 	defer func() { _ = file.Close() }()
@@ -381,9 +381,9 @@ func (s *Server) inspectionPhotoUpload(w http.ResponseWriter, r *http.Request) {
 	key, size, ctype, err := s.store.Save(ctx, file)
 	switch {
 	case errors.Is(err, storage.ErrUnsupportedType):
-		toast(w, "الملف ليس صورة مدعومة (JPG أو PNG أو WEBP)", "warn")
+		toast(w, appctx.T(ctx, "الملف ليس صورة مدعومة (JPG أو PNG أو WEBP)"), "warn")
 	case err != nil:
-		toast(w, "تعذّر رفع الصورة: "+err.Error(), "warn")
+		toast(w, appctx.T(ctx, "تعذّر رفع الصورة: ")+err.Error(), "warn")
 	default:
 		name := filepath.Base(hdr.Filename)
 		if len(name) > 200 {
@@ -436,7 +436,7 @@ func (s *Server) inspectionSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if errs := domain.ValidateSubmit(domain.SubmitCheck{
-		Result: d.Result, FindingsLinked: len(d.Findings), UnratedLabels: unrated,
+		Result: d.Result, FindingsLinked: len(d.Findings), UnratedLabels: unrated, Lang: appctx.Lang(ctx),
 	}); len(errs) > 0 {
 		d.Errors = errs
 		s.render(w, r, http.StatusUnprocessableEntity, views.InspectionPage(d))
@@ -458,11 +458,11 @@ func (s *Server) inspectionSubmit(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	msg := "تم إرسال الفحص — النتيجة " + domain.Fmt1(d.Result.Score) + "% "
+	msg := appctx.T(ctx, "تم إرسال الفحص — النتيجة ") + domain.Fmt1(d.Result.Score) + "% "
 	if d.Result.Passed {
-		s.flash(ctx, msg+"(مطابق)", "ok")
+		s.flash(ctx, msg+appctx.T(ctx, "(مطابق)"), "ok")
 	} else {
-		s.flash(ctx, msg+"(غير مطابق). تابع الملاحظات المفتوحة، ثم سجّل فحصاً جديداً بعد المعالجة.", "warn")
+		s.flash(ctx, msg+appctx.T(ctx, "(غير مطابق). تابع الملاحظات المفتوحة، ثم سجّل فحصاً جديداً بعد المعالجة."), "warn")
 	}
 	http.Redirect(w, r, "/work-orders/"+idStr(in.WorkOrderID), http.StatusSeeOther)
 }
@@ -503,7 +503,7 @@ func (s *Server) inspectionDelete(w http.ResponseWriter, r *http.Request) {
 	for _, p := range photos {
 		_ = s.store.Delete(ctx, p.StorageKey)
 	}
-	s.flash(ctx, "تم حذف المسودة", "")
+	s.flash(ctx, appctx.T(ctx, "تم حذف المسودة"), "")
 	http.Redirect(w, r, "/work-orders/"+idStr(in.WorkOrderID), http.StatusSeeOther)
 }
 
@@ -531,7 +531,7 @@ func (s *Server) inspectionReopen(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	s.flash(ctx, "أُعيد فتح الفحص كمسودة", "")
+	s.flash(ctx, appctx.T(ctx, "أُعيد فتح الفحص كمسودة"), "")
 	http.Redirect(w, r, "/inspections/"+idStr(id), http.StatusSeeOther)
 }
 
@@ -574,7 +574,7 @@ func (s *Server) attachmentDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.InspectionID == nil {
-		s.badRequest(w, r, "لا يمكن حذف هذا المرفق من هنا")
+		s.badRequest(w, r, appctx.T(ctx, "لا يمكن حذف هذا المرفق من هنا"))
 		return
 	}
 	in, err := s.q.GetInspection(ctx, *a.InspectionID)
@@ -583,7 +583,7 @@ func (s *Server) attachmentDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Status != gen.InspectionStatusDraft {
-		s.badRequest(w, r, "تم إرسال هذا الفحص ولا يمكن تعديل صوره.")
+		s.badRequest(w, r, appctx.T(ctx, "تم إرسال هذا الفحص ولا يمكن تعديل صوره."))
 		return
 	}
 	if err := s.q.DeleteAttachment(ctx, id); err != nil {

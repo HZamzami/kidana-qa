@@ -130,8 +130,8 @@ func (q *Queries) DeleteWorkOrder(ctx context.Context, id int64) error {
 }
 
 const getWorkOrder = `-- name: GetWorkOrder :one
-SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, s.name AS site_name, sy.name AS system_name, ag.name AS asset_group_name,
-       COALESCE(c.name, '')::text AS contractor_name,
+SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en,
+       COALESCE(c.name, '')::text AS contractor_name, COALESCE(c.name_en, '')::text AS contractor_name_en,
        COALESCE(u.name, '')::text AS created_by_name
 FROM work_orders w
 JOIN sites s ON s.id = w.site_id
@@ -143,29 +143,33 @@ WHERE w.id = $1
 `
 
 type GetWorkOrderRow struct {
-	ID             int64
-	Ref            string
-	Type           WoType
-	SiteID         int64
-	Location       string
-	SystemID       int64
-	AssetGroupID   int64
-	Asset          string
-	ContractorID   *int64
-	Technician     string
-	Priority       WoPriority
-	Description    string
-	PlannedDate    *time.Time
-	ActualDate     *time.Time
-	Status         WoStatus
-	CreatedBy      *int64
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	SiteName       string
-	SystemName     string
-	AssetGroupName string
-	ContractorName string
-	CreatedByName  string
+	ID               int64
+	Ref              string
+	Type             WoType
+	SiteID           int64
+	Location         string
+	SystemID         int64
+	AssetGroupID     int64
+	Asset            string
+	ContractorID     *int64
+	Technician       string
+	Priority         WoPriority
+	Description      string
+	PlannedDate      *time.Time
+	ActualDate       *time.Time
+	Status           WoStatus
+	CreatedBy        *int64
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	SiteName         string
+	SiteNameEn       string
+	SystemName       string
+	SystemNameEn     string
+	AssetGroupName   string
+	AssetGroupNameEn string
+	ContractorName   string
+	ContractorNameEn string
+	CreatedByName    string
 }
 
 func (q *Queries) GetWorkOrder(ctx context.Context, id int64) (GetWorkOrderRow, error) {
@@ -191,9 +195,13 @@ func (q *Queries) GetWorkOrder(ctx context.Context, id int64) (GetWorkOrderRow, 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SiteName,
+		&i.SiteNameEn,
 		&i.SystemName,
+		&i.SystemNameEn,
 		&i.AssetGroupName,
+		&i.AssetGroupNameEn,
 		&i.ContractorName,
+		&i.ContractorNameEn,
 		&i.CreatedByName,
 	)
 	return i, err
@@ -247,7 +255,7 @@ func (q *Queries) GetWorkOrderRefExists(ctx context.Context, arg GetWorkOrderRef
 
 const listWorkOrders = `-- name: ListWorkOrders :many
 SELECT w.id, w.ref, w.type, w.asset, w.location, w.status, w.priority, w.planned_date, w.actual_date, w.created_at,
-       s.name AS site_name, sy.name AS system_name, ag.name AS asset_group_name, COALESCE(c.name, '')::text AS contractor_name,
+       s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en, COALESCE(c.name, '')::text AS contractor_name, COALESCE(c.name_en, '')::text AS contractor_name_en,
        COALESCE(dur.score, -1)::double precision AS during_score,
        COALESCE(aft.score, -1)::double precision AS after_score,
        COALESCE(aft.passed, false)::boolean      AS after_passed,
@@ -310,9 +318,13 @@ type ListWorkOrdersRow struct {
 	ActualDate       *time.Time
 	CreatedAt        time.Time
 	SiteName         string
+	SiteNameEn       string
 	SystemName       string
+	SystemNameEn     string
 	AssetGroupName   string
+	AssetGroupNameEn string
 	ContractorName   string
+	ContractorNameEn string
 	DuringScore      float64
 	AfterScore       float64
 	AfterPassed      bool
@@ -355,9 +367,13 @@ func (q *Queries) ListWorkOrders(ctx context.Context, arg ListWorkOrdersParams) 
 			&i.ActualDate,
 			&i.CreatedAt,
 			&i.SiteName,
+			&i.SiteNameEn,
 			&i.SystemName,
+			&i.SystemNameEn,
 			&i.AssetGroupName,
+			&i.AssetGroupNameEn,
 			&i.ContractorName,
+			&i.ContractorNameEn,
 			&i.DuringScore,
 			&i.AfterScore,
 			&i.AfterPassed,
@@ -376,8 +392,8 @@ func (q *Queries) ListWorkOrders(ctx context.Context, arg ListWorkOrdersParams) 
 }
 
 const listWorkOrdersForPrint = `-- name: ListWorkOrdersForPrint :many
-SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, s.name AS site_name, sy.name AS system_name, ag.name AS asset_group_name,
-       COALESCE(c.name, '')::text AS contractor_name
+SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en,
+       COALESCE(c.name, '')::text AS contractor_name, COALESCE(c.name_en, '')::text AS contractor_name_en
 FROM work_orders w
 JOIN sites s ON s.id = w.site_id
 JOIN systems sy ON sy.id = w.system_id
@@ -414,28 +430,32 @@ type ListWorkOrdersForPrintParams struct {
 }
 
 type ListWorkOrdersForPrintRow struct {
-	ID             int64
-	Ref            string
-	Type           WoType
-	SiteID         int64
-	Location       string
-	SystemID       int64
-	AssetGroupID   int64
-	Asset          string
-	ContractorID   *int64
-	Technician     string
-	Priority       WoPriority
-	Description    string
-	PlannedDate    *time.Time
-	ActualDate     *time.Time
-	Status         WoStatus
-	CreatedBy      *int64
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	SiteName       string
-	SystemName     string
-	AssetGroupName string
-	ContractorName string
+	ID               int64
+	Ref              string
+	Type             WoType
+	SiteID           int64
+	Location         string
+	SystemID         int64
+	AssetGroupID     int64
+	Asset            string
+	ContractorID     *int64
+	Technician       string
+	Priority         WoPriority
+	Description      string
+	PlannedDate      *time.Time
+	ActualDate       *time.Time
+	Status           WoStatus
+	CreatedBy        *int64
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	SiteName         string
+	SiteNameEn       string
+	SystemName       string
+	SystemNameEn     string
+	AssetGroupName   string
+	AssetGroupNameEn string
+	ContractorName   string
+	ContractorNameEn string
 }
 
 // Work orders for printing: the list filters (or one id), full detail, newest
@@ -480,9 +500,13 @@ func (q *Queries) ListWorkOrdersForPrint(ctx context.Context, arg ListWorkOrders
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.SiteName,
+			&i.SiteNameEn,
 			&i.SystemName,
+			&i.SystemNameEn,
 			&i.AssetGroupName,
+			&i.AssetGroupNameEn,
 			&i.ContractorName,
+			&i.ContractorNameEn,
 		); err != nil {
 			return nil, err
 		}

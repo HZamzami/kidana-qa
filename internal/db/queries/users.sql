@@ -22,3 +22,6 @@ RETURNING *;
 
 -- name: UpdateUserPassword :exec
 UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1;
+
+-- name: SetUserLang :exec
+UPDATE users SET lang = $2 WHERE id = $1;

@@ -20,19 +20,21 @@ func (q *Queries) ActivateTemplate(ctx context.Context, id int64) error {
 }
 
 const createCriterion = `-- name: CreateCriterion :one
-INSERT INTO template_criteria (template_id, code, label, description, weight, is_critical, sort)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, template_id, code, label, description, weight, is_critical, sort
+INSERT INTO template_criteria (template_id, code, label, description, weight, is_critical, sort, label_en, description_en)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, template_id, code, label, description, weight, is_critical, sort, label_en, description_en
 `
 
 type CreateCriterionParams struct {
-	TemplateID  int64
-	Code        string
-	Label       string
-	Description string
-	Weight      int32
-	IsCritical  bool
-	Sort        int32
+	TemplateID    int64
+	Code          string
+	Label         string
+	Description   string
+	Weight        int32
+	IsCritical    bool
+	Sort          int32
+	LabelEn       string
+	DescriptionEn string
 }
 
 func (q *Queries) CreateCriterion(ctx context.Context, arg CreateCriterionParams) (TemplateCriterion, error) {
@@ -44,6 +46,8 @@ func (q *Queries) CreateCriterion(ctx context.Context, arg CreateCriterionParams
 		arg.Weight,
 		arg.IsCritical,
 		arg.Sort,
+		arg.LabelEn,
+		arg.DescriptionEn,
 	)
 	var i TemplateCriterion
 	err := row.Scan(
@@ -55,6 +59,8 @@ func (q *Queries) CreateCriterion(ctx context.Context, arg CreateCriterionParams
 		&i.Weight,
 		&i.IsCritical,
 		&i.Sort,
+		&i.LabelEn,
+		&i.DescriptionEn,
 	)
 	return i, err
 }
@@ -140,7 +146,7 @@ func (q *Queries) GetTemplate(ctx context.Context, id int64) (ChecklistTemplate,
 }
 
 const listCriteria = `-- name: ListCriteria :many
-SELECT id, template_id, code, label, description, weight, is_critical, sort FROM template_criteria WHERE template_id = $1 ORDER BY sort, code
+SELECT id, template_id, code, label, description, weight, is_critical, sort, label_en, description_en FROM template_criteria WHERE template_id = $1 ORDER BY sort, code
 `
 
 func (q *Queries) ListCriteria(ctx context.Context, templateID int64) ([]TemplateCriterion, error) {
@@ -161,6 +167,8 @@ func (q *Queries) ListCriteria(ctx context.Context, templateID int64) ([]Templat
 			&i.Weight,
 			&i.IsCritical,
 			&i.Sort,
+			&i.LabelEn,
+			&i.DescriptionEn,
 		); err != nil {
 			return nil, err
 		}

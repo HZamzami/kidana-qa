@@ -561,6 +561,7 @@ type AssetGroup struct {
 	Name   string
 	Active bool
 	Sort   int32
+	NameEn string
 }
 
 type Attachment struct {
@@ -602,6 +603,7 @@ type Contractor struct {
 	ContactName string
 	Phone       string
 	Active      bool
+	NameEn      string
 }
 
 type Finding struct {
@@ -659,6 +661,7 @@ type Site struct {
 	Name   string
 	Active bool
 	Sort   int32
+	NameEn string
 }
 
 type System struct {
@@ -666,17 +669,20 @@ type System struct {
 	Name   string
 	Active bool
 	Sort   int32
+	NameEn string
 }
 
 type TemplateCriterion struct {
-	ID          int64
-	TemplateID  int64
-	Code        string
-	Label       string
-	Description string
-	Weight      int32
-	IsCritical  bool
-	Sort        int32
+	ID            int64
+	TemplateID    int64
+	Code          string
+	Label         string
+	Description   string
+	Weight        int32
+	IsCritical    bool
+	Sort          int32
+	LabelEn       string
+	DescriptionEn string
 }
 
 type User struct {
@@ -688,6 +694,7 @@ type User struct {
 	Active       bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	Lang         string
 }
 
 type WorkOrder struct {

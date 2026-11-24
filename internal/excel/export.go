@@ -1,7 +1,6 @@
 package excel
 
 import (
-	"fmt"
 	_ "image/png" // excelize needs the PNG decoder registered to embed the logo
 	"sort"
 	"time"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/HZamzami/kidana-quality/internal/dates"
 	"github.com/HZamzami/kidana-quality/internal/domain"
+	"github.com/HZamzami/kidana-quality/internal/i18n"
 )
 
 const font = "Avenir Next Arabic" // brand font; Excel substitutes it if not installed
@@ -128,6 +128,7 @@ type ReportInput struct {
 	Findings   []FindingExport
 	Checklists []ChecklistExport // active checklists for the criteria sheet
 	Logo       []byte            // PNG shown on the summary sheet (optional)
+	Lang       i18n.Lang         // language of headings and labels
 }
 
 // Report builds the export workbook: summary, inspections, findings and criteria.
@@ -137,28 +138,28 @@ func Report(in ReportInput) (*excelize.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := summarySheet(f, st, in.Scope, in.Summary, in.Insights, in.Logo); err != nil {
+	if err := summarySheet(in.Lang, f, st, in.Scope, in.Summary, in.Insights, in.Logo); err != nil {
 		return nil, err
 	}
-	if err := inspectionsSheet(f, st, in.Rows, in.Criteria); err != nil {
+	if err := inspectionsSheet(in.Lang, f, st, in.Rows, in.Criteria); err != nil {
 		return nil, err
 	}
-	if err := findingsSheet(f, st, in.Findings); err != nil {
+	if err := findingsSheet(in.Lang, f, st, in.Findings); err != nil {
 		return nil, err
 	}
-	if err := criteriaSheet(f, st, in.Checklists); err != nil {
+	if err := criteriaSheet(in.Lang, f, st, in.Checklists); err != nil {
 		return nil, err
 	}
 	f.SetActiveSheet(0)
 	return f, nil
 }
 
-func summarySheet(f *excelize.File, st styles, scope string, S domain.Summary, insights []domain.Insight, logo []byte) error {
-	const sh = "ملخص"
+func summarySheet(l i18n.Lang, f *excelize.File, st styles, scope string, S domain.Summary, insights []domain.Insight, logo []byte) error {
+	sh := i18n.T(l, "ملخص")
 	if err := f.SetSheetName("Sheet1", sh); err != nil {
 		return err
 	}
-	rtl := true
+	rtl := l != i18n.EN
 	_ = f.SetSheetView(sh, 0, &excelize.ViewOptions{RightToLeft: &rtl, ShowGridLines: boolPtr(false)})
 	_ = f.SetColWidth(sh, "A", "A", 34)
 	_ = f.SetColWidth(sh, "B", "E", 15)
@@ -176,10 +177,10 @@ func summarySheet(f *excelize.File, st styles, scope string, S domain.Summary, i
 			r = 4
 		}
 	}
-	_ = f.SetCellValue(sh, axis(1, r), "تقرير جودة الصيانة — فحص أثناء التنفيذ وفحص بعد التنفيذ")
+	_ = f.SetCellValue(sh, axis(1, r), i18n.T(l, "تقرير جودة الصيانة — فحص أثناء التنفيذ وفحص بعد التنفيذ"))
 	_ = f.SetCellStyle(sh, axis(1, r), axis(1, r), st.title)
 	r++
-	_ = f.SetCellValue(sh, axis(1, r), fmt.Sprintf("إدارة جودة العمليات · تاريخ التقرير %s · النطاق: %s", dates.Both(time.Now().In(dates.Riyadh)), scope))
+	_ = f.SetCellValue(sh, axis(1, r), i18n.Tf(l, "إدارة جودة العمليات · تاريخ التقرير %s · النطاق: %s", dates.BothIn(l, time.Now().In(dates.Riyadh)), scope))
 	r += 2
 
 	title := func(t string) {
@@ -187,14 +188,14 @@ func summarySheet(f *excelize.File, st styles, scope string, S domain.Summary, i
 		_ = f.SetCellStyle(sh, axis(1, r), axis(5, r), st.sub)
 		r++
 	}
-	title("المؤشرات الرئيسية")
+	title(i18n.T(l, "المؤشرات الرئيسية"))
 	kpis := [][]any{
-		{"الفحوصات المرسلة", S.Total}, {"فحص أثناء التنفيذ", S.DuringCount}, {"فحص بعد التنفيذ", S.AfterCount},
-		{"أوامر العمل", S.WorkOrders}, {"متوسط أثناء التنفيذ %", round1(S.AvgDuring)}, {"متوسط بعد التنفيذ %", round1(S.AvgAfter)},
-		{"متوسط النتيجة %", round1(S.AvgScore)}, {"نسبة المطابقة %", round1(S.PassRate)},
-		{"غير مطابق", S.FailCount}, {"إخفاق في بند حرج", S.CriticalFails},
-		{"ملاحظات مفتوحة", S.Findings.Open}, {"ملاحظات متأخرة الإغلاق", S.Findings.Overdue},
-		{"الالتزام بالموعد %", round1(S.OnTimeRate)}, {"متوسط التأخير (يوم)", round1(S.AvgDelay)},
+		{i18n.T(l, "الفحوصات المرسلة"), S.Total}, {i18n.T(l, "فحص أثناء التنفيذ"), S.DuringCount}, {i18n.T(l, "فحص بعد التنفيذ"), S.AfterCount},
+		{i18n.T(l, "أوامر العمل"), S.WorkOrders}, {i18n.T(l, "متوسط أثناء التنفيذ %"), round1(S.AvgDuring)}, {i18n.T(l, "متوسط بعد التنفيذ %"), round1(S.AvgAfter)},
+		{i18n.T(l, "متوسط النتيجة %"), round1(S.AvgScore)}, {i18n.T(l, "نسبة المطابقة %"), round1(S.PassRate)},
+		{i18n.T(l, "غير مطابق"), S.FailCount}, {i18n.T(l, "إخفاق في بند حرج"), S.CriticalFails},
+		{i18n.T(l, "ملاحظات مفتوحة"), S.Findings.Open}, {i18n.T(l, "ملاحظات متأخرة الإغلاق"), S.Findings.Overdue},
+		{i18n.T(l, "الالتزام بالموعد %"), round1(S.OnTimeRate)}, {i18n.T(l, "متوسط التأخير (يوم)"), round1(S.AvgDelay)},
 	}
 	for _, k := range kpis {
 		setRow(f, sh, r, k[:1], st.text)
@@ -206,7 +207,7 @@ func summarySheet(f *excelize.File, st styles, scope string, S domain.Summary, i
 
 	group := func(name string, gs []domain.Group) {
 		title(name)
-		setRow(f, sh, r, []any{"البيان", "عدد الفحوصات", "متوسط النتيجة %", "نسبة المطابقة %", "غير مطابق"}, st.head)
+		setRow(f, sh, r, []any{i18n.T(l, "البيان"), i18n.T(l, "عدد الفحوصات"), i18n.T(l, "متوسط النتيجة %"), i18n.T(l, "نسبة المطابقة %"), i18n.T(l, "غير مطابق")}, st.head)
 		r++
 		for _, g := range gs {
 			setRow(f, sh, r, []any{g.Name}, st.text)
@@ -219,24 +220,24 @@ func summarySheet(f *excelize.File, st styles, scope string, S domain.Summary, i
 			r++
 		}
 		if len(gs) == 0 {
-			_ = f.SetCellValue(sh, axis(1, r), "لا توجد بيانات")
+			_ = f.SetCellValue(sh, axis(1, r), i18n.T(l, "لا توجد بيانات"))
 			r++
 		}
 		r++
 	}
-	group("الأداء حسب الموقع", S.BySite)
-	group("الأداء حسب المقاول", S.ByContractor)
-	group("الأداء حسب المنظومة", S.BySystem)
-	group("الأداء حسب مجموعة الأصل", S.ByAssetGroup)
+	group(i18n.T(l, "الأداء حسب الموقع"), S.BySite)
+	group(i18n.T(l, "الأداء حسب المقاول"), S.ByContractor)
+	group(i18n.T(l, "الأداء حسب المنظومة"), S.BySystem)
+	group(i18n.T(l, "الأداء حسب مجموعة الأصل"), S.ByAssetGroup)
 
-	title("نسبة المطابقة لكل معيار")
-	setRow(f, sh, r, []any{"المعيار", "عدد التقييمات", "نسبة المطابقة %", "غير مطابق", "حرج"}, st.head)
+	title(i18n.T(l, "نسبة المطابقة لكل معيار"))
+	setRow(f, sh, r, []any{i18n.T(l, "المعيار"), i18n.T(l, "عدد التقييمات"), i18n.T(l, "نسبة المطابقة %"), i18n.T(l, "غير مطابق"), i18n.T(l, "حرج")}, st.head)
 	r++
 	for _, c := range S.Criteria {
 		setRow(f, sh, r, []any{c.Code + " - " + c.Label}, st.text)
 		crit := ""
 		if c.Critical {
-			crit = "نعم"
+			crit = i18n.T(l, "نعم")
 		}
 		setRow2(f, sh, r, 2, []any{c.N, domain.Fmt1(c.Compliance), c.Fails, crit}, st.num)
 		style := st.pass
@@ -247,7 +248,7 @@ func summarySheet(f *excelize.File, st styles, scope string, S domain.Summary, i
 		r++
 	}
 	r++
-	title("الأنماط والمخاطر والتوصيات")
+	title(i18n.T(l, "الأنماط والمخاطر والتوصيات"))
 	for _, in := range insights {
 		a := axis(1, r)
 		_ = f.MergeCell(sh, a, axis(5, r))
@@ -267,15 +268,15 @@ func setRow2(f *excelize.File, sh string, row, startCol int, values []any, style
 	}
 }
 
-func inspectionsSheet(f *excelize.File, st styles, rows []InspectionExport, crits []CriterionColumn) error {
-	const sh = "الفحوصات"
+func inspectionsSheet(l i18n.Lang, f *excelize.File, st styles, rows []InspectionExport, crits []CriterionColumn) error {
+	sh := i18n.T(l, "الفحوصات")
 	if _, err := f.NewSheet(sh); err != nil {
 		return err
 	}
-	rtl := true
+	rtl := l != i18n.EN
 	_ = f.SetSheetView(sh, 0, &excelize.ViewOptions{RightToLeft: &rtl})
-	headers := []string{"رقم أمر العمل", "النوع", "الموقع", "الموقع التفصيلي", "المنظومة", "مجموعة الأصل", "الأصل / المعدة", "المقاول", "الفني",
-		"المرحلة", "المحاولة", "تاريخ الفحص", "التاريخ الهجري", "المدقق", "قائمة الفحص", "النتيجة %", "التقدير", "الحالة", "بند حرج", "التأخير (يوم)", "ملاحظات"}
+	headers := []string{i18n.T(l, "رقم أمر العمل"), i18n.T(l, "النوع"), i18n.T(l, "الموقع"), i18n.T(l, "الموقع التفصيلي"), i18n.T(l, "المنظومة"), i18n.T(l, "مجموعة الأصل"), i18n.T(l, "الأصل / المعدة"), i18n.T(l, "المقاول"), i18n.T(l, "الفني"),
+		i18n.T(l, "المرحلة"), i18n.T(l, "المحاولة"), i18n.T(l, "تاريخ الفحص"), i18n.T(l, "التاريخ الهجري"), i18n.T(l, "المدقق"), i18n.T(l, "قائمة الفحص"), i18n.T(l, "النتيجة %"), i18n.T(l, "التقدير"), i18n.T(l, "الحالة"), i18n.T(l, "بند حرج"), i18n.T(l, "التأخير (يوم)"), i18n.T(l, "ملاحظات")}
 	base := len(headers)
 	for _, c := range crits {
 		headers = append(headers, c.Code+" - "+c.Label)
@@ -295,22 +296,22 @@ func inspectionsSheet(f *excelize.File, st styles, rows []InspectionExport, crit
 
 	for i, r := range rows {
 		row := i + 2
-		result := "مطابق"
+		result := i18n.T(l, "مطابق")
 		if !r.Passed {
-			result = "غير مطابق"
+			result = i18n.T(l, "غير مطابق")
 		}
 		critical := ""
 		if r.CriticalFailed {
-			critical = "نعم"
+			critical = i18n.T(l, "نعم")
 		}
 		var delay any = ""
 		if r.DelayDays != nil {
 			delay = *r.DelayDays
 		}
-		vals := []any{r.Ref, domain.Label(domain.WOTypeLabels, r.Type), r.Site, r.Location, r.System, r.AssetGroup, r.Asset, r.Contractor, r.Technician,
-			domain.Stage(r.Stage).Label(), r.Attempt, r.Date, dates.Hijri(r.Date), r.Inspector, r.Template, r.Score, domain.GradeFor(r.Score), result, critical, delay, r.Notes}
+		vals := []any{r.Ref, i18n.T(l, domain.Label(domain.WOTypeLabels, r.Type)), r.Site, r.Location, r.System, r.AssetGroup, r.Asset, r.Contractor, r.Technician,
+			i18n.T(l, domain.Stage(r.Stage).Label()), r.Attempt, r.Date, dates.HijriIn(l, r.Date), r.Inspector, r.Template, r.Score, i18n.T(l, domain.GradeFor(r.Score)), result, critical, delay, r.Notes}
 		for _, c := range crits {
-			vals = append(vals, r.Ratings[c.Code].Label())
+			vals = append(vals, i18n.T(l, r.Ratings[c.Code].Label()))
 		}
 		for ci, v := range vals {
 			a := axis(ci+1, row)
@@ -333,22 +334,22 @@ func inspectionsSheet(f *excelize.File, st styles, rows []InspectionExport, crit
 	return f.AutoFilter(sh, "A1:"+axis(len(headers), max(len(rows)+1, 2)), nil)
 }
 
-func findingsSheet(f *excelize.File, st styles, items []FindingExport) error {
-	const sh = "الملاحظات"
+func findingsSheet(l i18n.Lang, f *excelize.File, st styles, items []FindingExport) error {
+	sh := i18n.T(l, "الملاحظات")
 	if _, err := f.NewSheet(sh); err != nil {
 		return err
 	}
-	rtl := true
+	rtl := l != i18n.EN
 	_ = f.SetSheetView(sh, 0, &excelize.ViewOptions{RightToLeft: &rtl})
-	headers := []string{"رقم", "أمر العمل", "الموقع", "المقاول", "المعيار", "الأهمية", "الحالة", "الوصف", "الإجراء التصحيحي", "المسؤول", "الإغلاق المستهدف", "الإغلاق المستهدف (هجري)", "تاريخ التسجيل", "تاريخ الإغلاق", "ملاحظة الإغلاق"}
+	headers := []string{i18n.T(l, "رقم"), i18n.T(l, "أمر العمل"), i18n.T(l, "الموقع"), i18n.T(l, "المقاول"), i18n.T(l, "المعيار"), i18n.T(l, "الأهمية"), i18n.T(l, "الحالة"), i18n.T(l, "الوصف"), i18n.T(l, "الإجراء التصحيحي"), i18n.T(l, "المسؤول"), i18n.T(l, "الإغلاق المستهدف"), i18n.T(l, "الإغلاق المستهدف (هجري)"), i18n.T(l, "تاريخ التسجيل"), i18n.T(l, "تاريخ الإغلاق"), i18n.T(l, "ملاحظة الإغلاق")}
 	setRow(f, sh, 1, toAny(headers), st.head)
 	_ = f.SetColWidth(sh, "A", "O", 15)
 	_ = f.SetColWidth(sh, "H", "I", 40)
 	for i, it := range items {
 		row := i + 2
-		vals := []any{it.ID, it.Ref, it.Site, it.Contractor, it.Criterion, domain.Label(domain.SeverityLabels, it.Severity),
-			domain.Label(domain.FindingStatusLabels, it.Status), it.Description, it.CorrectiveAction, it.Owner,
-			datePtr(it.DueDate), hijriPtr(it.DueDate), dayOf(it.CreatedAt.In(dates.Riyadh)), datePtr(it.ClosedAt), it.ClosureNote}
+		vals := []any{it.ID, it.Ref, it.Site, it.Contractor, it.Criterion, i18n.T(l, domain.Label(domain.SeverityLabels, it.Severity)),
+			i18n.T(l, domain.Label(domain.FindingStatusLabels, it.Status)), it.Description, it.CorrectiveAction, it.Owner,
+			datePtr(it.DueDate), hijriPtr(l, it.DueDate), dayOf(it.CreatedAt.In(dates.Riyadh)), datePtr(it.ClosedAt), it.ClosureNote}
 		for ci, v := range vals {
 			a := axis(ci+1, row)
 			_ = f.SetCellValue(sh, a, v)
@@ -378,11 +379,11 @@ func dayOf(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-func hijriPtr(t *time.Time) any {
+func hijriPtr(l i18n.Lang, t *time.Time) any {
 	if t == nil {
 		return ""
 	}
-	return dates.Hijri(*t)
+	return dates.HijriIn(l, *t)
 }
 
 func toAny(ss []string) []any {
@@ -428,12 +429,12 @@ func SortCriteria(cs []CriterionColumn) {
 
 // criteriaSheet lists the active checklists and the scoring rules, so the
 // export explains how every score was computed.
-func criteriaSheet(f *excelize.File, st styles, lists []ChecklistExport) error {
-	const sh = "المعايير"
+func criteriaSheet(l i18n.Lang, f *excelize.File, st styles, lists []ChecklistExport) error {
+	sh := i18n.T(l, "المعايير")
 	if _, err := f.NewSheet(sh); err != nil {
 		return err
 	}
-	rtl := true
+	rtl := l != i18n.EN
 	_ = f.SetSheetView(sh, 0, &excelize.ViewOptions{RightToLeft: &rtl, ShowGridLines: boolPtr(false)})
 	_ = f.SetColWidth(sh, "A", "A", 8)
 	_ = f.SetColWidth(sh, "B", "B", 34)
@@ -442,40 +443,40 @@ func criteriaSheet(f *excelize.File, st styles, lists []ChecklistExport) error {
 
 	r := 1
 	for _, cl := range lists {
-		_ = f.SetCellValue(sh, axis(1, r), fmt.Sprintf("%s — %s (الإصدار %d)", domain.Stage(cl.Stage).Label(), cl.Name, cl.Version))
+		_ = f.SetCellValue(sh, axis(1, r), i18n.Tf(l, "%s — %s (الإصدار %d)", i18n.T(l, domain.Stage(cl.Stage).Label()), cl.Name, cl.Version))
 		_ = f.SetCellStyle(sh, axis(1, r), axis(5, r), st.sub)
 		r++
-		setRow(f, sh, r, []any{"الرمز", "البند", "الوصف / طريقة التحقق", "الوزن", "حرج"}, st.head)
+		setRow(f, sh, r, []any{i18n.T(l, "الرمز"), i18n.T(l, "البند"), i18n.T(l, "الوصف / طريقة التحقق"), i18n.T(l, "الوزن"), i18n.T(l, "حرج")}, st.head)
 		r++
 		total := 0
 		for _, c := range cl.Criteria {
 			crit := ""
 			if c.Critical {
-				crit = "نعم"
+				crit = i18n.T(l, "نعم")
 			}
 			setRow(f, sh, r, []any{c.Code, c.Label, c.Description}, st.wrap)
 			setRow2(f, sh, r, 4, []any{c.Weight, crit}, st.num)
 			total += c.Weight
 			r++
 		}
-		setRow(f, sh, r, []any{"", "المجموع"}, st.bold)
+		setRow(f, sh, r, []any{"", i18n.T(l, "المجموع")}, st.bold)
 		setRow2(f, sh, r, 4, []any{total}, st.bold)
 		r += 2
 	}
 
-	_ = f.SetCellValue(sh, axis(1, r), "طريقة الحساب")
+	_ = f.SetCellValue(sh, axis(1, r), i18n.T(l, "طريقة الحساب"))
 	_ = f.SetCellStyle(sh, axis(1, r), axis(5, r), st.sub)
 	r++
 	rules := [][]any{
-		{"", "النتيجة", "مجموع (الوزن × معامل التقييم) ÷ مجموع أوزان البنود المنطبقة × 100"},
-		{"", "مطابق", "100% من وزن البند"},
-		{"", "مطابق جزئياً", "50% من وزن البند"},
-		{"", "غير مطابق", "0%"},
-		{"", "لا ينطبق", "يُستبعد من الحساب"},
-		{"", "حد المطابقة", fmt.Sprintf("%s%% — وأي بند حرج غير مطابق يُسقط الفحص مهما كانت النتيجة", Fmt1(domain.PassThreshold))},
+		{"", i18n.T(l, "النتيجة"), i18n.T(l, "مجموع (الوزن × معامل التقييم) ÷ مجموع أوزان البنود المنطبقة × 100")},
+		{"", i18n.T(l, "مطابق"), i18n.T(l, "100% من وزن البند")},
+		{"", i18n.T(l, "مطابق جزئياً"), i18n.T(l, "50% من وزن البند")},
+		{"", i18n.T(l, "غير مطابق"), "0%"},
+		{"", i18n.T(l, "لا ينطبق"), i18n.T(l, "يُستبعد من الحساب")},
+		{"", i18n.T(l, "حد المطابقة"), i18n.Tf(l, "%s%% — وأي بند حرج غير مطابق يُسقط الفحص مهما كانت النتيجة", Fmt1(domain.PassThreshold))},
 	}
 	for _, g := range domain.Grades {
-		rules = append(rules, []any{"", "التقدير: " + g.Label, fmt.Sprintf("من %s%%", Fmt1(g.Min))})
+		rules = append(rules, []any{"", i18n.T(l, "التقدير: ") + g.Label, i18n.Tf(l, "من %s%%", Fmt1(g.Min))})
 	}
 	for _, row := range rules {
 		setRow(f, sh, r, row, st.text)

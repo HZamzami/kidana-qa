@@ -10,6 +10,8 @@ import (
 	"time"
 
 	hijri "github.com/hablullah/go-hijri"
+
+	"github.com/HZamzami/kidana-quality/internal/i18n"
 )
 
 // HijriMonths are the Umm al-Qura month names.
@@ -69,6 +71,43 @@ func HijriLong(t time.Time) string {
 // Both formats as "22/11/2026 — 13/06/1448 هـ".
 func Both(t time.Time) string {
 	if h := Hijri(t); h != "" {
+		return DMY(t) + " — " + h
+	}
+	return DMY(t)
+}
+
+// HijriMonthsEn are the Umm al-Qura month names in English.
+var HijriMonthsEn = [12]string{
+	"Muharram", "Safar", "Rabi al-Awwal", "Rabi al-Thani", "Jumada al-Ula", "Jumada al-Akhirah",
+	"Rajab", "Shaban", "Ramadan", "Shawwal", "Dhu al-Qadah", "Dhu al-Hijjah",
+}
+
+// HijriIn is Hijri in the given language: "13/06/1448 AH" in English.
+func HijriIn(l i18n.Lang, t time.Time) string {
+	if l != i18n.EN {
+		return Hijri(t)
+	}
+	if h := HijriDigits(t); h != "" {
+		return h + " AH"
+	}
+	return ""
+}
+
+// HijriLongIn is HijriLong in the given language: "13 Jumada al-Akhirah 1448 AH".
+func HijriLongIn(l i18n.Lang, t time.Time) string {
+	if l != i18n.EN {
+		return HijriLong(t)
+	}
+	d, m, y, ok := HijriParts(t)
+	if !ok || m < 1 || m > 12 {
+		return ""
+	}
+	return fmt.Sprintf("%d %s %d AH", d, HijriMonthsEn[m-1], y)
+}
+
+// BothIn is Both in the given language.
+func BothIn(l i18n.Lang, t time.Time) string {
+	if h := HijriIn(l, t); h != "" {
 		return DMY(t) + " — " + h
 	}
 	return DMY(t)

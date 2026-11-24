@@ -3,6 +3,7 @@ package views
 import (
 	"time"
 
+	"github.com/HZamzami/kidana-quality/internal/appctx"
 	"github.com/HZamzami/kidana-quality/internal/dates"
 	"github.com/HZamzami/kidana-quality/internal/domain"
 )
@@ -11,31 +12,31 @@ import (
 // Gregorian is shown as dd/mm/yyyy; the Umm al-Qura Hijri date is shown with it, read-only.
 
 // HijriText renders "13/06/1448 هـ" with only the digits isolated LTR.
-templ HijriText(t time.Time) {
-	if h := dates.HijriDigits(t); h != "" {
-		<span class="whitespace-nowrap" title={ dates.HijriLong(t) }><span class="num">{ h }</span> هـ</span>
+templ HijriText(tm time.Time) {
+	if h := dates.HijriDigits(tm); h != "" {
+		<span class="whitespace-nowrap" title={ dates.HijriLongIn(appctx.Lang(ctx), tm) }><span class="num">{ h }</span> { t(ctx, "هـ") }</span>
 	}
 }
 
 // DateText stacks the Gregorian date over the Hijri date (detail facts, tables).
-templ DateText(t *time.Time) {
-	if t == nil {
+templ DateText(tm *time.Time) {
+	if tm == nil {
 		<span class="text-ink-60">—</span>
 	} else {
-		<span class="num">{ dmy(*t) }</span>
+		<span class="num">{ dmy(*tm) }</span>
 		<span class="block text-[11px] text-ink-60 font-normal">
-			@HijriText(*t)
+			@HijriText(*tm)
 		</span>
 	}
 }
 
 // DateInline shows both on one line: 22/11/2026 · 13/06/1448 هـ
-templ DateInline(t time.Time) {
+templ DateInline(tm time.Time) {
 	<span class="whitespace-nowrap">
-		<span class="num">{ dmy(t) }</span>
+		<span class="num">{ dmy(tm) }</span>
 		<span class="text-ink-60 ms-1">
 			{ "· " }
-			@HijriText(t)
+			@HijriText(tm)
 		</span>
 	</span>
 }
@@ -43,15 +44,15 @@ templ DateInline(t time.Time) {
 // ---------------------------------------------------------------- status pills
 templ StagePill(stage string) {
 	if stage == "during" {
-		<span class="pill bg-sky-30 text-ink" title="فحص أثناء التنفيذ">أثناء التنفيذ</span>
+		<span class="pill bg-sky-30 text-ink" title={ t(ctx, "فحص أثناء التنفيذ") }>{ t(ctx, "أثناء التنفيذ") }</span>
 	} else {
-		<span class="pill bg-gold-20 text-ink" title="فحص بعد التنفيذ">بعد التنفيذ</span>
+		<span class="pill bg-gold-20 text-ink" title={ t(ctx, "فحص بعد التنفيذ") }>{ t(ctx, "بعد التنفيذ") }</span>
 	}
 }
 
-templ TypePill(t string) {
-	<span class={ "pill", templ.KV("bg-green-10 text-green", t == "PM"), templ.KV("bg-ink-10 text-ink", t != "PM") }>
-		{ domain.Label(domain.WOTypeLabels, t) }
+templ TypePill(typ string) {
+	<span class={ "pill", templ.KV("bg-green-10 text-green", typ == "PM"), templ.KV("bg-ink-10 text-ink", typ != "PM") }>
+		{ t(ctx, domain.Label(domain.WOTypeLabels, typ)) }
 	</span>
 }
 
@@ -63,7 +64,7 @@ templ PriorityPill(p string) {
 			templ.KV("bg-gold-20 text-ink", p == "high"),
 			templ.KV("bg-fail-10 text-fail", p == "emergency") }
 	>
-		{ domain.Label(domain.PriorityLabels, p) }
+		{ t(ctx, domain.Label(domain.PriorityLabels, p)) }
 	</span>
 }
 
@@ -76,7 +77,7 @@ templ WOStatusPill(status string) {
 			templ.KV("bg-green-20 text-green", status == "accepted"),
 			templ.KV("bg-ink-5 text-ink-60 line-through", status == "cancelled") }
 	>
-		{ domain.WOStatus(status).Label() }
+		{ t(ctx, domain.WOStatus(status).Label()) }
 	</span>
 }
 
@@ -87,30 +88,30 @@ templ FindingStatusPill(status string, overdue bool) {
 			templ.KV("bg-gold-20 text-ink", status == "in_progress"),
 			templ.KV("bg-green-10 text-green", status == "closed") }
 	>
-		{ domain.Label(domain.FindingStatusLabels, status) }
+		{ t(ctx, domain.Label(domain.FindingStatusLabels, status)) }
 	</span>
 	if overdue {
-		<span class="pill bg-fail text-white">متأخرة</span>
+		<span class="pill bg-fail text-white">{ t(ctx, "متأخرة") }</span>
 	}
 }
 
 templ SeverityPill(sev string) {
 	if sev == "critical" {
-		<span class="pill border border-fail text-fail">حرجة</span>
+		<span class="pill border border-fail text-fail">{ t(ctx, "حرجة") }</span>
 	}
 }
 
 // ResultPill shows score + pass/fail for a submitted inspection.
 templ ResultPill(score *float64, passed *bool, critical bool) {
 	if score == nil || passed == nil {
-		<span class="pill bg-ink-5 text-ink-60">مسودة</span>
+		<span class="pill bg-ink-5 text-ink-60">{ t(ctx, "مسودة") }</span>
 	} else if *passed {
-		<span class="pill bg-green-10 text-green"><span class="num">{ domain.Pct(score) }</span> · مطابق</span>
+		<span class="pill bg-green-10 text-green"><span class="num">{ domain.Pct(score) }</span> { t(ctx, "· مطابق") }</span>
 	} else {
 		<span class="pill bg-fail-10 text-fail">
-			<span class="num">{ domain.Pct(score) }</span> · غير مطابق
+			<span class="num">{ domain.Pct(score) }</span> { t(ctx, "· غير مطابق") }
 			if critical {
-				· بند حرج
+				{ t(ctx, "· بند حرج") }
 			}
 		</span>
 	}
@@ -133,7 +134,7 @@ templ ScoreBar(v float64, passed bool) {
 // ---------------------------------------------------------------- form fields
 templ FieldError(errs map[string]string, name string) {
 	if msg, ok := errs[name]; ok {
-		<p class="field-error" id={ name + "-error" }>{ msg }</p>
+		<p class="field-error" id={ name + "-error" }>{ t(ctx, msg) }</p>
 	}
 }
 
@@ -210,7 +211,7 @@ templ SelectField(name, label, value string, opts []Option, placeholder string, 
 				<option value="">{ placeholder }</option>
 			}
 			for _, o := range opts {
-				<option value={ o.Value } selected?={ o.Value == value }>{ o.Label }</option>
+				<option value={ o.Value } selected?={ o.Value == value }>{ t(ctx, o.Label) }</option>
 			}
 		</select>
 		@FieldError(errs, name)
@@ -222,9 +223,9 @@ templ FilterSelect(name, label, value string, opts []Option) {
 	<div class="min-w-0">
 		<label class="label" for={ "flt_" + name }>{ label }</label>
 		<select class="input h-9" id={ "flt_" + name } name={ name }>
-			<option value="">الكل</option>
+			<option value="">{ t(ctx, "الكل") }</option>
 			for _, o := range opts {
-				<option value={ o.Value } selected?={ o.Value == value }>{ o.Label }</option>
+				<option value={ o.Value } selected?={ o.Value == value }>{ t(ctx, o.Label) }</option>
 			}
 		</select>
 	</div>
@@ -265,6 +266,6 @@ templ Fact(label string) {
 templ dateEchoLine(iso string) {
 	<p class="mt-1 text-[11px] text-ink-60 min-h-4">
 		<span class="num" x-text="g">{ echoG(iso) }</span>
-		<span x-show="h" class="whitespace-nowrap">— <span class="num" x-text="h">{ echoH(iso) }</span> هـ</span>
+		<span x-show="h" class="whitespace-nowrap">— <span class="num" x-text="h">{ echoH(iso) }</span> { t(ctx, "هـ") }</span>
 	</p>
 }

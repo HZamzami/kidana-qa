@@ -23,7 +23,7 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, name, role, password_hash)
 VALUES ($1, $2, $3, $4)
-RETURNING id, email, name, role, password_hash, active, created_at, updated_at
+RETURNING id, email, name, role, password_hash, active, created_at, updated_at, lang
 `
 
 type CreateUserParams struct {
@@ -50,12 +50,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Active,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Lang,
 	)
 	return i, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, role, password_hash, active, created_at, updated_at FROM users WHERE id = $1
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
@@ -70,12 +71,13 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.Active,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Lang,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, name, role, password_hash, active, created_at, updated_at FROM users WHERE email = $1
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -90,12 +92,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Active,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Lang,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, role, password_hash, active, created_at, updated_at FROM users ORDER BY active DESC, name
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang FROM users ORDER BY active DESC, name
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -116,6 +119,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Active,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Lang,
 		); err != nil {
 			return nil, err
 		}
@@ -127,10 +131,24 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const setUserLang = `-- name: SetUserLang :exec
+UPDATE users SET lang = $2 WHERE id = $1
+`
+
+type SetUserLangParams struct {
+	ID   int64
+	Lang string
+}
+
+func (q *Queries) SetUserLang(ctx context.Context, arg SetUserLangParams) error {
+	_, err := q.db.Exec(ctx, setUserLang, arg.ID, arg.Lang)
+	return err
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET email = $2, name = $3, role = $4, active = $5, updated_at = now()
 WHERE id = $1
-RETURNING id, email, name, role, password_hash, active, created_at, updated_at
+RETURNING id, email, name, role, password_hash, active, created_at, updated_at, lang
 `
 
 type UpdateUserParams struct {
@@ -159,6 +177,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.Active,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Lang,
 	)
 	return i, err
 }
