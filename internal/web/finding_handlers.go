@@ -437,7 +437,7 @@ func (s *Server) saveFindingPhoto(ctx context.Context, fh *multipart.FileHeader,
 	if len(name) > 200 {
 		name = name[:200]
 	}
-	a, err := s.q.CreateAttachment(ctx, gen.CreateAttachmentParams{
+	a, err := s.q.CreateAttachment(ctx, gen.CreateAttachmentParams{Kind: "photo",
 		FindingID: &findingID, StorageKey: key, Filename: name, ContentType: ctype, SizeBytes: size,
 		UploadedBy: currentUserID(ctx), Purpose: purpose,
 	})

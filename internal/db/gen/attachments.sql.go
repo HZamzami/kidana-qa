@@ -7,12 +7,15 @@ package gen
 
 import (
 	"context"
+	"time"
 )
 
 const createAttachment = `-- name: CreateAttachment :one
-INSERT INTO attachments (inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, purpose)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose
+INSERT INTO attachments (inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by,
+                         purpose, kind, signer_name, signer_role, lat, lng, accuracy, captured_at, annotated_of)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+        $13, $14, $15, $16, $17)
+RETURNING id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose, kind, signer_name, signer_role, lat, lng, accuracy, captured_at, annotated_of
 `
 
 type CreateAttachmentParams struct {
@@ -25,6 +28,14 @@ type CreateAttachmentParams struct {
 	SizeBytes    int64
 	UploadedBy   *int64
 	Purpose      string
+	Kind         string
+	SignerName   string
+	SignerRole   string
+	Lat          *float64
+	Lng          *float64
+	Accuracy     *float32
+	CapturedAt   *time.Time
+	AnnotatedOf  *int64
 }
 
 func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error) {
@@ -38,6 +49,14 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 		arg.SizeBytes,
 		arg.UploadedBy,
 		arg.Purpose,
+		arg.Kind,
+		arg.SignerName,
+		arg.SignerRole,
+		arg.Lat,
+		arg.Lng,
+		arg.Accuracy,
+		arg.CapturedAt,
+		arg.AnnotatedOf,
 	)
 	var i Attachment
 	err := row.Scan(
@@ -52,6 +71,14 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 		&i.UploadedBy,
 		&i.CreatedAt,
 		&i.Purpose,
+		&i.Kind,
+		&i.SignerName,
+		&i.SignerRole,
+		&i.Lat,
+		&i.Lng,
+		&i.Accuracy,
+		&i.CapturedAt,
+		&i.AnnotatedOf,
 	)
 	return i, err
 }
@@ -66,7 +93,7 @@ func (q *Queries) DeleteAttachment(ctx context.Context, id int64) error {
 }
 
 const getAttachment = `-- name: GetAttachment :one
-SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose FROM attachments WHERE id = $1
+SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose, kind, signer_name, signer_role, lat, lng, accuracy, captured_at, annotated_of FROM attachments WHERE id = $1
 `
 
 func (q *Queries) GetAttachment(ctx context.Context, id int64) (Attachment, error) {
@@ -84,12 +111,20 @@ func (q *Queries) GetAttachment(ctx context.Context, id int64) (Attachment, erro
 		&i.UploadedBy,
 		&i.CreatedAt,
 		&i.Purpose,
+		&i.Kind,
+		&i.SignerName,
+		&i.SignerRole,
+		&i.Lat,
+		&i.Lng,
+		&i.Accuracy,
+		&i.CapturedAt,
+		&i.AnnotatedOf,
 	)
 	return i, err
 }
 
 const listAttachmentsByFinding = `-- name: ListAttachmentsByFinding :many
-SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose FROM attachments WHERE finding_id = $1 ORDER BY created_at
+SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose, kind, signer_name, signer_role, lat, lng, accuracy, captured_at, annotated_of FROM attachments WHERE finding_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListAttachmentsByFinding(ctx context.Context, findingID *int64) ([]Attachment, error) {
@@ -113,6 +148,14 @@ func (q *Queries) ListAttachmentsByFinding(ctx context.Context, findingID *int64
 			&i.UploadedBy,
 			&i.CreatedAt,
 			&i.Purpose,
+			&i.Kind,
+			&i.SignerName,
+			&i.SignerRole,
+			&i.Lat,
+			&i.Lng,
+			&i.Accuracy,
+			&i.CapturedAt,
+			&i.AnnotatedOf,
 		); err != nil {
 			return nil, err
 		}
@@ -125,7 +168,7 @@ func (q *Queries) ListAttachmentsByFinding(ctx context.Context, findingID *int64
 }
 
 const listAttachmentsByInspection = `-- name: ListAttachmentsByInspection :many
-SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose FROM attachments WHERE inspection_id = $1 ORDER BY created_at
+SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose, kind, signer_name, signer_role, lat, lng, accuracy, captured_at, annotated_of FROM attachments WHERE inspection_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListAttachmentsByInspection(ctx context.Context, inspectionID *int64) ([]Attachment, error) {
@@ -149,6 +192,14 @@ func (q *Queries) ListAttachmentsByInspection(ctx context.Context, inspectionID 
 			&i.UploadedBy,
 			&i.CreatedAt,
 			&i.Purpose,
+			&i.Kind,
+			&i.SignerName,
+			&i.SignerRole,
+			&i.Lat,
+			&i.Lng,
+			&i.Accuracy,
+			&i.CapturedAt,
+			&i.AnnotatedOf,
 		); err != nil {
 			return nil, err
 		}
@@ -161,7 +212,7 @@ func (q *Queries) ListAttachmentsByInspection(ctx context.Context, inspectionID 
 }
 
 const listAttachmentsByWorkOrder = `-- name: ListAttachmentsByWorkOrder :many
-SELECT a.id, a.inspection_id, a.criterion_id, a.finding_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.uploaded_by, a.created_at, a.purpose FROM attachments a
+SELECT a.id, a.inspection_id, a.criterion_id, a.finding_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.uploaded_by, a.created_at, a.purpose, a.kind, a.signer_name, a.signer_role, a.lat, a.lng, a.accuracy, a.captured_at, a.annotated_of FROM attachments a
 LEFT JOIN inspections i ON i.id = a.inspection_id
 LEFT JOIN findings f ON f.id = a.finding_id
 WHERE i.work_order_id = $1 OR f.work_order_id = $1
@@ -188,6 +239,14 @@ func (q *Queries) ListAttachmentsByWorkOrder(ctx context.Context, workOrderID in
 			&i.UploadedBy,
 			&i.CreatedAt,
 			&i.Purpose,
+			&i.Kind,
+			&i.SignerName,
+			&i.SignerRole,
+			&i.Lat,
+			&i.Lng,
+			&i.Accuracy,
+			&i.CapturedAt,
+			&i.AnnotatedOf,
 		); err != nil {
 			return nil, err
 		}

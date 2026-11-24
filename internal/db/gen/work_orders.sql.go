@@ -58,7 +58,7 @@ const createWorkOrder = `-- name: CreateWorkOrder :one
 INSERT INTO work_orders (ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id,
                          technician, priority, description, planned_date, actual_date, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-RETURNING id, ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id, technician, priority, description, planned_date, actual_date, status, created_by, created_at, updated_at
+RETURNING id, ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id, technician, priority, description, planned_date, actual_date, status, created_by, created_at, updated_at, asset_id
 `
 
 type CreateWorkOrderParams struct {
@@ -115,6 +115,7 @@ func (q *Queries) CreateWorkOrder(ctx context.Context, arg CreateWorkOrderParams
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AssetID,
 	)
 	return i, err
 }
@@ -130,7 +131,7 @@ func (q *Queries) DeleteWorkOrder(ctx context.Context, id int64) error {
 }
 
 const getWorkOrder = `-- name: GetWorkOrder :one
-SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en,
+SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, w.asset_id, s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en,
        COALESCE(c.name, '')::text AS contractor_name, COALESCE(c.name_en, '')::text AS contractor_name_en,
        COALESCE(u.name, '')::text AS created_by_name
 FROM work_orders w
@@ -161,6 +162,7 @@ type GetWorkOrderRow struct {
 	CreatedBy        *int64
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+	AssetID          *int64
 	SiteName         string
 	SiteNameEn       string
 	SystemName       string
@@ -194,6 +196,7 @@ func (q *Queries) GetWorkOrder(ctx context.Context, id int64) (GetWorkOrderRow, 
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AssetID,
 		&i.SiteName,
 		&i.SiteNameEn,
 		&i.SystemName,
@@ -208,7 +211,7 @@ func (q *Queries) GetWorkOrder(ctx context.Context, id int64) (GetWorkOrderRow, 
 }
 
 const getWorkOrderByRef = `-- name: GetWorkOrderByRef :one
-SELECT id, ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id, technician, priority, description, planned_date, actual_date, status, created_by, created_at, updated_at FROM work_orders WHERE lower(ref) = lower($1)
+SELECT id, ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id, technician, priority, description, planned_date, actual_date, status, created_by, created_at, updated_at, asset_id FROM work_orders WHERE lower(ref) = lower($1)
 `
 
 func (q *Queries) GetWorkOrderByRef(ctx context.Context, lower string) (WorkOrder, error) {
@@ -233,6 +236,7 @@ func (q *Queries) GetWorkOrderByRef(ctx context.Context, lower string) (WorkOrde
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AssetID,
 	)
 	return i, err
 }
@@ -392,7 +396,7 @@ func (q *Queries) ListWorkOrders(ctx context.Context, arg ListWorkOrdersParams) 
 }
 
 const listWorkOrdersForPrint = `-- name: ListWorkOrdersForPrint :many
-SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en,
+SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, w.asset_id, s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en,
        COALESCE(c.name, '')::text AS contractor_name, COALESCE(c.name_en, '')::text AS contractor_name_en
 FROM work_orders w
 JOIN sites s ON s.id = w.site_id
@@ -448,6 +452,7 @@ type ListWorkOrdersForPrintRow struct {
 	CreatedBy        *int64
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+	AssetID          *int64
 	SiteName         string
 	SiteNameEn       string
 	SystemName       string
@@ -499,6 +504,7 @@ func (q *Queries) ListWorkOrdersForPrint(ctx context.Context, arg ListWorkOrders
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AssetID,
 			&i.SiteName,
 			&i.SiteNameEn,
 			&i.SystemName,
@@ -538,7 +544,7 @@ UPDATE work_orders SET
     contractor_id = $9, technician = $10, priority = $11, description = $12,
     planned_date = $13, actual_date = $14, status = $15, updated_at = now()
 WHERE id = $1
-RETURNING id, ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id, technician, priority, description, planned_date, actual_date, status, created_by, created_at, updated_at
+RETURNING id, ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id, technician, priority, description, planned_date, actual_date, status, created_by, created_at, updated_at, asset_id
 `
 
 type UpdateWorkOrderParams struct {
@@ -597,6 +603,7 @@ func (q *Queries) UpdateWorkOrder(ctx context.Context, arg UpdateWorkOrderParams
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AssetID,
 	)
 	return i, err
 }

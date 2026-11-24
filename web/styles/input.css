@@ -215,6 +215,19 @@
   font-size: 8.5pt;
   line-height: 1.5;
 }
+/* QR label sheet: 3 × 8 labels per A4 page. */
+.labels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 33mm;
+  gap: 2mm;
+  align-content: start;
+}
+.label-cell {
+  @apply flex items-center gap-2 rounded border border-ink-10 p-1.5 overflow-hidden;
+  break-inside: avoid;
+}
+
 /* Lists print across: an A4 landscape sheet. */
 .sheet-landscape {
   width: 297mm;

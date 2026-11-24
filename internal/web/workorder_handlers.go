@@ -11,6 +11,7 @@ import (
 
 	"github.com/HZamzami/kidana-quality/internal/db"
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/domain"
 	"github.com/HZamzami/kidana-quality/internal/views"
 )
 
@@ -204,6 +205,9 @@ func (s *Server) workOrderCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(ctx, s.q, "work_order", wo.ID, "created", map[string]any{"ref": wo.Ref})
+	if err := s.linkAsset(ctx, s.q, wo); err != nil {
+		s.log.Warn("link asset", "work_order", wo.ID, "err", err)
+	}
 	if err := s.sampleNewWorkOrder(ctx, s.q, wo); err != nil {
 		s.log.Warn("sampling", "work_order", wo.ID, "err", err)
 	}
@@ -312,6 +316,10 @@ func (s *Server) workOrderUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	err = db.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
+		before, err := q.GetWorkOrder(ctx, id)
+		if err != nil {
+			return err
+		}
 		wo, err := q.UpdateWorkOrder(ctx, gen.UpdateWorkOrderParams{
 			ID: id, Ref: in.Ref, Type: in.Type, SiteID: in.SiteID, Location: in.Location, SystemID: in.SystemID, AssetGroupID: in.AssetGroupID,
 			Asset: in.Asset, ContractorID: in.ContractorID, Technician: in.Technician, Priority: in.Priority,
@@ -320,7 +328,10 @@ func (s *Server) workOrderUpdate(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		s.audit(ctx, q, "work_order", wo.ID, "updated", nil)
+		if err := s.linkAsset(ctx, q, wo); err != nil {
+			return err
+		}
+		s.audit(ctx, q, "work_order", wo.ID, "updated", woDiff(before, wo))
 		// A manual status change may not contradict the acceptance rule.
 		return s.refreshWorkOrderStatus(ctx, q, wo.ID)
 	})
@@ -385,4 +396,25 @@ func (s *Server) workOrderDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	s.flash(ctx, appctx.T(ctx, "تم حذف أمر العمل ")+wo.Ref, "")
 	http.Redirect(w, r, "/work-orders", http.StatusSeeOther)
+}
+
+// woDiff lists the fields an edit changed, for the change history.
+func woDiff(b gen.GetWorkOrderRow, a gen.WorkOrder) map[string]any {
+	idp := func(p *int64) string {
+		if p == nil {
+			return ""
+		}
+		return idStr(*p)
+	}
+	return domain.Diff(map[string]string{
+		"ref": b.Ref, "type": string(b.Type), "site": idStr(b.SiteID), "location": b.Location, "system": idStr(b.SystemID),
+		"asset_group": idStr(b.AssetGroupID), "asset": b.Asset, "contractor": idp(b.ContractorID), "technician": b.Technician,
+		"priority": string(b.Priority), "description": b.Description, "planned_date": fmtDate(b.PlannedDate),
+		"actual_date": fmtDate(b.ActualDate), "status": string(b.Status),
+	}, map[string]string{
+		"ref": a.Ref, "type": string(a.Type), "site": idStr(a.SiteID), "location": a.Location, "system": idStr(a.SystemID),
+		"asset_group": idStr(a.AssetGroupID), "asset": a.Asset, "contractor": idp(a.ContractorID), "technician": a.Technician,
+		"priority": string(a.Priority), "description": a.Description, "planned_date": fmtDate(a.PlannedDate),
+		"actual_date": fmtDate(a.ActualDate), "status": string(a.Status),
+	})
 }

@@ -413,7 +413,7 @@ func (s *Server) inspectionPhotoUpload(w http.ResponseWriter, r *http.Request) {
 		if len(name) > 200 {
 			name = name[:200]
 		}
-		a, err := s.q.CreateAttachment(ctx, gen.CreateAttachmentParams{
+		a, err := s.q.CreateAttachment(ctx, gen.CreateAttachmentParams{Kind: "photo",
 			InspectionID: &in.ID, CriterionID: cid, StorageKey: key, Filename: name,
 			ContentType: ctype, SizeBytes: size, UploadedBy: currentUserID(ctx),
 		})

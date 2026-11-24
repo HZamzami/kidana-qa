@@ -126,6 +126,14 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /work-orders/{id}/delete", admin(s.workOrderDelete))
 	mux.HandleFunc("POST /work-orders/{id}/assignments", edit(s.assignmentCreate))
 
+	// assets (QR labels open /a/{code})
+	mux.HandleFunc("GET /assets", s.assetsList)
+	mux.HandleFunc("GET /assets/labels", staff(s.assetLabels))
+	mux.HandleFunc("GET /assets/{id}", s.assetShow)
+	mux.HandleFunc("POST /assets/{id}", edit(s.assetUpdate))
+	mux.HandleFunc("GET /assets/{id}/qr.png", s.assetQR)
+	mux.HandleFunc("GET /a/{code}", s.assetByCode)
+
 	// tasks, assignments and notifications
 	mux.HandleFunc("GET /my/tasks", s.tasksPage)
 	mux.HandleFunc("POST /assignments/{id}/claim", edit(s.assignmentClaim))

@@ -1,0 +1,298 @@
+package views
+
+import (
+	"net/url"
+
+	"github.com/HZamzami/kidana-quality/internal/appctx"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/domain"
+)
+
+// ---------------------------------------------------------------- list
+
+type AssetsData struct {
+	Rows        []gen.ListAssetsRow
+	Query       url.Values
+	Sites       []Option
+	Systems     []Option
+	AssetGroups []Option
+}
+
+templ AssetsPage(d AssetsData) {
+	@App(t(ctx, "الأصول")) {
+		@PageHeader(t(ctx, "الأصول"), t(ctx, "سجل الأصول وتاريخ كل أصل. امسح رمز QR الملصق على الأصل لفتح صفحته في الموقع.")) {
+			<a href="/assets" class="btn btn-ghost">{ t(ctx, "إعادة ضبط الفلاتر") }</a>
+			<a href={ templ.URL("/assets/labels?" + d.Query.Encode()) } class="btn btn-outline" target="_blank" rel="noopener">
+				@PrintIcon()
+				{ t(ctx, "طباعة ملصقات QR") }
+			</a>
+		}
+		<form
+			class="card p-3 mb-4 grid grid-cols-2 md:grid-cols-5 items-end gap-3"
+			method="get"
+			action="/assets"
+			hx-get="/assets"
+			hx-trigger="change, input from:#flt_aq delay:350ms"
+			hx-target="#assets-results"
+			hx-select="#assets-results"
+			hx-swap="outerHTML"
+			hx-push-url="true"
+		>
+			<div class="col-span-2 min-w-0">
+				<label class="label" for="flt_aq">{ t(ctx, "بحث") }</label>
+				<input class="input h-9" type="search" id="flt_aq" name="q" value={ d.Query.Get("q") } placeholder={ t(ctx, "رمز الأصل أو اسمه أو موقعه…") }/>
+			</div>
+			@FilterSelect("site", t(ctx, "الموقع"), d.Query.Get("site"), d.Sites)
+			@FilterSelect("system", t(ctx, "المنظومة"), d.Query.Get("system"), d.Systems)
+			@FilterSelect("group", t(ctx, "مجموعة الأصل"), d.Query.Get("group"), d.AssetGroups)
+			<noscript><button class="btn btn-primary">{ t(ctx, "تطبيق") }</button></noscript>
+		</form>
+		<div id="assets-results" class="card overflow-hidden">
+			if len(d.Rows) == 0 {
+				@EmptyState(t(ctx, "لا توجد أصول مطابقة"), t(ctx, "تُضاف الأصول تلقائياً من رموز الأصول في أوامر العمل."))
+			} else {
+				<div class="overflow-x-auto">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>{ t(ctx, "الرمز") }</th>
+								<th>{ t(ctx, "الاسم") }</th>
+								<th>{ t(ctx, "الموقع") }</th>
+								<th>{ t(ctx, "المنظومة / مجموعة الأصل") }</th>
+								<th>{ t(ctx, "أوامر العمل") }</th>
+								<th>{ t(ctx, "إخفاقات") }</th>
+								<th>{ t(ctx, "ملاحظات مفتوحة") }</th>
+								<th>{ t(ctx, "آخر فحص") }</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, a := range d.Rows {
+								<tr>
+									<td class="whitespace-nowrap"><a class="font-medium num underline decoration-gold-50 underline-offset-4" href={ u("/assets/%d", a.ID) }>{ a.Code }</a></td>
+									<td>{ orDash(nm(ctx, a.Name, a.NameEn)) }</td>
+									<td class="whitespace-nowrap">
+										{ orDash(nm(ctx, a.SiteName, a.SiteNameEn)) }
+										if a.Location != "" {
+											<span class="block text-xs text-ink-60">{ a.Location }</span>
+										}
+									</td>
+									<td>
+										{ orDash(nm(ctx, a.SystemName, a.SystemNameEn)) }
+										<span class="block text-xs text-ink-60">{ nm(ctx, a.AssetGroupName, a.AssetGroupNameEn) }</span>
+									</td>
+									<td class="num text-center">{ itoa(int(a.WorkOrders)) }</td>
+									<td class="num text-center">
+										if a.Failures >= 2 {
+											<span class="pill bg-fail-10 text-fail" title={ t(ctx, "إخفاق متكرر — يوصى بتحليل السبب الجذري") }>{ itoa(int(a.Failures)) }</span>
+										} else {
+											{ itoa(int(a.Failures)) }
+										}
+									</td>
+									<td class="num text-center">{ itoa(int(a.OpenFindings)) }</td>
+									<td class="whitespace-nowrap">
+										if !a.LastInspected.IsZero() {
+											@DateInline(a.LastInspected)
+										} else {
+											<span class="text-ink-60">—</span>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				<div class="px-3 py-2.5 text-xs text-ink-80 border-t border-ink-10">{ itoa(len(d.Rows)) }</div>
+			}
+		</div>
+	}
+}
+
+// ---------------------------------------------------------------- asset page
+
+type AssetData struct {
+	A                           gen.GetAssetRow
+	WorkOrders                  []gen.ListWorkOrdersByAssetRow
+	Findings                    []gen.ListFindingsByAssetRow
+	Link                        string // what the QR label encodes
+	Sites, Systems, AssetGroups []Option
+}
+
+func (d AssetData) openWorkOrder() int64 {
+	for _, w := range d.WorkOrders {
+		if w.Status != gen.WoStatusAccepted && w.Status != gen.WoStatusCancelled {
+			return w.ID
+		}
+	}
+	return 0
+}
+
+templ AssetPage(d AssetData) {
+	@App(d.A.Code) {
+		<div class="mb-4 text-sm">
+			<a href="/assets" class="text-ink-80 hover:text-ink">{ t(ctx, "الأصول") }</a>
+			<span class="text-ink-30 mx-1">/</span>
+			<span class="num">{ d.A.Code }</span>
+		</div>
+		<section class="card p-5 grid gap-5 md:grid-cols-[1fr_auto]">
+			<div class="min-w-0">
+				<div class="flex flex-wrap items-center gap-2">
+					<h1 class="text-xl font-semibold num">{ d.A.Code }</h1>
+					if !d.A.Active {
+						<span class="pill bg-ink-10 text-ink-60">{ t(ctx, "غير مفعّل") }</span>
+					}
+				</div>
+				if n := nm(ctx, d.A.Name, d.A.NameEn); n != "" {
+					<p class="mt-1 text-ink-80">{ n }</p>
+				}
+				<dl class="mt-4 grid gap-x-6 gap-y-3 grid-cols-2 md:grid-cols-4">
+					@Fact(t(ctx, "الموقع")) {
+						{ orDash(nm(ctx, d.A.SiteName, d.A.SiteNameEn)) }
+						if d.A.Location != "" {
+							<span class="block text-xs text-ink-80 font-normal">{ d.A.Location }</span>
+						}
+					}
+					@Fact(t(ctx, "المنظومة")) {
+						{ orDash(nm(ctx, d.A.SystemName, d.A.SystemNameEn)) }
+					}
+					@Fact(t(ctx, "مجموعة الأصل")) {
+						{ orDash(nm(ctx, d.A.AssetGroupName, d.A.AssetGroupNameEn)) }
+					}
+					@Fact(t(ctx, "أوامر العمل")) {
+						<span class="num">{ itoa(len(d.WorkOrders)) }</span>
+					}
+				</dl>
+				if wo := d.openWorkOrder(); wo != 0 && appctx.CanEdit(ctx) {
+					<a href={ u("/work-orders/%d", wo) } class="btn btn-primary mt-4">{ t(ctx, "افتح أمر العمل الجاري للفحص") }</a>
+				}
+			</div>
+			<div class="text-center">
+				<img src={ path("/assets/%d/qr.png", d.A.ID) } alt={ t(ctx, "رمز QR للأصل") } class="size-36 mx-auto rounded-lg border border-ink-10 bg-white p-1"/>
+				<a href={ templ.URL("/assets/labels?all=1&id=" + idStr(d.A.ID)) } target="_blank" rel="noopener" class="btn btn-ghost mt-2 text-xs">
+					@PrintIcon()
+					{ t(ctx, "طباعة الملصق") }
+				</a>
+			</div>
+		</section>
+		<div class="mt-5 grid gap-5 lg:grid-cols-5">
+			<section class="lg:col-span-3 card overflow-hidden">
+				<h2 class="px-4 pt-4 pb-2 font-semibold">{ t(ctx, "تاريخ الأصل") }</h2>
+				if len(d.WorkOrders) == 0 {
+					@EmptyState(t(ctx, "لا توجد أوامر عمل على هذا الأصل"), "")
+				} else {
+					<ul class="divide-y divide-ink-10">
+						for _, w := range d.WorkOrders {
+							<li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
+								<a class="font-medium num underline decoration-gold-50 underline-offset-4" href={ u("/work-orders/%d", w.ID) }>{ w.Ref }</a>
+								@TypePill(string(w.Type))
+								@WOStatusPill(string(w.Status))
+								<span class="text-xs text-ink-60 min-w-0 truncate">{ w.Description }</span>
+								<span class="ms-auto flex items-center gap-3">
+									if w.OpenFindings > 0 {
+										<span class="pill bg-fail-10 text-fail">{ count(ctx, int(w.OpenFindings), domain.NounFinding) }</span>
+									}
+									@ScoreBar(w.AfterScore, w.AfterPassed)
+									<span class="text-xs num text-ink-60">
+										if w.ActualDate != nil {
+											{ dmy(*w.ActualDate) }
+										} else if w.PlannedDate != nil {
+											{ dmy(*w.PlannedDate) }
+										}
+									</span>
+								</span>
+							</li>
+						}
+					</ul>
+				}
+			</section>
+			<section class="lg:col-span-2 space-y-5">
+				<div class="card overflow-hidden">
+					<h2 class="px-4 pt-4 pb-2 font-semibold">{ t(ctx, "الملاحظات على الأصل") }</h2>
+					if len(d.Findings) == 0 {
+						<p class="px-4 pb-4 text-sm text-ink-60">{ t(ctx, "لا توجد ملاحظات") }</p>
+					} else {
+						<ul class="divide-y divide-ink-10">
+							for _, f := range d.Findings {
+								<li class="px-4 py-2.5 text-sm">
+									<div class="flex flex-wrap items-center gap-2">
+										@FindingStatusPill(string(f.Status), false)
+										if f.RepeatOf != nil {
+											<span class="pill bg-fail-10 text-fail">{ t(ctx, "متكررة") }</span>
+										}
+										if f.CriterionCode != "" {
+											<span class="text-xs text-ink-60 num">{ f.CriterionCode }</span>
+										}
+										<a class="ms-auto text-xs num underline" href={ u("/findings/%d/edit", f.ID) }>{ f.WoRef }</a>
+									</div>
+									<p class="mt-1">{ f.Description }</p>
+								</li>
+							}
+						</ul>
+					}
+				</div>
+				if appctx.CanEdit(ctx) {
+					<form method="post" action={ u("/assets/%d", d.A.ID) } class="card p-4 space-y-3">
+						<h2 class="font-semibold text-sm">{ t(ctx, "بيانات الأصل") }</h2>
+						@TextField("name", t(ctx, "الاسم"), d.A.Name, false, nil, templ.Attributes{"maxlength": "120"})
+						@TextField("name_en", t(ctx, "الاسم بالإنجليزية (اختياري)"), d.A.NameEn, false, nil, templ.Attributes{"maxlength": "120", "dir": "ltr", "lang": "en"})
+						@SelectField("site_id", t(ctx, "الموقع"), idPtrStr(d.A.SiteID), d.Sites, "—", false, nil)
+						@SelectField("system_id", t(ctx, "المنظومة"), idPtrStr(d.A.SystemID), d.Systems, "—", false, nil)
+						@SelectField("asset_group_id", t(ctx, "مجموعة الأصل"), idPtrStr(d.A.AssetGroupID), d.AssetGroups, "—", false, nil)
+						@TextField("location", t(ctx, "الموقع التفصيلي"), d.A.Location, false, nil, templ.Attributes{"maxlength": "120"})
+						<label class="flex items-center gap-2 text-sm">
+							<input type="checkbox" name="active" value="on" checked?={ d.A.Active } class="size-4"/>
+							{ t(ctx, "مفعّل") }
+						</label>
+						<button type="submit" class="btn btn-primary">{ t(ctx, "حفظ") }</button>
+					</form>
+				}
+			</section>
+		</div>
+	}
+}
+
+func idPtrStr(p *int64) string {
+	if p == nil {
+		return ""
+	}
+	return idStr(*p)
+}
+
+// ---------------------------------------------------------------- QR label sheet (A4, 3 × 8)
+
+type AssetLabelsData struct {
+	Rows []gen.ListAssetsRow
+	Back string
+}
+
+templ AssetLabels(d AssetLabelsData) {
+	@Base(t(ctx, "ملصقات QR للأصول")) {
+		<div class="print-root" x-data="printPage" data-auto={ tern(len(d.Rows) > 0, "1", "0") }>
+			<div class="no-print sticky top-0 z-10 bg-white border-b border-ink-10 shadow-sm">
+				<div class="mx-auto max-w-[210mm] px-4 py-3 flex flex-wrap items-center gap-3">
+					<p class="font-semibold">{ t(ctx, "ملصقات QR للأصول") } <span class="text-ink-60 text-sm num">{ itoa(len(d.Rows)) }</span></p>
+					<div class="ms-auto flex gap-2">
+						<a href={ templ.SafeURL(d.Back) } class="btn btn-ghost">{ t(ctx, "رجوع") }</a>
+						<button type="button" class="btn btn-primary" @click="print">{ t(ctx, "طباعة / حفظ PDF") }</button>
+					</div>
+				</div>
+			</div>
+			<div class="sheets">
+				<div class="sheet labels">
+					for _, a := range d.Rows {
+						<div class="label-cell">
+							<img src={ path("/assets/%d/qr.png", a.ID) } alt="" class="size-[26mm]"/>
+							<div class="min-w-0">
+								<p class="font-bold num text-[10pt] leading-tight break-all" dir="ltr">{ a.Code }</p>
+								if n := nm(ctx, a.Name, a.NameEn); n != "" {
+									<p class="text-[7.5pt] leading-tight">{ n }</p>
+								}
+								<p class="text-[7pt] text-ink-60 leading-tight">{ nm(ctx, a.SiteName, a.SiteNameEn) }</p>
+								<p class="text-[6.5pt] text-ink-60 mt-1">{ t(ctx, "كدانة · امسح لفتح سجل الأصل") }</p>
+							</div>
+						</div>
+					}
+				</div>
+			</div>
+		</div>
+	}
+}

@@ -92,3 +92,8 @@ FROM inspection_items it
 JOIN template_criteria c ON c.id = it.criterion_id
 WHERE it.inspection_id = ANY(sqlc.arg(ids)::bigint[])
 ORDER BY it.inspection_id, c.sort, c.code;
+
+-- Where the inspector was when the inspection started (set once).
+-- name: SetInspectionLocation :exec
+UPDATE inspections SET lat = $2, lng = $3, accuracy = $4, located_at = now()
+WHERE id = $1 AND status = 'draft' AND lat IS NULL;

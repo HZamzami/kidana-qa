@@ -760,6 +760,19 @@ func AllWoTypeValues() []WoType {
 	}
 }
 
+type Asset struct {
+	ID           int64
+	Code         string
+	Name         string
+	NameEn       string
+	SiteID       *int64
+	SystemID     *int64
+	AssetGroupID *int64
+	Location     string
+	Active       bool
+	CreatedAt    time.Time
+}
+
 type AssetGroup struct {
 	ID     int64
 	Name   string
@@ -780,6 +793,14 @@ type Attachment struct {
 	UploadedBy   *int64
 	CreatedAt    time.Time
 	Purpose      string
+	Kind         string
+	SignerName   string
+	SignerRole   string
+	Lat          *float64
+	Lng          *float64
+	Accuracy     *float32
+	CapturedAt   *time.Time
+	AnnotatedOf  *int64
 }
 
 type AuditLog struct {
@@ -854,6 +875,10 @@ type Inspection struct {
 	Notes          string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	Lat            *float64
+	Lng            *float64
+	Accuracy       *float32
+	LocatedAt      *time.Time
 }
 
 type InspectionAssignment struct {
@@ -988,4 +1013,5 @@ type WorkOrder struct {
 	CreatedBy    *int64
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	AssetID      *int64
 }

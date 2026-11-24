@@ -397,6 +397,9 @@ func (s *Server) importWorkOrders(ctx context.Context, res *excel.Result, out *v
 			if err != nil {
 				return err
 			}
+			if err := s.linkAsset(ctx, q, wo); err != nil {
+				return err
+			}
 			if err := s.sampleNewWorkOrder(ctx, q, wo); err != nil {
 				return err
 			}

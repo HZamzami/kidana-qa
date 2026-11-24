@@ -47,7 +47,7 @@ func (q *Queries) AcceptanceFacts(ctx context.Context, id int64) (AcceptanceFact
 const createInspection = `-- name: CreateInspection :one
 INSERT INTO inspections (work_order_id, stage, attempt, template_id, inspector_id, inspected_on)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, work_order_id, stage, attempt, template_id, inspector_id, status, inspected_on, submitted_at, score, passed, critical_failed, notes, created_at, updated_at
+RETURNING id, work_order_id, stage, attempt, template_id, inspector_id, status, inspected_on, submitted_at, score, passed, critical_failed, notes, created_at, updated_at, lat, lng, accuracy, located_at
 `
 
 type CreateInspectionParams struct {
@@ -85,6 +85,10 @@ func (q *Queries) CreateInspection(ctx context.Context, arg CreateInspectionPara
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Lat,
+		&i.Lng,
+		&i.Accuracy,
+		&i.LocatedAt,
 	)
 	return i, err
 }
@@ -115,7 +119,7 @@ func (q *Queries) DeleteDraftInspection(ctx context.Context, id int64) (int64, e
 }
 
 const getInspection = `-- name: GetInspection :one
-SELECT i.id, i.work_order_id, i.stage, i.attempt, i.template_id, i.inspector_id, i.status, i.inspected_on, i.submitted_at, i.score, i.passed, i.critical_failed, i.notes, i.created_at, i.updated_at, w.ref AS wo_ref, u.name AS inspector_name, t.name AS template_name
+SELECT i.id, i.work_order_id, i.stage, i.attempt, i.template_id, i.inspector_id, i.status, i.inspected_on, i.submitted_at, i.score, i.passed, i.critical_failed, i.notes, i.created_at, i.updated_at, i.lat, i.lng, i.accuracy, i.located_at, w.ref AS wo_ref, u.name AS inspector_name, t.name AS template_name
 FROM inspections i
 JOIN work_orders w ON w.id = i.work_order_id
 JOIN users u ON u.id = i.inspector_id
@@ -139,6 +143,10 @@ type GetInspectionRow struct {
 	Notes          string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	Lat            *float64
+	Lng            *float64
+	Accuracy       *float32
+	LocatedAt      *time.Time
 	WoRef          string
 	InspectorName  string
 	TemplateName   string
@@ -163,6 +171,10 @@ func (q *Queries) GetInspection(ctx context.Context, id int64) (GetInspectionRow
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Lat,
+		&i.Lng,
+		&i.Accuracy,
+		&i.LocatedAt,
 		&i.WoRef,
 		&i.InspectorName,
 		&i.TemplateName,
@@ -228,7 +240,7 @@ func (q *Queries) ListInspectionItems(ctx context.Context, inspectionID int64) (
 }
 
 const listInspectionsByWorkOrder = `-- name: ListInspectionsByWorkOrder :many
-SELECT i.id, i.work_order_id, i.stage, i.attempt, i.template_id, i.inspector_id, i.status, i.inspected_on, i.submitted_at, i.score, i.passed, i.critical_failed, i.notes, i.created_at, i.updated_at, u.name AS inspector_name,
+SELECT i.id, i.work_order_id, i.stage, i.attempt, i.template_id, i.inspector_id, i.status, i.inspected_on, i.submitted_at, i.score, i.passed, i.critical_failed, i.notes, i.created_at, i.updated_at, i.lat, i.lng, i.accuracy, i.located_at, u.name AS inspector_name,
        (SELECT count(*) FROM findings f WHERE f.inspection_id = i.id)::int AS findings_count
 FROM inspections i
 JOIN users u ON u.id = i.inspector_id
@@ -252,6 +264,10 @@ type ListInspectionsByWorkOrderRow struct {
 	Notes          string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	Lat            *float64
+	Lng            *float64
+	Accuracy       *float32
+	LocatedAt      *time.Time
 	InspectorName  string
 	FindingsCount  int32
 }
@@ -281,6 +297,10 @@ func (q *Queries) ListInspectionsByWorkOrder(ctx context.Context, workOrderID in
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Lat,
+			&i.Lng,
+			&i.Accuracy,
+			&i.LocatedAt,
 			&i.InspectorName,
 			&i.FindingsCount,
 		); err != nil {
@@ -424,6 +444,29 @@ WHERE id = $1
 // Re-opens a submitted inspection for correction (admin only).
 func (q *Queries) ReopenInspection(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, reopenInspection, id)
+	return err
+}
+
+const setInspectionLocation = `-- name: SetInspectionLocation :exec
+UPDATE inspections SET lat = $2, lng = $3, accuracy = $4, located_at = now()
+WHERE id = $1 AND status = 'draft' AND lat IS NULL
+`
+
+type SetInspectionLocationParams struct {
+	ID       int64
+	Lat      *float64
+	Lng      *float64
+	Accuracy *float32
+}
+
+// Where the inspector was when the inspection started (set once).
+func (q *Queries) SetInspectionLocation(ctx context.Context, arg SetInspectionLocationParams) error {
+	_, err := q.db.Exec(ctx, setInspectionLocation,
+		arg.ID,
+		arg.Lat,
+		arg.Lng,
+		arg.Accuracy,
+	)
 	return err
 }
 
