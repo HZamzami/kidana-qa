@@ -129,6 +129,16 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /work-orders/{id}/delete", admin(s.workOrderDelete))
 	mux.HandleFunc("POST /work-orders/{id}/assignments", edit(s.assignmentCreate))
 
+	// search and saved views
+	mux.HandleFunc("GET /search", s.search)
+	mux.HandleFunc("POST /views", s.savedViewCreate)
+	mux.HandleFunc("POST /views/{id}/delete", s.savedViewDelete)
+
+	// contractor performance
+	mux.HandleFunc("GET /contractors", s.contractorsPage)
+	mux.HandleFunc("GET /contractors/{id}", s.contractorPage)
+	mux.HandleFunc("GET /reports/contractor/{id}", s.contractorReport)
+
 	// assets (QR labels open /a/{code})
 	mux.HandleFunc("GET /assets", s.assetsList)
 	mux.HandleFunc("GET /assets/labels", staff(s.assetLabels))
@@ -197,6 +207,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/users/{id}/password", admin(s.userResetPassword))
 	mux.HandleFunc("POST /admin/users/{id}/reset-link", admin(s.adminResetLink))
 	mux.HandleFunc("POST /admin/users/{id}/2fa-reset", admin(s.adminReset2FA))
+	mux.HandleFunc("GET /admin/audit", admin(s.auditPage))
+	mux.HandleFunc("GET /admin/sla", admin(s.slaPage))
+	mux.HandleFunc("POST /admin/sla", admin(s.slaSave))
 	mux.HandleFunc("GET /admin/sampling", admin(s.samplingPage))
 	mux.HandleFunc("POST /admin/sampling", admin(s.samplingCreate))
 	mux.HandleFunc("POST /admin/sampling/{id}", admin(s.samplingUpdate))

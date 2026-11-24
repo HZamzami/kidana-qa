@@ -23,9 +23,12 @@ type WOListData struct {
 	Contractors []Option
 	Statuses    []Option
 	Priorities  []Option
+	Views       ViewsBar
 }
 
 func (d WOListData) val(k string) string { return d.Query.Get(k) }
+
+var slaOptions = []Option{{"breached", "تجاوز الهدف"}, {"at_risk", "قريب من الهدف"}}
 
 // printURL prints every work order matching the current filters (not just this page).
 func (d WOListData) printURL() templ.SafeURL {
@@ -50,8 +53,9 @@ templ WorkOrdersPage(d WOListData) {
 				<a href="/work-orders/new" class="btn btn-primary">{ t(ctx, "＋ أمر عمل جديد") }</a>
 			}
 		}
+		@SavedViewsBar(d.Views)
 		<form
-			class="card p-3 mb-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 items-end gap-3"
+			class="card p-3 mb-4 grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 items-end gap-3"
 			method="get"
 			action="/work-orders"
 			hx-get="/work-orders"
@@ -65,16 +69,15 @@ templ WorkOrdersPage(d WOListData) {
 				<label class="label" for="flt_q">{ t(ctx, "بحث") }</label>
 				<input class="input h-9" type="search" id="flt_q" name="q" value={ d.val("q") } placeholder={ t(ctx, "رقم أمر العمل، الأصل، الموقع التفصيلي، الفني…") }/>
 			</div>
-			<!-- 9 cells: search spans two; contractor spans on phone so no straggler -->
+			<!-- 10 cells: search spans two; even on phone, tablet (5) and wide (10) -->
 			@FilterSelect("type", t(ctx, "النوع"), d.val("type"), TypeOptions)
 			@FilterSelect("status", t(ctx, "الحالة"), d.val("status"), d.Statuses)
 			@FilterSelect("priority", t(ctx, "الأولوية"), d.val("priority"), d.Priorities)
+			@FilterSelect("sla", t(ctx, "زمن الحل"), d.val("sla"), slaOptions)
 			@FilterSelect("site", t(ctx, "الموقع"), d.val("site"), d.Sites)
 			@FilterSelect("system", t(ctx, "المنظومة"), d.val("system"), d.Systems)
 			@FilterSelect("group", t(ctx, "مجموعة الأصل"), d.val("group"), d.AssetGroups)
-			<div class="col-span-2 md:col-span-1 min-w-0">
-				@FilterSelect("contractor", t(ctx, "المقاول"), d.val("contractor"), d.Contractors)
-			</div>
+			@FilterSelect("contractor", t(ctx, "المقاول"), d.val("contractor"), d.Contractors)
 			<noscript><button class="btn btn-primary">{ t(ctx, "تطبيق") }</button></noscript>
 		</form>
 		@WorkOrdersResults(d)
@@ -153,8 +156,11 @@ templ WorkOrdersResults(d WOListData) {
 										<span class="text-ink-60">0</span>
 									}
 								</td>
-								<td>
+								<td class="space-y-1">
 									@WOStatusPill(string(w.Status))
+									<div>
+										@SLAPill(slaState(w.PlannedDate, w.ActualDate, string(w.Status)))
+									</div>
 								</td>
 								<td class="py-1">
 									<a
@@ -194,7 +200,7 @@ templ WorkOrdersResults(d WOListData) {
 
 type WOFormValues struct {
 	Ref, Type, SiteID, Location, SystemID, AssetGroupID, Asset, ContractorID, Technician string
-	Priority, Description, PlannedDate, ActualDate, Status                               string
+	Priority, Description, PlannedDate, ActualDate, Status, ReportedOn                   string
 }
 
 type WOFormData struct {
@@ -234,7 +240,8 @@ templ WorkOrderForm(d WOFormData) {
 				@TextField("asset", t(ctx, "الأصل / المعدة"), d.V.Asset, false, d.Errors, templ.Attributes{"maxlength": "120", "placeholder": t(ctx, "رمز أو اسم الأصل")})
 				@SelectField("contractor_id", t(ctx, "المقاول / الجهة المنفذة"), d.V.ContractorID, d.Contractors, "—", false, d.Errors)
 				@TextField("technician", t(ctx, "الفني"), d.V.Technician, false, d.Errors, templ.Attributes{"maxlength": "80"})
-				@TextField("planned_date", t(ctx, "التاريخ المجدول / استحقاق SLA"), d.V.PlannedDate, false, d.Errors, templ.Attributes{"type": "date"})
+				@TextField("reported_on", t(ctx, "تاريخ البلاغ"), tern(d.V.ReportedOn == "", today(), d.V.ReportedOn), false, d.Errors, templ.Attributes{"type": "date"})
+				@TextField("planned_date", t(ctx, "التاريخ المجدول / استحقاق SLA"), d.V.PlannedDate, false, d.Errors, templ.Attributes{"type": "date", "title": t(ctx, "يُحسب من الأولوية إن تُرك فارغاً")})
 				@TextField("actual_date", t(ctx, "تاريخ التنفيذ الفعلي"), d.V.ActualDate, false, d.Errors, templ.Attributes{"type": "date"})
 				if d.ID != 0 {
 					@SelectField("status", t(ctx, "الحالة"), d.V.Status, d.Statuses, "", true, d.Errors)
@@ -264,6 +271,7 @@ type WOShowData struct {
 	Inspections []gen.ListInspectionsByWorkOrderRow
 	Findings    []gen.ListFindingsByWorkOrderRow
 	Assignments []gen.ListAssignmentsByWorkOrderRow
+	History     []HistoryEntry
 	Assignees   []Option // people an inspection can be assigned to
 	Today       string
 }
@@ -346,6 +354,12 @@ templ WorkOrderShow(d WOShowData) {
 				}
 				@Fact(t(ctx, "الالتزام بالموعد")) {
 					{ delayText(ctx, d.WO.PlannedDate, d.WO.ActualDate) }
+					<span class="block mt-1">
+						@SLAPill(slaState(d.WO.PlannedDate, d.WO.ActualDate, string(d.WO.Status)))
+					</span>
+				}
+				@Fact(t(ctx, "تاريخ البلاغ")) {
+					@DateText(&d.WO.ReportedOn)
 				}
 				@Fact(t(ctx, "أُنشئ")) {
 					<span class="num">{ dateTime(d.WO.CreatedAt) }</span>
@@ -423,6 +437,14 @@ templ WorkOrderShow(d WOShowData) {
 					</div>
 					@FindingsCards(d.Findings, d.Today)
 				</div>
+				if !appctx.IsContractor(ctx) {
+					<details class="card p-4">
+						<summary class="font-semibold text-sm cursor-pointer">{ t(ctx, "السجل") } <span class="text-ink-60 font-normal num">{ itoa(len(d.History)) }</span></summary>
+						<div class="mt-3">
+							@HistoryList(d.History, true)
+						</div>
+					</details>
+				}
 			</section>
 		</div>
 	}

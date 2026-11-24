@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/HZamzami/kidana-quality/internal/appctx"
@@ -240,5 +241,36 @@ func (s *Server) contractorUserIDs(ctx context.Context, contractorID *int64) []i
 	return ids
 }
 
-// runScheduledReports creates the monthly report run (see reports).
-func (s *Server) runScheduledReports(ctx context.Context) { _ = ctx }
+// runScheduledReports books last month's report once and tells admins.
+func (s *Server) runScheduledReports(ctx context.Context) {
+	today := dates.Today()
+	period := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0)
+	run, err := s.q.CreateReportRun(ctx, gen.CreateReportRunParams{Kind: "monthly", Period: period})
+	if err != nil {
+		if !isNoRows(err) {
+			s.log.Warn("report run", "err", err)
+		}
+		return // already done for this month
+	}
+	admins, err := s.q.ListAdmins(ctx)
+	if err != nil {
+		return
+	}
+	ids := make([]int64, len(admins))
+	for i, a := range admins {
+		ids[i] = a.ID
+	}
+	s.notify(ctx, s.q, ids, note{
+		kind: notifyReportReady, link: "/data", dedupe: "report:" + idStr(run.ID),
+		params: map[string]string{"period": period.Format("01/2006")},
+	})
+}
+
+// reportRuns lists generated monthly reports for the data page.
+func (s *Server) reportRuns(r *http.Request) []gen.ReportRun {
+	runs, err := s.q.ListReportRuns(r.Context())
+	if err != nil {
+		s.log.Warn("report runs", "err", err)
+	}
+	return runs
+}

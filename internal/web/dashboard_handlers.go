@@ -7,6 +7,7 @@ import (
 
 	"github.com/HZamzami/kidana-quality/internal/appctx"
 
+	"github.com/HZamzami/kidana-quality/internal/dates"
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
 	"github.com/HZamzami/kidana-quality/internal/domain"
 	"github.com/HZamzami/kidana-quality/internal/i18n"
@@ -68,6 +69,7 @@ type reportData struct {
 	Rows    []gen.ListSubmittedInspectionsRow
 	Items   []gen.ListItemsForInspectionsRow
 	Summary domain.Summary
+	Trend   []domain.MonthPoint // last 12 months in scope
 }
 
 func (s *Server) loadReport(ctx context.Context, sc reportScope) (reportData, error) {
@@ -82,7 +84,7 @@ func (s *Server) loadReport(ctx context.Context, sc reportScope) (reportData, er
 		ids[i] = r.ID
 		ir := domain.InspectionRow{
 			ID: r.ID, WorkOrderID: r.WorkOrderID, Stage: domain.Stage(r.Stage), CriticalFailed: r.CriticalFailed,
-			Type: string(r.Type), Site: i18n.Pick(appctx.Lang(ctx), r.SiteName, r.SiteNameEn), System: i18n.Pick(appctx.Lang(ctx), r.SystemName, r.SystemNameEn), AssetGroup: i18n.Pick(appctx.Lang(ctx), r.AssetGroupName, r.AssetGroupNameEn), Contractor: i18n.Pick(appctx.Lang(ctx), r.ContractorName, r.ContractorNameEn), Asset: r.Asset,
+			Date: r.InspectedOn, Type: string(r.Type), Site: i18n.Pick(appctx.Lang(ctx), r.SiteName, r.SiteNameEn), System: i18n.Pick(appctx.Lang(ctx), r.SystemName, r.SystemNameEn), AssetGroup: i18n.Pick(appctx.Lang(ctx), r.AssetGroupName, r.AssetGroupNameEn), Contractor: i18n.Pick(appctx.Lang(ctx), r.ContractorName, r.ContractorNameEn), Asset: r.Asset,
 		}
 		if r.Score != nil {
 			ir.Score = *r.Score
@@ -116,6 +118,11 @@ func (s *Server) loadReport(ctx context.Context, sc reportScope) (reportData, er
 		return d, err
 	}
 	d.Rows, d.Items = rows, items
+	end := dates.Today()
+	if sc.Params.DateTo != nil {
+		end = *sc.Params.DateTo
+	}
+	d.Trend = domain.TrendByMonth(inRows, end.AddDate(0, -11, 0), end)
 	d.Summary = domain.Summarize(inRows, itRows, domain.FindingStats{
 		Open: int(fs.OpenCount), Overdue: int(fs.OverdueCount), OpenCritical: int(fs.OpenCritical),
 	})
@@ -140,7 +147,8 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, r, http.StatusOK, views.Dashboard(views.DashboardData{
-		S: rep.Summary, Insights: domain.InsightsIn(appctx.Lang(ctx), rep.Summary), F: sc.F, Query: sc.query(),
+		S: rep.Summary, Insights: domain.InsightsIn(appctx.Lang(ctx), rep.Summary), F: sc.F, Query: sc.query(), Trend: rep.Trend,
+		Views: s.savedViews(r, "dashboard", r.URL.Query()),
 		Sites: lk.Sites, Systems: lk.Systems, AssetGroups: lk.AssetGroups, Contractors: lk.Contractors,
 	}))
 }

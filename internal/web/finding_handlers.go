@@ -66,7 +66,7 @@ func (s *Server) findingsList(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, r, http.StatusOK, views.FindingsPage(views.FindingsListData{
 		Rows: rows, Query: r.URL.Query(), Sites: lk.Sites, Systems: lk.Systems, AssetGroups: lk.AssetGroups,
-		Contractors: lk.Contractors, Today: time.Now().Format(time.DateOnly),
+		Contractors: lk.Contractors, Today: time.Now().Format(time.DateOnly), Views: s.savedViews(r, "findings", r.URL.Query()),
 	}))
 }
 

@@ -9,7 +9,7 @@ import (
 
 templ adminNav(active string) {
 	<nav class="flex flex-wrap gap-2 mb-5">
-		for _, it := range []Option{{"/admin/checklists", t(ctx, "قوائم الفحص")}, {"/admin/lookups/sites", t(ctx, "المواقع")}, {"/admin/lookups/systems", t(ctx, "المنظومات")}, {"/admin/lookups/asset-groups", t(ctx, "مجموعات الأصول")}, {"/admin/lookups/contractors", t(ctx, "المقاولون")}, {"/admin/users", t(ctx, "المستخدمون")}} {
+		for _, it := range []Option{{"/admin/checklists", t(ctx, "قوائم الفحص")}, {"/admin/lookups/sites", t(ctx, "المواقع")}, {"/admin/lookups/systems", t(ctx, "المنظومات")}, {"/admin/lookups/asset-groups", t(ctx, "مجموعات الأصول")}, {"/admin/lookups/contractors", t(ctx, "المقاولون")}, {"/admin/users", t(ctx, "المستخدمون")}, {"/admin/sampling", t(ctx, "قواعد العينة")}, {"/admin/sla", t(ctx, "زمن الحل والتقييم")}, {"/admin/audit", t(ctx, "سجل التغييرات")}} {
 			<a href={ templ.URL(it.Value) } class={ "btn", templ.KV("btn-primary", active == it.Value), templ.KV("btn-outline", active != it.Value) }>{ t(ctx, it.Label) }</a>
 		}
 	</nav>
@@ -26,6 +26,8 @@ templ AdminHome() {
 			@adminCard("/admin/lookups/contractors", t(ctx, "المقاولون"), t(ctx, "الجهات المنفذة وبيانات التواصل."))
 			@adminCard("/admin/users", t(ctx, "المستخدمون"), t(ctx, "الحسابات والصلاحيات: مدير، مدقق، مشاهد، مقاول."))
 			@adminCard("/admin/sampling", t(ctx, "قواعد العينة"), t(ctx, "أي أوامر العمل الجديدة يُسند لها فحص تلقائياً، حسب النوع والأولوية."))
+			@adminCard("/admin/sla", t(ctx, "زمن الحل والتقييم"), t(ctx, "الأيام المستهدفة لحل أوامر العمل وإغلاق الملاحظات، وأوزان تقييم المقاولين."))
+			@adminCard("/admin/audit", t(ctx, "سجل التغييرات"), t(ctx, "من غيّر ماذا ومتى في كل أوامر العمل والفحوصات والإعدادات."))
 		</div>
 	}
 }
@@ -373,4 +375,57 @@ templ ChecklistForm(d ChecklistFormData) {
 			</div>
 		</form>
 	}
+}
+
+// ---------------------------------------------------------------- resolution targets and scorecard weights
+
+func slaLabel(key string) string {
+	switch key {
+	case "emergency":
+		return "أمر عمل طارئ"
+	case "high":
+		return "أمر عمل عالي الأولوية"
+	case "normal":
+		return "أمر عمل عادي"
+	case "finding_critical":
+		return "ملاحظة حرجة"
+	case "finding_normal":
+		return "ملاحظة عادية"
+	}
+	return key
+}
+
+templ SLAPage(rows []gen.SlaTarget, w domain.ScoreWeights) {
+	@App(t(ctx, "زمن الحل والتقييم")) {
+		@PageHeader(t(ctx, "زمن الحل والتقييم"), t(ctx, "قيم افتراضية تحتاج تأكيد الإدارة. تُطبق على أوامر العمل والملاحظات الجديدة."))
+		@adminNav("/admin/sla")
+		<form method="post" action="/admin/sla" class="grid gap-5 lg:grid-cols-2">
+			<section class="card p-5 space-y-3">
+				<h2 class="font-semibold">{ t(ctx, "زمن الحل المستهدف (بالأيام)") }</h2>
+				<p class="text-xs text-ink-80">{ t(ctx, "استحقاق أمر العمل = تاريخ البلاغ + أيام أولويته، إن لم يُدخل تاريخ مجدول. استحقاق الملاحظة = تاريخ تسجيلها + أيام أهميتها، إن لم يُدخل.") }</p>
+				for _, r := range rows {
+					<label class="flex items-center gap-3">
+						<span class="flex-1 text-sm">{ t(ctx, slaLabel(r.Key)) }</span>
+						<input class="input h-9 w-24" type="number" min="0" max="365" name={ "days_" + r.Key } value={ itoa(int(r.Days)) }/>
+					</label>
+				}
+			</section>
+			<section class="card p-5 space-y-3">
+				<h2 class="font-semibold">{ t(ctx, "أوزان تقييم المقاولين (المجموع 100)") }</h2>
+				<p class="text-xs text-ink-80">{ t(ctx, "التقييم المركب في صفحة المقاولين. الأجزاء غير المتاحة تُستبعد وتُعاد موازنة الباقي.") }</p>
+				@weightInput("after", t(ctx, "متوسط الفحص بعد التنفيذ"), w.After)
+				@weightInput("during", t(ctx, "متوسط الفحص أثناء التنفيذ"), w.During)
+				@weightInput("sla", t(ctx, "الالتزام بزمن الحل"), w.SLA)
+				@weightInput("findings", t(ctx, "إغلاق الملاحظات في موعدها"), w.Findings)
+			</section>
+			<button type="submit" class="btn btn-primary justify-self-start">{ t(ctx, "حفظ") }</button>
+		</form>
+	}
+}
+
+templ weightInput(key, label string, v int) {
+	<label class="flex items-center gap-3">
+		<span class="flex-1 text-sm">{ label }</span>
+		<input class="input h-9 w-24" type="number" min="0" max="100" name={ "w_" + key } value={ itoa(v) }/>
+	</label>
 }

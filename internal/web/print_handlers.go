@@ -49,7 +49,7 @@ func (s *Server) workOrdersPrint(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.q.ListWorkOrdersForPrint(ctx, gen.ListWorkOrdersForPrintParams{
 		SiteID: f.SiteID, SystemID: f.SystemID, AssetGroupID: f.AssetGroupID, ContractorID: f.ContractorID,
-		Type: f.Type, Status: f.Status, Priority: f.Priority, Q: f.Q, Lim: printCap,
+		Type: f.Type, Status: f.Status, Priority: f.Priority, Q: f.Q, Sla: f.Sla, Lim: printCap,
 	})
 	if err != nil {
 		s.serverError(w, r, err)

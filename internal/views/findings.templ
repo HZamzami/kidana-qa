@@ -17,6 +17,7 @@ type FindingsListData struct {
 	AssetGroups []Option
 	Contractors []Option
 	Today       string
+	Views       ViewsBar
 }
 
 func (d FindingsListData) query() string { return d.Query.Encode() }
@@ -36,6 +37,7 @@ templ FindingsPage(d FindingsListData) {
 		@PageHeader(t(ctx, "الملاحظات والإجراءات التصحيحية"), t(ctx, "متابعة عدم المطابقة حتى الإغلاق. لا يُعتمد أمر العمل وفيه ملاحظة مفتوحة.")) {
 			<a href="/findings" class="btn btn-ghost">{ t(ctx, "إعادة ضبط الفلاتر") }</a>
 		}
+		@SavedViewsBar(d.Views)
 		<form
 			class="card p-3 mb-4 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-10 items-end gap-3"
 			method="get"

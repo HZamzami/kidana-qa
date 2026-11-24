@@ -53,6 +53,8 @@ var nav = []navItem{
 	{"/work-orders", "أوامر العمل", ""},
 	{"/findings", "الملاحظات", ""},
 	{"/assets", "الأصول", "staff"},
+	{"/contractors", "أداء المقاولين", "staff"},
+	{"/contractors", "أداء المقاول", "contractor"},
 	{"/data", "البيانات والتقارير", "staff"},
 	{"/admin", "الإعدادات", "admin"},
 }
@@ -65,6 +67,8 @@ func navVisible(ctx context.Context, n navItem) bool {
 		return appctx.CanEdit(ctx) || appctx.IsContractor(ctx)
 	case "admin":
 		return appctx.IsAdmin(ctx)
+	case "contractor":
+		return appctx.IsContractor(ctx)
 	}
 	return true
 }
@@ -83,12 +87,18 @@ templ App(title string) {
 						</span>
 					</a>
 					<div class="ms-auto flex items-center gap-1">
+						<form method="get" action="/search" class="hidden md:block no-print" role="search">
+							<input class="input h-9 w-44 lg:w-56" type="search" name="q" placeholder={ t(ctx, "بحث برقم أو رمز…") } aria-label={ t(ctx, "بحث") }/>
+						</form>
+						<a href="/search" class="btn btn-ghost px-2 md:hidden" aria-label={ t(ctx, "بحث") }>
+							<svg viewBox="0 0 20 20" class="size-5" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="9" cy="9" r="5.5"></circle><path d="M13 13l4 4"></path></svg>
+						</a>
 						@LangToggle()
 						@bellSlot()
 						@userMenu()
 					</div>
 				</div>
-				<nav class="-mb-px flex gap-1 overflow-x-auto" aria-label={ t(ctx, "القائمة الرئيسية") }>
+				<nav class="-mb-px hidden md:flex gap-1 overflow-x-auto" aria-label={ t(ctx, "القائمة الرئيسية") }>
 					for _, n := range nav {
 						if navVisible(ctx, n) {
 							<a
@@ -105,13 +115,14 @@ templ App(title string) {
 				</nav>
 			</div>
 		</header>
-		<main class="mx-auto max-w-7xl px-4 sm:px-6 py-6">
+		<main class="mx-auto max-w-7xl px-4 sm:px-6 py-6 pb-24 md:pb-6">
 			@flashBanner()
 			{ children... }
 		</main>
 		<footer class="mx-auto max-w-7xl px-4 sm:px-6 pb-8 pt-2 text-xs text-ink-60 no-print">
 			{ t(ctx, "شركة كدانة للتنمية والتطوير · إدارة جودة العمليات") }
 		</footer>
+		@phoneNav()
 	}
 }
 
@@ -218,4 +229,59 @@ templ OfflinePage() {
 			</div>
 		</main>
 	}
+}
+
+// phoneTab is a bottom-bar tab on phones.
+type phoneTab struct {
+	href, label, icon, who string
+}
+
+var phoneTabs = []phoneTab{
+	{"/", "لوحة المؤشرات", "M3 10.5 10 4l7 6.5V17h-4.5v-4h-5v4H3z", "staff"},
+	{"/my/tasks", "مهامي", "M5 5h10M5 10h10M5 15h6M3 5h.01M3 10h.01M3 15h.01", "tasks"},
+	{"/work-orders", "أوامر العمل", "M6 3h8l2 2v12H4V3zM7 8h6M7 11h6M7 14h4", ""},
+	{"/findings", "الملاحظات", "M10 3 2.5 16.5h15zM10 8v4M10 14.5h.01", ""},
+}
+
+// phoneNav is the fixed bottom tab bar on phones; «المزيد» opens the rest.
+templ phoneNav() {
+	<nav class="md:hidden no-print fixed bottom-0 inset-x-0 z-30 bg-white border-t border-ink-10 pb-[env(safe-area-inset-bottom)]" aria-label={ t(ctx, "القائمة الرئيسية") } x-data="disclosure">
+		<div class="grid grid-cols-5">
+			for _, tb := range phoneTabs {
+				if navVisible(ctx, navItem{href: tb.href, who: tb.who}) {
+					<a
+						href={ templ.URL(tb.href) }
+						class={ "flex flex-col items-center gap-0.5 py-2 text-[11px]", templ.KV("text-gold font-semibold", isActive(appctx.Path(ctx), tb.href)), templ.KV("text-ink-80", !isActive(appctx.Path(ctx), tb.href)) }
+						if isActive(appctx.Path(ctx), tb.href) {
+							aria-current="page"
+						}
+					>
+						<svg viewBox="0 0 20 20" class="size-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={ tb.icon }></path></svg>
+						<span class="truncate max-w-full px-1">{ t(ctx, tb.label) }</span>
+					</a>
+				}
+			}
+			<button type="button" class="flex flex-col items-center gap-0.5 py-2 text-[11px] text-ink-80" x-on:click="toggle" x-bind:aria-expanded="open">
+				<svg viewBox="0 0 20 20" class="size-5" fill="currentColor" aria-hidden="true"><circle cx="4.5" cy="10" r="1.5"></circle><circle cx="10" cy="10" r="1.5"></circle><circle cx="15.5" cy="10" r="1.5"></circle></svg>
+				<span>{ t(ctx, "المزيد") }</span>
+			</button>
+		</div>
+		<div x-show="open" x-cloak x-on:click.outside="close" class="absolute bottom-full inset-x-0 mb-1 mx-2 card shadow-lg p-1">
+			for _, n := range nav {
+				if navVisible(ctx, n) && !onPhoneBar(n.href) {
+					<a href={ templ.URL(n.href) } class="block rounded-md px-3 py-2.5 hover:bg-ink-5">{ t(ctx, n.label) }</a>
+				}
+			}
+			<a href="/notifications" class="block rounded-md px-3 py-2.5 hover:bg-ink-5">{ t(ctx, "التنبيهات") }</a>
+		</div>
+	</nav>
+}
+
+func onPhoneBar(href string) bool {
+	for _, tb := range phoneTabs {
+		if tb.href == href {
+			return true
+		}
+	}
+	return false
 }

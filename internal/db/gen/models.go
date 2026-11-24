@@ -932,6 +932,13 @@ type PasswordResetRequest struct {
 	HandledBy *int64
 }
 
+type ReportRun struct {
+	ID        int64
+	Kind      string
+	Period    time.Time
+	CreatedAt time.Time
+}
+
 type SamplingRule struct {
 	ID       int64
 	Stage    InspectionStage
@@ -941,10 +948,25 @@ type SamplingRule struct {
 	Active   bool
 }
 
+type SavedView struct {
+	ID        int64
+	UserID    int64
+	Page      string
+	Name      string
+	Query     string
+	Shared    bool
+	CreatedAt time.Time
+}
+
 type Session struct {
 	Token  string
 	Data   []byte
 	Expiry time.Time
+}
+
+type Setting struct {
+	Key   string
+	Value string
 }
 
 type Site struct {
@@ -953,6 +975,11 @@ type Site struct {
 	Active bool
 	Sort   int32
 	NameEn string
+}
+
+type SlaTarget struct {
+	Key  string
+	Days int32
 }
 
 type System struct {
@@ -1014,4 +1041,5 @@ type WorkOrder struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	AssetID      *int64
+	ReportedOn   time.Time
 }

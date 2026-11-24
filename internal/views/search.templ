@@ -1,0 +1,113 @@
+package views
+
+import (
+	"github.com/HZamzami/kidana-quality/internal/appctx"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+)
+
+type SearchData struct {
+	Q          string
+	WorkOrders []gen.ListWorkOrdersRow
+	Assets     []gen.ListAssetsRow
+	Findings   []gen.ListFindingsRow
+}
+
+templ SearchPage(d SearchData) {
+	@App(t(ctx, "بحث")) {
+		@PageHeader(t(ctx, "بحث"), t(ctx, "رقم أمر العمل يفتحه مباشرة. ابحث أيضاً برمز الأصل أو نص الملاحظة."))
+		<form method="get" action="/search" class="card p-3 mb-4 flex gap-2">
+			<input class="input h-10 flex-1" type="search" name="q" value={ d.Q } autofocus placeholder={ t(ctx, "رقم أمر العمل، رمز الأصل، نص…") } aria-label={ t(ctx, "بحث") }/>
+			<button class="btn btn-primary">{ t(ctx, "بحث") }</button>
+		</form>
+		if d.Q != "" {
+			if len(d.WorkOrders)+len(d.Assets)+len(d.Findings) == 0 {
+				<div class="card">
+					@EmptyState(t(ctx, "لا توجد نتائج"), t(ctx, "جرّب جزءاً من الرقم أو الرمز."))
+				</div>
+			}
+			<div class="grid gap-4 lg:grid-cols-3">
+				if len(d.WorkOrders) > 0 {
+					<section class="card overflow-hidden">
+						<h2 class="px-4 pt-4 pb-2 font-semibold">{ t(ctx, "أوامر العمل") }</h2>
+						<ul class="divide-y divide-ink-10">
+							for _, w := range d.WorkOrders {
+								<li class="px-4 py-2.5 flex flex-wrap items-center gap-2">
+									<a class="font-medium num underline decoration-gold-50 underline-offset-4" href={ u("/work-orders/%d", w.ID) }>{ w.Ref }</a>
+									@WOStatusPill(string(w.Status))
+									<span class="text-xs text-ink-60">{ orDash(w.Asset) }</span>
+								</li>
+							}
+						</ul>
+					</section>
+				}
+				if len(d.Assets) > 0 {
+					<section class="card overflow-hidden">
+						<h2 class="px-4 pt-4 pb-2 font-semibold">{ t(ctx, "الأصول") }</h2>
+						<ul class="divide-y divide-ink-10">
+							for _, a := range d.Assets {
+								<li class="px-4 py-2.5">
+									<a class="font-medium num underline decoration-gold-50 underline-offset-4" href={ u("/assets/%d", a.ID) }>{ a.Code }</a>
+									<span class="text-xs text-ink-60 ms-2">{ nm(ctx, a.Name, a.NameEn) }</span>
+								</li>
+							}
+						</ul>
+					</section>
+				}
+				if len(d.Findings) > 0 {
+					<section class="card overflow-hidden">
+						<h2 class="px-4 pt-4 pb-2 font-semibold">{ t(ctx, "الملاحظات") }</h2>
+						<ul class="divide-y divide-ink-10">
+							for _, f := range d.Findings {
+								<li class="px-4 py-2.5 text-sm">
+									<a class="num underline" href={ u("/findings/%d/edit", f.ID) }>{ f.WoRef }</a>
+									<span class="block">{ f.Description }</span>
+								</li>
+							}
+						</ul>
+					</section>
+				}
+			</div>
+		}
+	}
+}
+
+// ---------------------------------------------------------------- saved views
+
+type ViewsBar struct {
+	Page, Base, Query string
+	Views             []gen.ListSavedViewsRow
+	Me                int64
+}
+
+// SavedViewsBar shows saved filter views as chips and a form to save the
+// current filters.
+templ SavedViewsBar(v ViewsBar) {
+	<div class="mb-3 flex flex-wrap items-center gap-2" x-data="disclosure">
+		for _, sv := range v.Views {
+			<span class={ "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs", templ.KV("border-gold bg-gold-10", sv.Query == v.Query), templ.KV("border-ink-10 bg-white", sv.Query != v.Query) }>
+				<a href={ templ.URL(v.Base + "?" + sv.Query) } class="hover:underline">{ sv.Name }</a>
+				if sv.Shared {
+					<span class="text-ink-60" title={ t(ctx, "عرض مشترك") + " · " + sv.OwnerName }>👥</span>
+				}
+				if sv.UserID == v.Me {
+					<form method="post" action={ u("/views/%d/delete", sv.ID) } class="inline">
+						<button type="submit" class="text-ink-60 hover:text-fail" aria-label={ t(ctx, "حذف العرض") }>✕</button>
+					</form>
+				}
+			</span>
+		}
+		<button type="button" class="btn btn-ghost py-1 text-xs" x-on:click="toggle">{ t(ctx, "＋ حفظ العرض الحالي") }</button>
+		<form method="post" action="/views" class="flex flex-wrap items-center gap-2" x-show="open" x-cloak>
+			<input type="hidden" name="page" value={ v.Page }/>
+			<input type="hidden" name="query" value={ v.Query }/>
+			<input class="input h-8 w-48 text-xs" name="name" maxlength="60" required placeholder={ t(ctx, "اسم العرض") } aria-label={ t(ctx, "اسم العرض") }/>
+			if appctx.CanEdit(ctx) {
+				<label class="flex items-center gap-1 text-xs">
+					<input type="checkbox" name="shared" value="on" class="size-3.5"/>
+					{ t(ctx, "مشترك مع الجميع") }
+				</label>
+			}
+			<button type="submit" class="btn btn-primary py-1 text-xs">{ t(ctx, "حفظ") }</button>
+		</form>
+	</div>
+}

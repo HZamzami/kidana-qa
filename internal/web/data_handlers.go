@@ -232,7 +232,7 @@ func (s *Server) sendWorkbook(w http.ResponseWriter, r *http.Request, f *exceliz
 }
 
 func (s *Server) dataPage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, http.StatusOK, views.DataPage(nil))
+	s.render(w, r, http.StatusOK, views.DataPage(nil, s.reportRuns(r)))
 }
 
 func (s *Server) workOrderTemplate(w http.ResponseWriter, r *http.Request) {
@@ -263,18 +263,18 @@ func (s *Server) importExcel(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	r.Body = http.MaxBytesReader(w, r.Body, maxImportBytes+1<<20)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
-		s.render(w, r, http.StatusBadRequest, views.DataPage(&views.ImportOutcome{Error: appctx.T(ctx, "الملف كبير جداً (الحد 15MB) أو غير صالح.")}))
+		s.render(w, r, http.StatusBadRequest, views.DataPage(&views.ImportOutcome{Error: appctx.T(ctx, "الملف كبير جداً (الحد 15MB) أو غير صالح.")}, s.reportRuns(r)))
 		return
 	}
 	defer func() { _ = r.MultipartForm.RemoveAll() }()
 	file, hdr, err := r.FormFile("file")
 	if err != nil {
-		s.render(w, r, http.StatusBadRequest, views.DataPage(&views.ImportOutcome{Error: appctx.T(ctx, "اختر ملف Excel بصيغة \u200e.xlsx")}))
+		s.render(w, r, http.StatusBadRequest, views.DataPage(&views.ImportOutcome{Error: appctx.T(ctx, "اختر ملف Excel بصيغة \u200e.xlsx")}, s.reportRuns(r)))
 		return
 	}
 	defer func() { _ = file.Close() }()
 	if !strings.HasSuffix(strings.ToLower(hdr.Filename), ".xlsx") {
-		s.render(w, r, http.StatusBadRequest, views.DataPage(&views.ImportOutcome{Error: appctx.T(ctx, "الملف يجب أن يكون بصيغة \u200e.xlsx")}))
+		s.render(w, r, http.StatusBadRequest, views.DataPage(&views.ImportOutcome{Error: appctx.T(ctx, "الملف يجب أن يكون بصيغة \u200e.xlsx")}, s.reportRuns(r)))
 		return
 	}
 
@@ -284,7 +284,7 @@ func (s *Server) importExcel(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, excel.ErrUnrecognised) {
 			msg = appctx.T(ctx, "لم يتم التعرف على أعمدة الملف. استخدم قالب أوامر العمل.")
 		}
-		s.render(w, r, http.StatusUnprocessableEntity, views.DataPage(&views.ImportOutcome{Error: msg}))
+		s.render(w, r, http.StatusUnprocessableEntity, views.DataPage(&views.ImportOutcome{Error: msg}, s.reportRuns(r)))
 		return
 	}
 
@@ -295,7 +295,7 @@ func (s *Server) importExcel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(ctx, s.q, "import", 0, "excel_import", map[string]any{"file": hdr.Filename, "kind": out.KindLabel, "created": out.Created})
-	s.render(w, r, http.StatusOK, views.DataPage(out))
+	s.render(w, r, http.StatusOK, views.DataPage(out, s.reportRuns(r)))
 }
 
 // lookupResolver finds or creates sites/systems/asset groups/contractors by name during an import.

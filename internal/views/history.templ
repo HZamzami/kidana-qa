@@ -1,0 +1,133 @@
+package views
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"sort"
+	"time"
+
+	"github.com/HZamzami/kidana-quality/internal/domain"
+)
+
+// HistoryEntry is one change-history line.
+type HistoryEntry struct {
+	Entity, Action, User string
+	EntityID             int64
+	Details              []byte
+	At                   time.Time
+}
+
+// historyDetails turns an entry's details into readable "field: from → to"
+// parts. Changes recorded by domain.Diff show both sides.
+func historyDetails(ctx context.Context, raw []byte) []string {
+	var m map[string]any
+	if json.Unmarshal(raw, &m) != nil || len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var out []string
+	for _, k := range keys {
+		label := t(ctx, domain.Label(domain.AuditFieldLabels, k))
+		switch v := m[k].(type) {
+		case map[string]any:
+			from, to := fmt.Sprint(v["from"]), fmt.Sprint(v["to"])
+			if from == "" || from == "<nil>" {
+				from = "—"
+			}
+			if to == "" || to == "<nil>" {
+				to = "—"
+			}
+			out = append(out, label+": "+clipText(t(ctx, from), 60)+" ← "+clipText(t(ctx, to), 60))
+		case nil:
+		default:
+			out = append(out, label+": "+clipText(t(ctx, fmt.Sprint(v)), 80))
+		}
+	}
+	return out
+}
+
+func clipText(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n-1]) + "…"
+}
+
+templ HistoryList(entries []HistoryEntry, showEntity bool) {
+	if len(entries) == 0 {
+		<p class="text-sm text-ink-60">{ t(ctx, "لا توجد تغييرات مسجلة.") }</p>
+	} else {
+		<ol class="relative border-s-2 border-ink-10 ms-2 space-y-3">
+			for _, e := range entries {
+				<li class="ps-4 text-sm">
+					<span class="absolute -start-[5px] mt-1.5 size-2 rounded-full bg-gold"></span>
+					<div class="flex flex-wrap items-baseline gap-x-2">
+						<span class="font-medium">{ t(ctx, domain.Label(domain.AuditEntityLabels, e.Entity)) }</span>
+						if showEntity && e.EntityID != 0 {
+							<span class="text-xs text-ink-60 num">{ "#" + idStr(e.EntityID) }</span>
+						}
+						<span>{ t(ctx, domain.Label(domain.AuditActionLabels, e.Action)) }</span>
+						<span class="text-xs text-ink-60">{ orDash(e.User) }</span>
+						<span class="text-xs text-ink-60 num ms-auto">{ dateTime(e.At) }</span>
+					</div>
+					for _, d := range historyDetails(ctx, e.Details) {
+						<p class="text-xs text-ink-80" dir="auto">{ d }</p>
+					}
+				</li>
+			}
+		</ol>
+	}
+}
+
+// ---------------------------------------------------------------- admin audit log
+
+type AuditData struct {
+	Entries []HistoryEntry
+	Query   url.Values
+	Users   []Option
+	Page    int
+	More    bool
+}
+
+var auditEntityOptions = []Option{
+	{"work_order", "أمر العمل"}, {"inspection", "فحص"}, {"finding", "ملاحظة"}, {"assignment", "تكليف"},
+	{"user", "مستخدم"}, {"asset", "أصل"}, {"import", "استيراد"}, {"checklist_template", "قائمة فحص"},
+}
+
+templ AuditPage(d AuditData) {
+	@App(t(ctx, "سجل التغييرات")) {
+		@PageHeader(t(ctx, "سجل التغييرات"), t(ctx, "كل تغيير في النظام: من فعله ومتى وما الذي تغيّر"))
+		@adminNav("/admin/audit")
+		<form method="get" action="/admin/audit" class="card p-3 mb-4 grid grid-cols-2 md:grid-cols-4 items-end gap-3">
+			@FilterSelect("user", t(ctx, "المستخدم"), d.Query.Get("user"), d.Users)
+			@FilterSelect("entity", t(ctx, "النوع"), d.Query.Get("entity"), auditEntityOptions)
+			<div class="min-w-0">
+				<label class="label" for="au_from">{ t(ctx, "من تاريخ") }</label>
+				<input class="input h-9" type="date" id="au_from" name="from" value={ d.Query.Get("from") }/>
+			</div>
+			<div class="min-w-0">
+				<label class="label" for="au_to">{ t(ctx, "إلى تاريخ") }</label>
+				<input class="input h-9" type="date" id="au_to" name="to" value={ d.Query.Get("to") }/>
+			</div>
+			<button class="btn btn-primary col-span-2 md:col-span-4 justify-self-start">{ t(ctx, "تطبيق") }</button>
+		</form>
+		<div class="card p-5">
+			@HistoryList(d.Entries, true)
+			<div class="mt-4 flex gap-2">
+				if d.Page > 1 {
+					<a class="btn btn-ghost" href={ templ.URL(withQuery("/admin/audit", d.Query, "page", itoa(d.Page-1))) }>{ t(ctx, "السابق") }</a>
+				}
+				if d.More {
+					<a class="btn btn-ghost ms-auto" href={ templ.URL(withQuery("/admin/audit", d.Query, "page", itoa(d.Page+1))) }>{ t(ctx, "التالي") }</a>
+				}
+			</div>
+		</div>
+	}
+}

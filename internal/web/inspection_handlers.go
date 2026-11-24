@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/HZamzami/kidana-quality/internal/appctx"
+	"github.com/HZamzami/kidana-quality/internal/dates"
 	"github.com/HZamzami/kidana-quality/internal/db"
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
 	"github.com/HZamzami/kidana-quality/internal/domain"
@@ -299,6 +300,11 @@ func (s *Server) inspectionFindingCreate(w http.ResponseWriter, r *http.Request)
 	sev := gen.FindingSeverityNormal
 	if f.Bool("critical") {
 		sev = gen.FindingSeverityCritical
+	}
+	if due == nil { // default the target close date from the severity's target
+		if d, ok := domain.DueFrom(dates.Today(), "finding_"+string(sev), s.slaTargets(ctx)); ok {
+			due = &d
+		}
 	}
 
 	critical := false

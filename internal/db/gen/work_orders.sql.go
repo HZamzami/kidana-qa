@@ -21,10 +21,15 @@ WHERE ($1::bigint IS NULL OR w.site_id = $1)
   AND ($6::wo_status IS NULL OR w.status = $6)
   AND ($7::wo_priority IS NULL OR w.priority = $7)
   AND ($8::text IS NULL
-       OR w.ref ILIKE '%' || $8 || '%'
-       OR w.asset ILIKE '%' || $8 || '%'
-       OR w.location ILIKE '%' || $8 || '%'
-       OR w.technician ILIKE '%' || $8 || '%')
+       OR ($8 = 'breached' AND w.status <> 'cancelled' AND w.planned_date IS NOT NULL
+           AND ((w.actual_date IS NULL AND w.planned_date < CURRENT_DATE) OR w.actual_date > w.planned_date))
+       OR ($8 = 'at_risk' AND w.status <> 'cancelled' AND w.actual_date IS NULL
+           AND w.planned_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 1))
+  AND ($9::text IS NULL
+       OR w.ref ILIKE '%' || $9 || '%'
+       OR w.asset ILIKE '%' || $9 || '%'
+       OR w.location ILIKE '%' || $9 || '%'
+       OR w.technician ILIKE '%' || $9 || '%')
 `
 
 type CountWorkOrdersParams struct {
@@ -35,6 +40,7 @@ type CountWorkOrdersParams struct {
 	Type         *WoType
 	Status       *WoStatus
 	Priority     *WoPriority
+	Sla          *string
 	Q            *string
 }
 
@@ -47,6 +53,7 @@ func (q *Queries) CountWorkOrders(ctx context.Context, arg CountWorkOrdersParams
 		arg.Type,
 		arg.Status,
 		arg.Priority,
+		arg.Sla,
 		arg.Q,
 	)
 	var count int64
@@ -56,9 +63,9 @@ func (q *Queries) CountWorkOrders(ctx context.Context, arg CountWorkOrdersParams
 
 const createWorkOrder = `-- name: CreateWorkOrder :one
 INSERT INTO work_orders (ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id,
-                         technician, priority, description, planned_date, actual_date, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-RETURNING id, ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id, technician, priority, description, planned_date, actual_date, status, created_by, created_at, updated_at, asset_id
+                         technician, priority, description, planned_date, actual_date, created_by, reported_on)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE($15::date, CURRENT_DATE))
+RETURNING id, ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id, technician, priority, description, planned_date, actual_date, status, created_by, created_at, updated_at, asset_id, reported_on
 `
 
 type CreateWorkOrderParams struct {
@@ -76,6 +83,7 @@ type CreateWorkOrderParams struct {
 	PlannedDate  *time.Time
 	ActualDate   *time.Time
 	CreatedBy    *int64
+	ReportedOn   *time.Time
 }
 
 func (q *Queries) CreateWorkOrder(ctx context.Context, arg CreateWorkOrderParams) (WorkOrder, error) {
@@ -94,6 +102,7 @@ func (q *Queries) CreateWorkOrder(ctx context.Context, arg CreateWorkOrderParams
 		arg.PlannedDate,
 		arg.ActualDate,
 		arg.CreatedBy,
+		arg.ReportedOn,
 	)
 	var i WorkOrder
 	err := row.Scan(
@@ -116,6 +125,7 @@ func (q *Queries) CreateWorkOrder(ctx context.Context, arg CreateWorkOrderParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AssetID,
+		&i.ReportedOn,
 	)
 	return i, err
 }
@@ -131,7 +141,7 @@ func (q *Queries) DeleteWorkOrder(ctx context.Context, id int64) error {
 }
 
 const getWorkOrder = `-- name: GetWorkOrder :one
-SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, w.asset_id, s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en,
+SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, w.asset_id, w.reported_on, s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en,
        COALESCE(c.name, '')::text AS contractor_name, COALESCE(c.name_en, '')::text AS contractor_name_en,
        COALESCE(u.name, '')::text AS created_by_name
 FROM work_orders w
@@ -163,6 +173,7 @@ type GetWorkOrderRow struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	AssetID          *int64
+	ReportedOn       time.Time
 	SiteName         string
 	SiteNameEn       string
 	SystemName       string
@@ -197,6 +208,7 @@ func (q *Queries) GetWorkOrder(ctx context.Context, id int64) (GetWorkOrderRow, 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AssetID,
+		&i.ReportedOn,
 		&i.SiteName,
 		&i.SiteNameEn,
 		&i.SystemName,
@@ -211,7 +223,7 @@ func (q *Queries) GetWorkOrder(ctx context.Context, id int64) (GetWorkOrderRow, 
 }
 
 const getWorkOrderByRef = `-- name: GetWorkOrderByRef :one
-SELECT id, ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id, technician, priority, description, planned_date, actual_date, status, created_by, created_at, updated_at, asset_id FROM work_orders WHERE lower(ref) = lower($1)
+SELECT id, ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id, technician, priority, description, planned_date, actual_date, status, created_by, created_at, updated_at, asset_id, reported_on FROM work_orders WHERE lower(ref) = lower($1)
 `
 
 func (q *Queries) GetWorkOrderByRef(ctx context.Context, lower string) (WorkOrder, error) {
@@ -237,6 +249,7 @@ func (q *Queries) GetWorkOrderByRef(ctx context.Context, lower string) (WorkOrde
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AssetID,
+		&i.ReportedOn,
 	)
 	return i, err
 }
@@ -289,12 +302,17 @@ WHERE ($1::bigint IS NULL OR w.site_id = $1)
   AND ($6::wo_status IS NULL OR w.status = $6)
   AND ($7::wo_priority IS NULL OR w.priority = $7)
   AND ($8::text IS NULL
-       OR w.ref ILIKE '%' || $8 || '%'
-       OR w.asset ILIKE '%' || $8 || '%'
-       OR w.location ILIKE '%' || $8 || '%'
-       OR w.technician ILIKE '%' || $8 || '%')
+       OR ($8 = 'breached' AND w.status <> 'cancelled' AND w.planned_date IS NOT NULL
+           AND ((w.actual_date IS NULL AND w.planned_date < CURRENT_DATE) OR w.actual_date > w.planned_date))
+       OR ($8 = 'at_risk' AND w.status <> 'cancelled' AND w.actual_date IS NULL
+           AND w.planned_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 1))
+  AND ($9::text IS NULL
+       OR w.ref ILIKE '%' || $9 || '%'
+       OR w.asset ILIKE '%' || $9 || '%'
+       OR w.location ILIKE '%' || $9 || '%'
+       OR w.technician ILIKE '%' || $9 || '%')
 ORDER BY w.created_at DESC, w.id DESC
-LIMIT $10 OFFSET $9
+LIMIT $11 OFFSET $10
 `
 
 type ListWorkOrdersParams struct {
@@ -305,6 +323,7 @@ type ListWorkOrdersParams struct {
 	Type         *WoType
 	Status       *WoStatus
 	Priority     *WoPriority
+	Sla          *string
 	Q            *string
 	Off          int32
 	Lim          int32
@@ -348,6 +367,7 @@ func (q *Queries) ListWorkOrders(ctx context.Context, arg ListWorkOrdersParams) 
 		arg.Type,
 		arg.Status,
 		arg.Priority,
+		arg.Sla,
 		arg.Q,
 		arg.Off,
 		arg.Lim,
@@ -396,7 +416,7 @@ func (q *Queries) ListWorkOrders(ctx context.Context, arg ListWorkOrdersParams) 
 }
 
 const listWorkOrdersForPrint = `-- name: ListWorkOrdersForPrint :many
-SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, w.asset_id, s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en,
+SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, w.asset_id, w.reported_on, s.name AS site_name, s.name_en AS site_name_en, sy.name AS system_name, sy.name_en AS system_name_en, ag.name AS asset_group_name, ag.name_en AS asset_group_name_en,
        COALESCE(c.name, '')::text AS contractor_name, COALESCE(c.name_en, '')::text AS contractor_name_en
 FROM work_orders w
 JOIN sites s ON s.id = w.site_id
@@ -412,12 +432,17 @@ WHERE ($1::bigint IS NULL OR w.id = $1)
   AND ($7::wo_status IS NULL OR w.status = $7)
   AND ($8::wo_priority IS NULL OR w.priority = $8)
   AND ($9::text IS NULL
-       OR w.ref ILIKE '%' || $9 || '%'
-       OR w.asset ILIKE '%' || $9 || '%'
-       OR w.location ILIKE '%' || $9 || '%'
-       OR w.technician ILIKE '%' || $9 || '%')
+       OR ($9 = 'breached' AND w.status <> 'cancelled' AND w.planned_date IS NOT NULL
+           AND ((w.actual_date IS NULL AND w.planned_date < CURRENT_DATE) OR w.actual_date > w.planned_date))
+       OR ($9 = 'at_risk' AND w.status <> 'cancelled' AND w.actual_date IS NULL
+           AND w.planned_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 1))
+  AND ($10::text IS NULL
+       OR w.ref ILIKE '%' || $10 || '%'
+       OR w.asset ILIKE '%' || $10 || '%'
+       OR w.location ILIKE '%' || $10 || '%'
+       OR w.technician ILIKE '%' || $10 || '%')
 ORDER BY w.created_at DESC, w.id DESC
-LIMIT $10
+LIMIT $11
 `
 
 type ListWorkOrdersForPrintParams struct {
@@ -429,6 +454,7 @@ type ListWorkOrdersForPrintParams struct {
 	Type         *WoType
 	Status       *WoStatus
 	Priority     *WoPriority
+	Sla          *string
 	Q            *string
 	Lim          int32
 }
@@ -453,6 +479,7 @@ type ListWorkOrdersForPrintRow struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	AssetID          *int64
+	ReportedOn       time.Time
 	SiteName         string
 	SiteNameEn       string
 	SystemName       string
@@ -475,6 +502,7 @@ func (q *Queries) ListWorkOrdersForPrint(ctx context.Context, arg ListWorkOrders
 		arg.Type,
 		arg.Status,
 		arg.Priority,
+		arg.Sla,
 		arg.Q,
 		arg.Lim,
 	)
@@ -505,6 +533,7 @@ func (q *Queries) ListWorkOrdersForPrint(ctx context.Context, arg ListWorkOrders
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.AssetID,
+			&i.ReportedOn,
 			&i.SiteName,
 			&i.SiteNameEn,
 			&i.SystemName,
@@ -542,9 +571,10 @@ const updateWorkOrder = `-- name: UpdateWorkOrder :one
 UPDATE work_orders SET
     ref = $2, type = $3, site_id = $4, location = $5, system_id = $6, asset_group_id = $7, asset = $8,
     contractor_id = $9, technician = $10, priority = $11, description = $12,
-    planned_date = $13, actual_date = $14, status = $15, updated_at = now()
+    planned_date = $13, actual_date = $14, status = $15,
+    reported_on = COALESCE($16::date, reported_on), updated_at = now()
 WHERE id = $1
-RETURNING id, ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id, technician, priority, description, planned_date, actual_date, status, created_by, created_at, updated_at, asset_id
+RETURNING id, ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id, technician, priority, description, planned_date, actual_date, status, created_by, created_at, updated_at, asset_id, reported_on
 `
 
 type UpdateWorkOrderParams struct {
@@ -563,6 +593,7 @@ type UpdateWorkOrderParams struct {
 	PlannedDate  *time.Time
 	ActualDate   *time.Time
 	Status       WoStatus
+	ReportedOn   *time.Time
 }
 
 func (q *Queries) UpdateWorkOrder(ctx context.Context, arg UpdateWorkOrderParams) (WorkOrder, error) {
@@ -582,6 +613,7 @@ func (q *Queries) UpdateWorkOrder(ctx context.Context, arg UpdateWorkOrderParams
 		arg.PlannedDate,
 		arg.ActualDate,
 		arg.Status,
+		arg.ReportedOn,
 	)
 	var i WorkOrder
 	err := row.Scan(
@@ -604,6 +636,7 @@ func (q *Queries) UpdateWorkOrder(ctx context.Context, arg UpdateWorkOrderParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AssetID,
+		&i.ReportedOn,
 	)
 	return i, err
 }

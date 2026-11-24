@@ -82,11 +82,19 @@ func run(log *slog.Logger, n int, reset bool) error {
 	s := &seeder{rng: rand.New(rand.NewPCG(2026, 11)), today: today(), hash: hash} //nolint:gosec // dummy data, not security
 	err = db.InTx(ctx, pool, func(tx pgx.Tx) error {
 		if reset {
-			if _, err := tx.Exec(ctx, `TRUNCATE work_orders, contractors, audit_log RESTART IDENTITY CASCADE`); err != nil {
-				return err
-			}
-			if _, err := tx.Exec(ctx, `DELETE FROM users WHERE email LIKE '%@`+demoDomain+`'`); err != nil {
-				return err
+			// Targeted deletes, not TRUNCATE ... CASCADE: users reference
+			// contractors, and a cascade would also empty users and checklists.
+			for _, q := range []string{
+				`DELETE FROM work_orders`, // inspections, findings, photos and assignments go with them
+				`DELETE FROM audit_log`,
+				`DELETE FROM report_runs`,
+				`DELETE FROM users WHERE email LIKE '%@` + demoDomain + `'`,
+				`DELETE FROM contractors WHERE id NOT IN (SELECT contractor_id FROM users WHERE contractor_id IS NOT NULL)`,
+				`DELETE FROM assets`,
+			} {
+				if _, err := tx.Exec(ctx, q); err != nil {
+					return err
+				}
 			}
 		}
 		s.tx, s.q = tx, gen.New(tx)
@@ -178,6 +186,11 @@ func (s *seeder) seed(ctx context.Context, n int) error {
 		if err := s.workOrder(ctx, planned, seq); err != nil {
 			return err
 		}
+	}
+	// Last month's report, as the scheduler would have made it.
+	first := time.Date(s.today.Year(), s.today.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0)
+	if _, err := s.q.CreateReportRun(ctx, gen.CreateReportRunParams{Kind: "monthly", Period: first}); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
 	}
 	return nil
 }
@@ -391,7 +404,7 @@ func (s *seeder) workOrder(ctx context.Context, planned time.Time, seq map[gen.W
 	}
 	// Registered a few days before it was due, as it would be in the CMMS.
 	registered := planned.AddDate(0, 0, -1-s.rng.IntN(6)).Add(8*time.Hour + time.Duration(s.rng.IntN(9*60))*time.Minute)
-	if _, err := s.tx.Exec(ctx, "UPDATE work_orders SET created_at = $2, updated_at = $2 WHERE id = $1", wo.ID, registered); err != nil {
+	if _, err := s.tx.Exec(ctx, "UPDATE work_orders SET created_at = $2::timestamptz, updated_at = $2::timestamptz, reported_on = ($2::timestamptz)::date WHERE id = $1", wo.ID, registered); err != nil {
 		return err
 	}
 

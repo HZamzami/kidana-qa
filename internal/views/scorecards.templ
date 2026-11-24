@@ -1,0 +1,234 @@
+package views
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/HZamzami/kidana-quality/internal/appctx"
+	"github.com/HZamzami/kidana-quality/internal/dates"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/domain"
+)
+
+// ScoreRow is one contractor's results for a period. Percentages are -1
+// when unknown.
+type ScoreRow struct {
+	ID                                         int64
+	Name                                       string
+	Rank, Inspections, Findings, Open, Overdue int
+	During, After, FirstPass, SLA, OnTime      float64
+	AvgClose, Composite                        float64
+}
+
+type ContractorsData struct {
+	Rows     []ScoreRow
+	From, To time.Time
+	Weights  domain.ScoreWeights
+}
+
+// pct shows a percentage or a dash when unknown.
+func pct(v float64) string {
+	if v < 0 {
+		return "—"
+	}
+	return scoreVal(v)
+}
+
+func periodQuery(from, to time.Time) string {
+	return "from=" + from.Format(time.DateOnly) + "&to=" + to.Format(time.DateOnly)
+}
+
+templ periodForm(action string, from, to time.Time) {
+	<form method="get" action={ templ.SafeURL(action) } class="card p-3 mb-4 flex flex-wrap items-end gap-3">
+		<div>
+			<label class="label" for="sc_from">{ t(ctx, "من تاريخ") }</label>
+			<input class="input h-9" type="date" id="sc_from" name="from" value={ from.Format(time.DateOnly) }/>
+		</div>
+		<div>
+			<label class="label" for="sc_to">{ t(ctx, "إلى تاريخ") }</label>
+			<input class="input h-9" type="date" id="sc_to" name="to" value={ to.Format(time.DateOnly) }/>
+		</div>
+		<button class="btn btn-primary h-9">{ t(ctx, "تطبيق") }</button>
+	</form>
+}
+
+templ ContractorsPage(d ContractorsData) {
+	@App(t(ctx, "أداء المقاولين")) {
+		@PageHeader(t(ctx, "أداء المقاولين"), tf(ctx, "ترتيب بالتقييم المركب: بعد التنفيذ %d%%، أثناء التنفيذ %d%%، زمن الحل %d%%، إغلاق الملاحظات في موعدها %d%%.", d.Weights.After, d.Weights.During, d.Weights.SLA, d.Weights.Findings))
+		@periodForm("/contractors", d.From, d.To)
+		<div class="card overflow-hidden">
+			if len(d.Rows) == 0 {
+				@EmptyState(t(ctx, "لا يوجد مقاولون"), "")
+			} else {
+				<div class="overflow-x-auto">
+					<table class="table">
+						<thead>
+							<tr>
+								<th class="w-10">#</th>
+								<th>{ t(ctx, "المقاول") }</th>
+								<th>{ t(ctx, "التقييم المركب") }</th>
+								<th>{ t(ctx, "بعد التنفيذ") }</th>
+								<th>{ t(ctx, "أثناء التنفيذ") }</th>
+								<th>{ t(ctx, "نجاح من أول مرة") }</th>
+								<th>{ t(ctx, "زمن الحل") }</th>
+								<th>{ t(ctx, "إغلاق في الموعد") }</th>
+								<th>{ t(ctx, "ملاحظات مفتوحة / متأخرة") }</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, r := range d.Rows {
+								<tr>
+									<td class="num text-center font-semibold">
+										if r.Rank > 0 {
+											{ itoa(r.Rank) }
+										} else {
+											—
+										}
+									</td>
+									<td><a class="font-medium underline decoration-gold-50 underline-offset-4" href={ templ.URL(fmt.Sprintf("/contractors/%d?%s", r.ID, periodQuery(d.From, d.To))) }>{ r.Name }</a></td>
+									<td>
+										@ScoreBar(r.Composite, r.Composite >= domain.PassThreshold)
+									</td>
+									<td class="num">{ pct(r.After) }</td>
+									<td class="num">{ pct(r.During) }</td>
+									<td class="num">{ pct(r.FirstPass) }</td>
+									<td class="num">{ pct(r.SLA) }</td>
+									<td class="num">{ pct(r.OnTime) }</td>
+									<td class="num">
+										{ itoa(r.Open) }
+										if r.Overdue > 0 {
+											<span class="pill bg-fail-10 text-fail ms-1">{ itoa(r.Overdue) }</span>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		</div>
+		<p class="mt-3 text-xs text-ink-60">{ t(ctx, "أوزان التقييم المركب قرار إداري ويمكن تعديلها من الإعدادات.") }</p>
+	}
+}
+
+// ---------------------------------------------------------------- one contractor
+
+type ScorecardData struct {
+	Row           ScoreRow
+	Of            int // contractors ranked
+	From, To      time.Time
+	Summary       domain.Summary
+	Trend         []domain.MonthPoint
+	FindingsTrend []gen.FindingsByMonthRow
+	Overdue       []gen.ListFindingsRow
+	Print         bool
+	Printed       time.Time
+}
+
+templ ScorecardPage(d ScorecardData) {
+	if d.Print {
+		@Base(t(ctx, "تقرير أداء المقاول") + " — " + d.Row.Name) {
+			<div class="print-root" x-data="printPage" data-auto="1">
+				<div class="sheets">
+					<article class="sheet">
+						<header class="flex items-center gap-4 pb-3 border-b-2 border-gold mb-4">
+							<img src={ asset("/static/img/kidana-logo.png") } alt={ t(ctx, "كدانة") } class="h-11 w-auto"/>
+							<div>
+								<p class="pr-label">{ t(ctx, "إدارة جودة العمليات · قطاع العمليات") }</p>
+								<h1 class="text-[15pt] font-bold leading-tight">{ t(ctx, "تقرير أداء المقاول") }</h1>
+							</div>
+							<div class="ms-auto text-end">
+								<p class="text-[14pt] font-bold">{ d.Row.Name }</p>
+								<p class="text-[8pt] text-ink-80 num">{ dmy(d.From) + " – " + dmy(d.To) }</p>
+							</div>
+						</header>
+						@scorecardBody(d)
+						<footer class="mt-auto pt-3 border-t border-ink-10 text-[7pt] text-ink-60">
+							{ t(ctx, "طُبع في ") }<span class="num">{ dates.DMYTime(d.Printed) }</span>
+						</footer>
+					</article>
+				</div>
+			</div>
+		}
+	} else {
+		@App(d.Row.Name) {
+			<div class="mb-4 text-sm">
+				if !appctx.IsContractor(ctx) {
+					<a href="/contractors" class="text-ink-80 hover:text-ink">{ t(ctx, "أداء المقاولين") }</a>
+					<span class="text-ink-30 mx-1">/</span>
+				}
+				<span>{ d.Row.Name }</span>
+			</div>
+			@PageHeader(d.Row.Name, t(ctx, "بطاقة أداء المقاول")) {
+				<a href={ templ.URL(fmt.Sprintf("/reports/contractor/%d?%s", d.Row.ID, periodQuery(d.From, d.To))) } class="btn btn-outline" target="_blank" rel="noopener">
+					@PrintIcon()
+					{ t(ctx, "تقرير للطباعة") }
+				</a>
+			}
+			@periodForm(fmt.Sprintf("/contractors/%d", d.Row.ID), d.From, d.To)
+			@scorecardBody(d)
+		}
+	}
+}
+
+templ scorecardBody(d ScorecardData) {
+	<div class="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+		@kpi(t(ctx, "التقييم المركب"), pct(d.Row.Composite), rankText(ctx, d.Row.Rank, d.Of), tern(d.Row.Composite >= domain.PassThreshold, "green", "fail"))
+		@kpi(t(ctx, "متوسط بعد التنفيذ"), pct(d.Row.After), tf(ctx, "نجاح من أول مرة %s", pct(d.Row.FirstPass)), "gold")
+		@kpi(t(ctx, "متوسط أثناء التنفيذ"), pct(d.Row.During), count(ctx, d.Row.Inspections, domain.NounInspection), "sky")
+		@kpi(t(ctx, "الالتزام بزمن الحل"), pct(d.Row.SLA), t(ctx, "أوامر العمل المستحقة في الفترة"), "")
+		@kpi(t(ctx, "إغلاق الملاحظات في الموعد"), pct(d.Row.OnTime), avgCloseText(ctx, d.Row.AvgClose), "")
+		@kpi(t(ctx, "ملاحظات مفتوحة"), itoa(d.Row.Open), tf(ctx, "متأخرة %d · من أصل %d", d.Row.Overdue, d.Row.Findings), tern(d.Row.Overdue > 0, "fail", ""))
+	</div>
+	<section class="mt-4 card p-4 print-avoid-break">
+		<h2 class="font-semibold mb-3">{ t(ctx, "الاتجاه الشهري") }</h2>
+		@TrendChart(d.Trend)
+	</section>
+	<div class="mt-4 grid gap-4 lg:grid-cols-2">
+		@criteriaCard(domain.StageAfter, d.Summary.CriteriaFor(domain.StageAfter), false)
+		<section class="card p-4 print-avoid-break">
+			<h2 class="font-semibold mb-3">{ t(ctx, "الملاحظات شهرياً") }</h2>
+			<table class="table">
+				<thead><tr><th>{ t(ctx, "الشهر") }</th><th>{ t(ctx, "سُجّلت") }</th><th>{ t(ctx, "أُغلقت") }</th></tr></thead>
+				<tbody>
+					for _, m := range d.FindingsTrend {
+						<tr><td class="num">{ m.Month }</td><td class="num">{ itoa(int(m.Opened)) }</td><td class="num">{ itoa(int(m.Closed)) }</td></tr>
+					}
+				</tbody>
+			</table>
+		</section>
+	</div>
+	<section class="mt-4 card overflow-hidden print-avoid-break">
+		<h2 class="px-4 pt-4 pb-2 font-semibold">{ t(ctx, "ملاحظات متأخرة عن الإغلاق") }</h2>
+		if len(d.Overdue) == 0 {
+			<p class="px-4 pb-4 text-sm text-ink-60">{ t(ctx, "لا توجد ملاحظات متأخرة.") }</p>
+		} else {
+			<ul class="divide-y divide-ink-10">
+				for _, f := range d.Overdue {
+					<li class="flex flex-wrap items-center gap-2 px-4 py-2.5 text-sm">
+						<a class="num underline" href={ u("/findings/%d/edit", f.ID) }>{ f.WoRef }</a>
+						<span class="min-w-0 flex-1">{ f.Description }</span>
+						if f.DueDate != nil {
+							<span class="text-xs text-fail num">{ dmy(*f.DueDate) }</span>
+						}
+					</li>
+				}
+			</ul>
+		}
+	</section>
+}
+
+func rankText(ctx context.Context, rank, of int) string {
+	if rank == 0 {
+		return t(ctx, "لا يوجد ترتيب بعد")
+	}
+	return tf(ctx, "الترتيب %d من %d", rank, of)
+}
+
+func avgCloseText(ctx context.Context, days float64) string {
+	if days < 0 {
+		return "—"
+	}
+	return tf(ctx, "متوسط الإغلاق %s يوم", domain.Fmt1(days))
+}

@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"time"
+
 	"github.com/HZamzami/kidana-quality/internal/i18n"
 
 	"fmt"
@@ -22,7 +24,8 @@ type InspectionRow struct {
 	AssetGroup     string
 	Contractor     string
 	Asset          string
-	DelayDays      *int // work order actual − planned
+	DelayDays      *int      // work order actual − planned
+	Date           time.Time // inspected on
 }
 
 // ItemRow is one rated criterion of a submitted inspection.

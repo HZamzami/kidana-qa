@@ -1,14 +1,15 @@
 -- name: CreateWorkOrder :one
 INSERT INTO work_orders (ref, type, site_id, location, system_id, asset_group_id, asset, contractor_id,
-                         technician, priority, description, planned_date, actual_date, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                         technician, priority, description, planned_date, actual_date, created_by, reported_on)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE(sqlc.narg(reported_on)::date, CURRENT_DATE))
 RETURNING *;
 
 -- name: UpdateWorkOrder :one
 UPDATE work_orders SET
     ref = $2, type = $3, site_id = $4, location = $5, system_id = $6, asset_group_id = $7, asset = $8,
     contractor_id = $9, technician = $10, priority = $11, description = $12,
-    planned_date = $13, actual_date = $14, status = $15, updated_at = now()
+    planned_date = $13, actual_date = $14, status = $15,
+    reported_on = COALESCE(sqlc.narg(reported_on)::date, reported_on), updated_at = now()
 WHERE id = $1
 RETURNING *;
 
@@ -66,6 +67,11 @@ WHERE (sqlc.narg(site_id)::bigint IS NULL OR w.site_id = sqlc.narg(site_id))
   AND (sqlc.narg(type)::wo_type IS NULL OR w.type = sqlc.narg(type))
   AND (sqlc.narg(status)::wo_status IS NULL OR w.status = sqlc.narg(status))
   AND (sqlc.narg(priority)::wo_priority IS NULL OR w.priority = sqlc.narg(priority))
+  AND (sqlc.narg(sla)::text IS NULL
+       OR (sqlc.narg(sla) = 'breached' AND w.status <> 'cancelled' AND w.planned_date IS NOT NULL
+           AND ((w.actual_date IS NULL AND w.planned_date < CURRENT_DATE) OR w.actual_date > w.planned_date))
+       OR (sqlc.narg(sla) = 'at_risk' AND w.status <> 'cancelled' AND w.actual_date IS NULL
+           AND w.planned_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 1))
   AND (sqlc.narg(q)::text IS NULL
        OR w.ref ILIKE '%' || sqlc.narg(q) || '%'
        OR w.asset ILIKE '%' || sqlc.narg(q) || '%'
@@ -84,6 +90,11 @@ WHERE (sqlc.narg(site_id)::bigint IS NULL OR w.site_id = sqlc.narg(site_id))
   AND (sqlc.narg(type)::wo_type IS NULL OR w.type = sqlc.narg(type))
   AND (sqlc.narg(status)::wo_status IS NULL OR w.status = sqlc.narg(status))
   AND (sqlc.narg(priority)::wo_priority IS NULL OR w.priority = sqlc.narg(priority))
+  AND (sqlc.narg(sla)::text IS NULL
+       OR (sqlc.narg(sla) = 'breached' AND w.status <> 'cancelled' AND w.planned_date IS NOT NULL
+           AND ((w.actual_date IS NULL AND w.planned_date < CURRENT_DATE) OR w.actual_date > w.planned_date))
+       OR (sqlc.narg(sla) = 'at_risk' AND w.status <> 'cancelled' AND w.actual_date IS NULL
+           AND w.planned_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 1))
   AND (sqlc.narg(q)::text IS NULL
        OR w.ref ILIKE '%' || sqlc.narg(q) || '%'
        OR w.asset ILIKE '%' || sqlc.narg(q) || '%'
@@ -112,6 +123,11 @@ WHERE (sqlc.narg(id)::bigint IS NULL OR w.id = sqlc.narg(id))
   AND (sqlc.narg(type)::wo_type IS NULL OR w.type = sqlc.narg(type))
   AND (sqlc.narg(status)::wo_status IS NULL OR w.status = sqlc.narg(status))
   AND (sqlc.narg(priority)::wo_priority IS NULL OR w.priority = sqlc.narg(priority))
+  AND (sqlc.narg(sla)::text IS NULL
+       OR (sqlc.narg(sla) = 'breached' AND w.status <> 'cancelled' AND w.planned_date IS NOT NULL
+           AND ((w.actual_date IS NULL AND w.planned_date < CURRENT_DATE) OR w.actual_date > w.planned_date))
+       OR (sqlc.narg(sla) = 'at_risk' AND w.status <> 'cancelled' AND w.actual_date IS NULL
+           AND w.planned_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 1))
   AND (sqlc.narg(q)::text IS NULL
        OR w.ref ILIKE '%' || sqlc.narg(q) || '%'
        OR w.asset ILIKE '%' || sqlc.narg(q) || '%'

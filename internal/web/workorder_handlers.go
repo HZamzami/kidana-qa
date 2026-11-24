@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/HZamzami/kidana-quality/internal/dates"
 	"github.com/HZamzami/kidana-quality/internal/db"
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
 	"github.com/HZamzami/kidana-quality/internal/domain"
@@ -32,7 +34,7 @@ func (s *Server) workOrdersList(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.q.ListWorkOrders(ctx, gen.ListWorkOrdersParams{
 		SiteID: filter.SiteID, SystemID: filter.SystemID, AssetGroupID: filter.AssetGroupID, ContractorID: filter.ContractorID,
-		Type: filter.Type, Status: filter.Status, Priority: filter.Priority, Q: filter.Q,
+		Type: filter.Type, Status: filter.Status, Priority: filter.Priority, Q: filter.Q, Sla: filter.Sla,
 		Lim: woPageSize, Off: int32((page - 1) * woPageSize), //nolint:gosec // bounded by page count
 	})
 	if err != nil {
@@ -48,6 +50,7 @@ func (s *Server) workOrdersList(w http.ResponseWriter, r *http.Request) {
 	d := views.WOListData{
 		Rows: rows, Total: total, Page: page, PageSize: woPageSize, Query: q,
 		Sites: lk.Sites, Systems: lk.Systems, AssetGroups: lk.AssetGroups, Contractors: lk.Contractors, Statuses: woStatusOptions(true), Priorities: priorityOptions(),
+		Views: s.savedViews(r, "work-orders", q),
 	}
 	s.render(w, r, http.StatusOK, views.WorkOrdersPage(d))
 }
@@ -68,6 +71,9 @@ func woFilter(r *http.Request) gen.CountWorkOrdersParams {
 	}
 	if p := gen.WoPriority(q.Get("priority")); p.Valid() {
 		f.Priority = &p
+	}
+	if v := q.Get("sla"); v == domain.SLABreached || v == domain.SLAAtRisk {
+		f.Sla = &v
 	}
 	if scope := appctx.ContractorScope(r.Context()); scope != nil {
 		f.ContractorID = scope // contractor users see only their own work orders
@@ -123,7 +129,7 @@ type woInput struct {
 	SiteID, SystemID, AssetGroupID                int64
 	ContractorID                                  *int64
 	Priority                                      gen.WoPriority
-	PlannedDate, ActualDate                       *time.Time
+	PlannedDate, ActualDate, ReportedOn           *time.Time
 	Status                                        gen.WoStatus
 }
 
@@ -134,7 +140,7 @@ func (s *Server) parseWO(r *http.Request, id int64) (woInput, views.WOFormValues
 		Ref: f.Str("ref"), Type: f.Str("type"), SiteID: f.Str("site_id"), Location: f.Str("location"),
 		SystemID: f.Str("system_id"), AssetGroupID: f.Str("asset_group_id"), Asset: f.Str("asset"), ContractorID: f.Str("contractor_id"),
 		Technician: f.Str("technician"), Priority: f.Str("priority"), Description: f.Str("description"),
-		PlannedDate: f.Str("planned_date"), ActualDate: f.Str("actual_date"), Status: f.Str("status"),
+		PlannedDate: f.Str("planned_date"), ActualDate: f.Str("actual_date"), Status: f.Str("status"), ReportedOn: f.Str("reported_on"),
 	}
 	in := woInput{
 		Ref:          f.Required("ref", appctx.T(r.Context(), "رقم أمر العمل")),
@@ -147,6 +153,7 @@ func (s *Server) parseWO(r *http.Request, id int64) (woInput, views.WOFormValues
 		AssetGroupID: f.ReqID("asset_group_id", appctx.T(r.Context(), "مجموعة الأصل")),
 		ContractorID: f.OptID("contractor_id"),
 		PlannedDate:  f.OptDate("planned_date"),
+		ReportedOn:   f.OptDate("reported_on"),
 		ActualDate:   f.OptDate("actual_date"),
 	}
 	for name, n := range map[string]int{"ref": 60, "location": 120, "asset": 120, "technician": 80, "description": 2000} {
@@ -198,7 +205,7 @@ func (s *Server) workOrderCreate(w http.ResponseWriter, r *http.Request) {
 	wo, err := s.q.CreateWorkOrder(ctx, gen.CreateWorkOrderParams{
 		Ref: in.Ref, Type: in.Type, SiteID: in.SiteID, Location: in.Location, SystemID: in.SystemID, AssetGroupID: in.AssetGroupID,
 		Asset: in.Asset, ContractorID: in.ContractorID, Technician: in.Technician, Priority: in.Priority,
-		Description: in.Description, PlannedDate: in.PlannedDate, ActualDate: in.ActualDate, CreatedBy: currentUserID(ctx),
+		Description: in.Description, PlannedDate: s.dueDate(ctx, in), ActualDate: in.ActualDate, CreatedBy: currentUserID(ctx), ReportedOn: in.ReportedOn,
 	})
 	if err != nil {
 		s.serverError(w, r, err)
@@ -252,6 +259,16 @@ func (s *Server) workOrderShow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := views.WOShowData{WO: wo, Inspections: ins, Findings: fs, Assignments: as, Today: time.Now().Format(time.DateOnly)}
+	if !appctx.IsContractor(ctx) {
+		hist, err := s.q.ListWorkOrderHistory(ctx, id)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		for _, h := range hist {
+			d.History = append(d.History, views.HistoryEntry{Entity: h.Entity, EntityID: h.EntityID, Action: h.Action, User: h.UserName, Details: h.Details, At: h.CreatedAt})
+		}
+	}
 	if appctx.CanEdit(ctx) {
 		if d.Assignees, err = s.assignees(r); err != nil {
 			s.serverError(w, r, err)
@@ -276,7 +293,7 @@ func (s *Server) workOrderEdit(w http.ResponseWriter, r *http.Request) {
 		Ref: wo.Ref, Type: string(wo.Type), SiteID: idStr(wo.SiteID), Location: wo.Location,
 		SystemID: idStr(wo.SystemID), AssetGroupID: idStr(wo.AssetGroupID), Asset: wo.Asset, Technician: wo.Technician,
 		Priority: string(wo.Priority), Description: wo.Description, Status: string(wo.Status),
-		PlannedDate: fmtDate(wo.PlannedDate), ActualDate: fmtDate(wo.ActualDate),
+		PlannedDate: fmtDate(wo.PlannedDate), ActualDate: fmtDate(wo.ActualDate), ReportedOn: fmtDate(&wo.ReportedOn),
 	}
 	if wo.ContractorID != nil {
 		v.ContractorID = idStr(*wo.ContractorID)
@@ -323,7 +340,7 @@ func (s *Server) workOrderUpdate(w http.ResponseWriter, r *http.Request) {
 		wo, err := q.UpdateWorkOrder(ctx, gen.UpdateWorkOrderParams{
 			ID: id, Ref: in.Ref, Type: in.Type, SiteID: in.SiteID, Location: in.Location, SystemID: in.SystemID, AssetGroupID: in.AssetGroupID,
 			Asset: in.Asset, ContractorID: in.ContractorID, Technician: in.Technician, Priority: in.Priority,
-			Description: in.Description, PlannedDate: in.PlannedDate, ActualDate: in.ActualDate, Status: in.Status,
+			Description: in.Description, PlannedDate: s.dueDate(ctx, in), ActualDate: in.ActualDate, Status: in.Status, ReportedOn: in.ReportedOn,
 		})
 		if err != nil {
 			return err
@@ -417,4 +434,34 @@ func woDiff(b gen.GetWorkOrderRow, a gen.WorkOrder) map[string]any {
 		"priority": string(a.Priority), "description": a.Description, "planned_date": fmtDate(a.PlannedDate),
 		"actual_date": fmtDate(a.ActualDate), "status": string(a.Status),
 	})
+}
+
+// dueDate is the entered due date, or for a work order (WO) the report date
+// plus the priority's resolution target.
+func (s *Server) dueDate(ctx context.Context, in woInput) *time.Time {
+	if in.PlannedDate != nil || in.Type != gen.WoTypeWO {
+		return in.PlannedDate
+	}
+	reported := dates.Today()
+	if in.ReportedOn != nil {
+		reported = *in.ReportedOn
+	}
+	if due, ok := domain.DueFrom(reported, string(in.Priority), s.slaTargets(ctx)); ok {
+		return &due
+	}
+	return nil
+}
+
+// slaTargets loads the resolution targets (days by priority / severity).
+func (s *Server) slaTargets(ctx context.Context) domain.SLATargets {
+	t := domain.SLATargets{}
+	rows, err := s.q.ListSLATargets(ctx)
+	if err != nil {
+		s.log.Warn("sla targets", "err", err)
+		return t
+	}
+	for _, r := range rows {
+		t[r.Key] = int(r.Days)
+	}
+	return t
 }

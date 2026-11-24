@@ -1,6 +1,7 @@
 package views
 
 import (
+	"context"
 	"fmt"
 	"math"
 
@@ -20,6 +21,8 @@ type DashboardData struct {
 	Systems     []Option
 	AssetGroups []Option
 	Contractors []Option
+	Trend       []domain.MonthPoint
+	Views       ViewsBar
 }
 
 var StageOptions = []Option{{"during", "أثناء التنفيذ"}, {"after", "بعد التنفيذ"}}
@@ -35,6 +38,7 @@ templ Dashboard(d DashboardData) {
 			<a class="btn btn-outline" href={ templ.URL("/reports/print?" + d.Query) } target="_blank" rel="noopener">{ t(ctx, "تقرير للطباعة") }</a>
 			<a class="btn btn-gold" href={ templ.URL("/reports/export.xlsx?" + d.Query) }>{ t(ctx, "تصدير Excel") }</a>
 		}
+		@SavedViewsBar(d.Views)
 		<form
 			class="card p-3 mb-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 items-end gap-3 no-print"
 			method="get"
@@ -90,6 +94,13 @@ templ Dashboard(d DashboardData) {
 					@groupBars(d.S.ByContractor, 6)
 				</section>
 			</div>
+			<section class="mt-4 card p-4">
+				<div class="flex flex-wrap items-baseline gap-2 mb-3">
+					<h2 class="font-semibold">{ t(ctx, "الاتجاه الشهري") }</h2>
+					<span class="text-xs text-ink-60">{ t(ctx, "متوسط النتيجة لكل شهر (آخر 12 شهراً)، والخط حد المطابقة") }</span>
+				</div>
+				@TrendChart(d.Trend)
+			</section>
 			<div class="mt-4">
 				<section class="card p-4">
 					<h2 class="font-semibold mb-3">{ t(ctx, "أبرز الملاحظات والتوصيات") }</h2>
@@ -287,4 +298,32 @@ func tern(cond bool, a, b string) string {
 		return a
 	}
 	return b
+}
+
+// TrendChart shows monthly average score as bars (oldest first in reading
+// order) with the pass mark as a line. Bars are tinted pass or fail.
+templ TrendChart(points []domain.MonthPoint) {
+	<div class="relative">
+		<div class="absolute inset-x-0 border-t border-dashed border-fail/60 pointer-events-none" style={ fmt.Sprintf("bottom:calc(1.5rem + %.1f%% * 0.85)", domain.PassThreshold) }></div>
+		<div class="flex items-end gap-1 sm:gap-2 h-44">
+			for _, p := range points {
+				<div class="flex-1 min-w-0 h-full flex flex-col justify-end items-center" title={ trendTitle(ctx, p) }>
+					if p.Count > 0 {
+						<span class="text-[10px] num text-ink-80 mb-0.5">{ domain.Fmt1(p.Avg) }</span>
+						<span class={ "w-full max-w-10 rounded-t", templ.KV("bg-green-50", p.Avg >= domain.PassThreshold), templ.KV("bg-fail/40", p.Avg < domain.PassThreshold) } style={ fmt.Sprintf("height:%.1f%%", p.Avg*0.85) }></span>
+					} else {
+						<span class="w-full max-w-10 h-px bg-ink-10"></span>
+					}
+					<span class="mt-1 h-5 text-[10px] num text-ink-60">{ p.Month[5:] + "/" + p.Month[2:4] }</span>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+func trendTitle(ctx context.Context, p domain.MonthPoint) string {
+	if p.Count == 0 {
+		return p.Month
+	}
+	return fmt.Sprintf("%s — %s · %s", p.Month, count(ctx, p.Count, domain.NounInspection), domain.PctVal(p.PassRate))
 }

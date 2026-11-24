@@ -56,6 +56,26 @@ templ TypePill(typ string) {
 	</span>
 }
 
+// SLAPill shows a work order against its resolution target ("" shows nothing).
+templ SLAPill(state string) {
+	switch state {
+		case "met":
+			<span class="pill bg-green-10 text-green" title={ t(ctx, "تم ضمن زمن الحل المستهدف") }>{ t(ctx, "ضمن الهدف") }</span>
+		case "breached":
+			<span class="pill bg-fail text-white" title={ t(ctx, "تجاوز زمن الحل المستهدف") }>{ t(ctx, "تجاوز الهدف") }</span>
+		case "at_risk":
+			<span class="pill bg-gold-20 text-ink" title={ t(ctx, "يستحق اليوم أو غداً") }>{ t(ctx, "قريب من الهدف") }</span>
+	}
+}
+
+// slaState is a work order's state against its due date today.
+func slaState(planned, actual *time.Time, status string) string {
+	if status == "cancelled" {
+		return ""
+	}
+	return domain.SLAState(planned, actual, dates.Today())
+}
+
 // PriorityPill colours rise with urgency: neutral, gold, then brick.
 templ PriorityPill(p string) {
 	<span
