@@ -7,7 +7,18 @@ package gen
 
 import (
 	"context"
+	"time"
 )
+
+const bumpSessionVersion = `-- name: BumpSessionVersion :exec
+UPDATE users SET session_version = session_version + 1 WHERE id = $1
+`
+
+// Signs out every session of the user (sessions carry the version they started with).
+func (q *Queries) BumpSessionVersion(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, bumpSessionVersion, id)
+	return err
+}
 
 const countUsers = `-- name: CountUsers :one
 SELECT count(*) FROM users
@@ -20,10 +31,40 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const createPasswordReset = `-- name: CreatePasswordReset :exec
+INSERT INTO password_resets (user_id, token_hash, expires_at, created_by) VALUES ($1, $2, $3, $4)
+`
+
+type CreatePasswordResetParams struct {
+	UserID    int64
+	TokenHash string
+	ExpiresAt time.Time
+	CreatedBy *int64
+}
+
+func (q *Queries) CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) error {
+	_, err := q.db.Exec(ctx, createPasswordReset,
+		arg.UserID,
+		arg.TokenHash,
+		arg.ExpiresAt,
+		arg.CreatedBy,
+	)
+	return err
+}
+
+const createPasswordResetRequest = `-- name: CreatePasswordResetRequest :exec
+INSERT INTO password_reset_requests (user_id) VALUES ($1)
+`
+
+func (q *Queries) CreatePasswordResetRequest(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, createPasswordResetRequest, userID)
+	return err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, name, role, password_hash)
 VALUES ($1, $2, $3, $4)
-RETURNING id, email, name, role, password_hash, active, created_at, updated_at, lang
+RETURNING id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version
 `
 
 type CreateUserParams struct {
@@ -51,12 +92,54 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Lang,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.RecoveryCodes,
+		&i.OidcSubject,
+		&i.SessionVersion,
+	)
+	return i, err
+}
+
+const getPasswordReset = `-- name: GetPasswordReset :one
+SELECT r.id, r.user_id, r.token_hash, r.expires_at, r.used_at, r.created_by, r.created_at, u.name, u.email, u.active
+FROM password_resets r JOIN users u ON u.id = r.user_id
+WHERE r.token_hash = $1
+`
+
+type GetPasswordResetRow struct {
+	ID        int64
+	UserID    int64
+	TokenHash string
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+	CreatedBy *int64
+	CreatedAt time.Time
+	Name      string
+	Email     string
+	Active    bool
+}
+
+func (q *Queries) GetPasswordReset(ctx context.Context, tokenHash string) (GetPasswordResetRow, error) {
+	row := q.db.QueryRow(ctx, getPasswordReset, tokenHash)
+	var i GetPasswordResetRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.Name,
+		&i.Email,
+		&i.Active,
 	)
 	return i, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang FROM users WHERE id = $1
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
@@ -72,12 +155,17 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Lang,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.RecoveryCodes,
+		&i.OidcSubject,
+		&i.SessionVersion,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang FROM users WHERE email = $1
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -93,12 +181,137 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Lang,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.RecoveryCodes,
+		&i.OidcSubject,
+		&i.SessionVersion,
 	)
 	return i, err
 }
 
+const getUserByOIDCSubject = `-- name: GetUserByOIDCSubject :one
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version FROM users WHERE oidc_subject = $1
+`
+
+func (q *Queries) GetUserByOIDCSubject(ctx context.Context, oidcSubject *string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByOIDCSubject, oidcSubject)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.PasswordHash,
+		&i.Active,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Lang,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.RecoveryCodes,
+		&i.OidcSubject,
+		&i.SessionVersion,
+	)
+	return i, err
+}
+
+const handlePasswordResetRequests = `-- name: HandlePasswordResetRequests :exec
+UPDATE password_reset_requests SET handled_at = now(), handled_by = $2 WHERE user_id = $1 AND handled_at IS NULL
+`
+
+type HandlePasswordResetRequestsParams struct {
+	UserID    int64
+	HandledBy *int64
+}
+
+func (q *Queries) HandlePasswordResetRequests(ctx context.Context, arg HandlePasswordResetRequestsParams) error {
+	_, err := q.db.Exec(ctx, handlePasswordResetRequests, arg.UserID, arg.HandledBy)
+	return err
+}
+
+const listAdmins = `-- name: ListAdmins :many
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version FROM users WHERE role = 'admin' AND active
+`
+
+func (q *Queries) ListAdmins(ctx context.Context) ([]User, error) {
+	rows, err := q.db.Query(ctx, listAdmins)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.Role,
+			&i.PasswordHash,
+			&i.Active,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Lang,
+			&i.TotpSecret,
+			&i.TotpEnabled,
+			&i.RecoveryCodes,
+			&i.OidcSubject,
+			&i.SessionVersion,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenPasswordResetRequests = `-- name: ListOpenPasswordResetRequests :many
+SELECT r.id, r.created_at, u.id AS user_id, u.name, u.email
+FROM password_reset_requests r JOIN users u ON u.id = r.user_id
+WHERE r.handled_at IS NULL
+ORDER BY r.created_at
+`
+
+type ListOpenPasswordResetRequestsRow struct {
+	ID        int64
+	CreatedAt time.Time
+	UserID    int64
+	Name      string
+	Email     string
+}
+
+func (q *Queries) ListOpenPasswordResetRequests(ctx context.Context) ([]ListOpenPasswordResetRequestsRow, error) {
+	rows, err := q.db.Query(ctx, listOpenPasswordResetRequests)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOpenPasswordResetRequestsRow{}
+	for rows.Next() {
+		var i ListOpenPasswordResetRequestsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UserID,
+			&i.Name,
+			&i.Email,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang FROM users ORDER BY active DESC, name
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version FROM users ORDER BY active DESC, name
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -120,6 +333,11 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Lang,
+			&i.TotpSecret,
+			&i.TotpEnabled,
+			&i.RecoveryCodes,
+			&i.OidcSubject,
+			&i.SessionVersion,
 		); err != nil {
 			return nil, err
 		}
@@ -129,6 +347,55 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setOIDCSubject = `-- name: SetOIDCSubject :exec
+UPDATE users SET oidc_subject = $2 WHERE id = $1
+`
+
+type SetOIDCSubjectParams struct {
+	ID          int64
+	OidcSubject *string
+}
+
+func (q *Queries) SetOIDCSubject(ctx context.Context, arg SetOIDCSubjectParams) error {
+	_, err := q.db.Exec(ctx, setOIDCSubject, arg.ID, arg.OidcSubject)
+	return err
+}
+
+const setRecoveryCodes = `-- name: SetRecoveryCodes :exec
+UPDATE users SET recovery_codes = $2 WHERE id = $1
+`
+
+type SetRecoveryCodesParams struct {
+	ID            int64
+	RecoveryCodes []string
+}
+
+func (q *Queries) SetRecoveryCodes(ctx context.Context, arg SetRecoveryCodesParams) error {
+	_, err := q.db.Exec(ctx, setRecoveryCodes, arg.ID, arg.RecoveryCodes)
+	return err
+}
+
+const setTOTP = `-- name: SetTOTP :exec
+UPDATE users SET totp_secret = $2, totp_enabled = $3, recovery_codes = $4, updated_at = now() WHERE id = $1
+`
+
+type SetTOTPParams struct {
+	ID            int64
+	TotpSecret    string
+	TotpEnabled   bool
+	RecoveryCodes []string
+}
+
+func (q *Queries) SetTOTP(ctx context.Context, arg SetTOTPParams) error {
+	_, err := q.db.Exec(ctx, setTOTP,
+		arg.ID,
+		arg.TotpSecret,
+		arg.TotpEnabled,
+		arg.RecoveryCodes,
+	)
+	return err
 }
 
 const setUserLang = `-- name: SetUserLang :exec
@@ -148,7 +415,7 @@ func (q *Queries) SetUserLang(ctx context.Context, arg SetUserLangParams) error 
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET email = $2, name = $3, role = $4, active = $5, updated_at = now()
 WHERE id = $1
-RETURNING id, email, name, role, password_hash, active, created_at, updated_at, lang
+RETURNING id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version
 `
 
 type UpdateUserParams struct {
@@ -178,6 +445,11 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Lang,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.RecoveryCodes,
+		&i.OidcSubject,
+		&i.SessionVersion,
 	)
 	return i, err
 }
@@ -194,4 +466,16 @@ type UpdateUserPasswordParams struct {
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.Exec(ctx, updateUserPassword, arg.ID, arg.PasswordHash)
 	return err
+}
+
+const usePasswordReset = `-- name: UsePasswordReset :execrows
+UPDATE password_resets SET used_at = now() WHERE id = $1 AND used_at IS NULL AND expires_at > now()
+`
+
+func (q *Queries) UsePasswordReset(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, usePasswordReset, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

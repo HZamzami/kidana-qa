@@ -18,6 +18,10 @@ type Config struct {
 	SessionSecure   bool
 	SessionLifetime time.Duration
 
+	// Microsoft (Entra ID) or any OIDC sign-in; off unless all are set.
+	OIDCIssuer, OIDCClientID, OIDCClientSecret, OIDCRedirectURL string
+	OIDCLabel                                                   string // button text, e.g. "Microsoft"
+
 	// First-run admin, created only when there are no users.
 	AdminEmail    string
 	AdminName     string
@@ -25,6 +29,11 @@ type Config struct {
 }
 
 func (c Config) IsDev() bool { return c.Env != "production" }
+
+// OIDCEnabled reports whether single sign-on is configured.
+func (c Config) OIDCEnabled() bool {
+	return c.OIDCIssuer != "" && c.OIDCClientID != "" && c.OIDCClientSecret != "" && c.OIDCRedirectURL != ""
+}
 
 func Load() (Config, error) {
 	c := Config{
@@ -35,6 +44,12 @@ func Load() (Config, error) {
 		AdminEmail:    os.Getenv("ADMIN_EMAIL"),
 		AdminName:     get("ADMIN_NAME", "مدير النظام"),
 		AdminPassword: os.Getenv("ADMIN_PASSWORD"),
+
+		OIDCIssuer:       os.Getenv("OIDC_ISSUER"),
+		OIDCClientID:     os.Getenv("OIDC_CLIENT_ID"),
+		OIDCClientSecret: os.Getenv("OIDC_CLIENT_SECRET"),
+		OIDCRedirectURL:  os.Getenv("OIDC_REDIRECT_URL"),
+		OIDCLabel:        get("OIDC_LABEL", "Microsoft"),
 	}
 	var errs []error
 	if c.DatabaseURL == "" {

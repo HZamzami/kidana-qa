@@ -15,6 +15,7 @@ import (
 	"github.com/HZamzami/kidana-quality/internal/config"
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
 	"github.com/HZamzami/kidana-quality/internal/storage"
+	"github.com/HZamzami/kidana-quality/internal/views"
 	webassets "github.com/HZamzami/kidana-quality/web"
 )
 
@@ -26,6 +27,7 @@ type Server struct {
 	sm      *scs.SessionManager
 	store   storage.Store
 	limiter *auth.LoginLimiter
+	oidc    *ssoClient
 }
 
 func New(cfg config.Config, log *slog.Logger, pool *pgxpool.Pool, store storage.Store) *Server {
@@ -38,6 +40,9 @@ func New(cfg config.Config, log *slog.Logger, pool *pgxpool.Pool, store storage.
 	sm.Cookie.SameSite = http.SameSiteLaxMode
 	sm.Cookie.Secure = cfg.SessionSecure
 
+	if cfg.OIDCEnabled() {
+		views.SSOLabel = cfg.OIDCLabel
+	}
 	return &Server{
 		cfg:     cfg,
 		log:     log,
@@ -46,6 +51,7 @@ func New(cfg config.Config, log *slog.Logger, pool *pgxpool.Pool, store storage.
 		sm:      sm,
 		store:   store,
 		limiter: auth.NewLoginLimiter(time.Minute, 5),
+		oidc:    &ssoClient{},
 	}
 }
 
@@ -63,6 +69,14 @@ func (s *Server) Handler() http.Handler {
 	app.HandleFunc("GET /login", s.loginPage)
 	app.HandleFunc("POST /login", s.loginSubmit)
 	app.HandleFunc("POST /lang", s.setLang)
+	app.HandleFunc("GET /login/2fa", s.twoFactorPage)
+	app.HandleFunc("POST /login/2fa", s.twoFactorSubmit)
+	app.HandleFunc("GET /forgot", s.forgotPage)
+	app.HandleFunc("POST /forgot", s.forgotSubmit)
+	app.HandleFunc("GET /reset/{token}", s.resetPage)
+	app.HandleFunc("POST /reset/{token}", s.resetSubmit)
+	app.HandleFunc("GET /auth/oidc", s.oidcStart)
+	app.HandleFunc("GET /auth/oidc/callback", s.oidcCallback)
 
 	authed := http.NewServeMux()
 	s.routes(authed)
@@ -88,6 +102,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /logout", s.logout)
 	mux.HandleFunc("GET /account/password", s.passwordPage)
 	mux.HandleFunc("POST /account/password", s.passwordSubmit)
+	mux.HandleFunc("GET /account/security", s.securityPage)
+	mux.HandleFunc("POST /account/2fa/start", s.twoFAStart)
+	mux.HandleFunc("POST /account/2fa/confirm", s.twoFAConfirm)
+	mux.HandleFunc("POST /account/2fa/disable", s.twoFADisable)
+	mux.HandleFunc("POST /account/2fa/recovery", s.twoFARecovery)
 
 	// dashboard
 	mux.HandleFunc("GET /{$}", s.dashboard)
@@ -143,6 +162,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/users", admin(s.userCreate))
 	mux.HandleFunc("POST /admin/users/{id}", admin(s.userUpdate))
 	mux.HandleFunc("POST /admin/users/{id}/password", admin(s.userResetPassword))
+	mux.HandleFunc("POST /admin/users/{id}/reset-link", admin(s.adminResetLink))
+	mux.HandleFunc("POST /admin/users/{id}/2fa-reset", admin(s.adminReset2FA))
 	mux.HandleFunc("GET /admin/checklists", admin(s.checklistsList))
 	mux.HandleFunc("GET /admin/checklists/{id}", admin(s.checklistShow))
 	mux.HandleFunc("GET /admin/checklists/{id}/new-version", admin(s.checklistNewVersion))

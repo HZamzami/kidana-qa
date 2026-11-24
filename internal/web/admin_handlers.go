@@ -188,6 +188,10 @@ func (s *Server) usersPage(w http.ResponseWriter, r *http.Request, status int, d
 		return
 	}
 	d.Users = users
+	if d.Requests, err = s.q.ListOpenPasswordResetRequests(r.Context()); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	s.render(w, r, status, views.UsersPage(d))
 }
 
@@ -302,6 +306,10 @@ func (s *Server) userResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.q.UpdateUserPassword(ctx, gen.UpdateUserPasswordParams{ID: id, PasswordHash: hash}); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if err := s.q.BumpSessionVersion(ctx, id); err != nil { // sign the user out everywhere
 		s.serverError(w, r, err)
 		return
 	}

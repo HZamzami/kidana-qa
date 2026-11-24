@@ -105,6 +105,7 @@ templ userMenu() {
 				</span>
 			</button>
 			<div x-show="open" x-cloak class="absolute end-0 mt-2 w-52 card shadow-lg p-1 z-30">
+				<a href="/account/security" class="block rounded-md px-3 py-2 hover:bg-ink-5">{ t(ctx, "الأمان والتحقق بخطوتين") }</a>
 				<a href="/account/password" class="block rounded-md px-3 py-2 hover:bg-ink-5">{ t(ctx, "تغيير كلمة المرور") }</a>
 				<form method="post" action="/logout">
 					<button type="submit" class="w-full text-start rounded-md px-3 py-2 hover:bg-ink-5">{ t(ctx, "تسجيل الخروج") }</button>

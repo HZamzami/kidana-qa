@@ -120,10 +120,13 @@ templ LookupPage(d LookupData) {
 // ---------------------------------------------------------------- users
 
 type UsersData struct {
-	Users  []gen.User
-	Errors map[string]string
-	New    struct{ Email, Name, Role string }
-	Info   string // e.g. a generated temporary password to hand over
+	Users     []gen.User
+	Requests  []gen.ListOpenPasswordResetRequestsRow // «نسيت كلمة المرور» awaiting an admin
+	Errors    map[string]string
+	New       struct{ Email, Name, Role string }
+	Info      string // e.g. a generated temporary password to hand over
+	ResetLink string // a one-time reset link to hand over, shown once
+	ResetFor  string
 }
 
 func roleOptions() []Option {
@@ -140,6 +143,29 @@ templ UsersPage(d UsersData) {
 		@adminNav("/admin/users")
 		if d.Info != "" {
 			<div role="status" class="mb-4 rounded-lg border border-gold-50 bg-gold-10 px-4 py-3 text-sm">{ d.Info }</div>
+		}
+		if d.ResetLink != "" {
+			<div role="status" class="mb-4 rounded-lg border border-gold-50 bg-gold-10 px-4 py-3 text-sm space-y-2">
+				<p>{ tf(ctx, "رابط إعادة تعيين كلمة المرور لـ %s — صالح 24 ساعة ولمرة واحدة. أرسله للمستخدم بنفسك؛ لن يظهر مرة أخرى.", d.ResetFor) }</p>
+				<input class="input h-9 font-mono text-xs" dir="ltr" readonly value={ d.ResetLink } aria-label={ t(ctx, "رابط إعادة التعيين") }/>
+			</div>
+		}
+		if len(d.Requests) > 0 {
+			<section class="card p-4 mb-4 border-s-4 border-s-gold">
+				<h2 class="font-semibold text-sm mb-2">{ t(ctx, "طلبات إعادة تعيين كلمة المرور") }</h2>
+				<ul class="divide-y divide-ink-10">
+					for _, rq := range d.Requests {
+						<li class="flex flex-wrap items-center gap-3 py-2">
+							<span class="font-medium">{ rq.Name }</span>
+							<span class="text-xs text-ink-60" dir="ltr">{ rq.Email }</span>
+							<span class="text-xs text-ink-60 num">{ dateTime(rq.CreatedAt) }</span>
+							<form method="post" action={ u("/admin/users/%d/reset-link", rq.UserID) } class="ms-auto">
+								<button type="submit" class="btn btn-primary py-1.5 text-xs">{ t(ctx, "إنشاء رابط إعادة تعيين") }</button>
+							</form>
+						</li>
+					}
+				</ul>
+			</section>
 		}
 		<form method="post" action="/admin/users" class="card p-4 mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end" novalidate>
 			@TextField("name", t(ctx, "الاسم"), d.New.Name, true, d.Errors, templ.Attributes{"maxlength": "80"})
@@ -171,9 +197,20 @@ templ UsersPage(d UsersData) {
 											</label>
 											<button type="submit" class="btn btn-outline py-1.5">{ t(ctx, "حفظ") }</button>
 										</form>
+										if usr.TotpEnabled {
+											<span class="pill bg-green-10 text-green" title={ t(ctx, "التحقق بخطوتين مفعّل") }>2FA</span>
+										}
+										<form method="post" action={ u("/admin/users/%d/reset-link", usr.ID) }>
+											<button type="submit" class="btn btn-ghost py-1.5 text-xs">{ t(ctx, "رابط إعادة تعيين") }</button>
+										</form>
 										<form method="post" action={ u("/admin/users/%d/password", usr.ID) }>
 											<button type="submit" class="btn btn-ghost py-1.5 text-xs">{ t(ctx, "كلمة مرور مؤقتة جديدة") }</button>
 										</form>
+										if usr.TotpEnabled {
+											<form method="post" action={ u("/admin/users/%d/2fa-reset", usr.ID) }>
+												<button type="submit" class="btn btn-ghost py-1.5 text-xs text-fail">{ t(ctx, "إيقاف 2FA") }</button>
+											</form>
+										}
 									</div>
 								</td>
 							</tr>

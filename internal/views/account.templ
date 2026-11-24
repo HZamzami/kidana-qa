@@ -1,0 +1,170 @@
+package views
+
+import "github.com/HZamzami/kidana-quality/internal/auth"
+
+// ---------------------------------------------------------------- sign-in, second step
+templ authShell(title string) {
+	@Base(title) {
+		<div class="fixed top-3 end-3 z-10">
+			@LangToggle()
+		</div>
+		<main class="min-h-dvh grid place-items-center px-4 py-10">
+			<div class="w-full max-w-sm">
+				<div class="text-center mb-6">
+					<img src={ asset("/static/img/kidana-logo.png") } alt={ t(ctx, "كدانة") } class="h-11 w-auto mx-auto"/>
+					<h1 class="mt-5 text-lg font-semibold">{ title }</h1>
+				</div>
+				{ children... }
+			</div>
+		</main>
+	}
+}
+
+templ TwoFactorPage(errMsg string) {
+	@authShell(t(ctx, "التحقق بخطوتين")) {
+		<form method="post" action="/login/2fa" class="card p-6 space-y-4">
+			if errMsg != "" {
+				<div role="alert" class="rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2">{ errMsg }</div>
+			}
+			<p class="text-sm text-ink-80">{ t(ctx, "أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة، أو أحد رموز الاسترداد.") }</p>
+			<div>
+				<label class="label" for="code">{ t(ctx, "الرمز") }</label>
+				<input class="input text-center text-lg tracking-widest" id="code" name="code" inputmode="text" autocomplete="one-time-code" required autofocus dir="ltr" maxlength="11"/>
+			</div>
+			<button type="submit" class="btn btn-primary w-full py-2.5">{ t(ctx, "تحقق") }</button>
+			<a href="/login" class="block text-center text-sm text-ink-80 hover:text-ink">{ t(ctx, "رجوع لتسجيل الدخول") }</a>
+		</form>
+	}
+}
+
+// ---------------------------------------------------------------- forgot / reset
+templ ForgotPage(sent bool, errMsg string) {
+	@authShell(t(ctx, "نسيت كلمة المرور")) {
+		<div class="card p-6 space-y-4">
+			if sent {
+				<p role="status" class="text-sm">{ t(ctx, "تم إرسال طلبك إلى مدير النظام. سيرسل لك رابطاً لإعادة تعيين كلمة المرور.") }</p>
+			} else {
+				if errMsg != "" {
+					<div role="alert" class="rounded-lg bg-fail-10 border border-fail-20 text-fail text-sm px-3 py-2">{ errMsg }</div>
+				}
+				<p class="text-sm text-ink-80">{ t(ctx, "أدخل بريدك الإلكتروني ليصل طلبك إلى مدير النظام، وسيرسل لك رابطاً لمرة واحدة لتعيين كلمة مرور جديدة.") }</p>
+				<form method="post" action="/forgot" class="space-y-4">
+					<div>
+						<label class="label" for="email">{ t(ctx, "البريد الإلكتروني") }</label>
+						<input class="input" id="email" name="email" type="email" autocomplete="username" required dir="ltr"/>
+					</div>
+					<button type="submit" class="btn btn-primary w-full py-2.5">{ t(ctx, "إرسال الطلب") }</button>
+				</form>
+			}
+			<a href="/login" class="block text-center text-sm text-ink-80 hover:text-ink">{ t(ctx, "رجوع لتسجيل الدخول") }</a>
+		</div>
+	}
+}
+
+templ ResetPage(token string, errs map[string]string, expired bool) {
+	@authShell(t(ctx, "تعيين كلمة مرور جديدة")) {
+		<div class="card p-6 space-y-4">
+			if expired {
+				<p role="alert" class="text-sm text-fail">{ t(ctx, "هذا الرابط غير صالح أو انتهت صلاحيته أو استُخدم من قبل. اطلب رابطاً جديداً من مدير النظام.") }</p>
+				<a href="/forgot" class="btn btn-outline w-full">{ t(ctx, "طلب رابط جديد") }</a>
+			} else {
+				<form method="post" action={ templ.SafeURL("/reset/" + token) } class="space-y-4" novalidate>
+					@TextField("new", t(ctx, "كلمة المرور الجديدة"), "", true, errs, templ.Attributes{"type": "password", "autocomplete": "new-password", "dir": "ltr"})
+					@TextField("confirm", t(ctx, "تأكيد كلمة المرور الجديدة"), "", true, errs, templ.Attributes{"type": "password", "autocomplete": "new-password", "dir": "ltr"})
+					<p class="text-xs text-ink-60">{ t(ctx, "10 أحرف على الأقل.") }</p>
+					<button type="submit" class="btn btn-primary w-full py-2.5">{ t(ctx, "حفظ كلمة المرور") }</button>
+				</form>
+			}
+		</div>
+	}
+}
+
+// ---------------------------------------------------------------- account security
+
+type SecurityData struct {
+	Enabled      bool
+	RecoveryLeft int
+	SSO          bool            // linked to Microsoft sign-in
+	Setup        *auth.TOTPSetup // enabling: QR + secret, awaiting a confirmation code
+	Codes        []string        // recovery codes to show once
+	Info, Error  string
+}
+
+templ SecurityPage(d SecurityData) {
+	@App(t(ctx, "الأمان")) {
+		@PageHeader(t(ctx, "الأمان"), t(ctx, "كلمة المرور والتحقق بخطوتين")) {
+			<a href="/account/password" class="btn btn-outline">{ t(ctx, "تغيير كلمة المرور") }</a>
+		}
+		if d.Info != "" {
+			<div role="status" class="mb-4 rounded-lg border border-green-50 bg-green-10 text-green px-4 py-3 text-sm">{ d.Info }</div>
+		}
+		if d.Error != "" {
+			<div role="alert" class="mb-4 rounded-lg border border-fail-20 bg-fail-10 text-fail px-4 py-3 text-sm">{ d.Error }</div>
+		}
+		<section class="card p-5 max-w-2xl space-y-4">
+			<div class="flex flex-wrap items-center gap-2">
+				<h2 class="font-semibold">{ t(ctx, "التحقق بخطوتين") }</h2>
+				if d.Enabled {
+					<span class="pill bg-green-20 text-green">{ t(ctx, "مفعّل") }</span>
+				} else {
+					<span class="pill bg-ink-10 text-ink-80">{ t(ctx, "غير مفعّل") }</span>
+				}
+				<span class="text-xs text-ink-60">{ t(ctx, "اختياري") }</span>
+			</div>
+			<p class="text-sm text-ink-80">{ t(ctx, "يطلب رمزاً من تطبيق مصادقة على جوالك (مثل Microsoft Authenticator أو Google Authenticator) بعد كلمة المرور، فلا يكفي معرفة كلمة المرور وحدها للدخول.") }</p>
+			if d.SSO {
+				<p class="text-xs text-ink-60">{ t(ctx, "الدخول عبر Microsoft يعتمد على التحقق الذي تفرضه جهتك هناك.") }</p>
+			}
+			if len(d.Codes) > 0 {
+				<div class="rounded-lg border border-gold-50 bg-gold-10 p-4">
+					<p class="text-sm font-medium">{ t(ctx, "رموز الاسترداد — احفظها في مكان آمن. كل رمز يعمل مرة واحدة إن فقدت جوالك، ولن تظهر مرة أخرى.") }</p>
+					<ul class="mt-3 grid grid-cols-2 gap-2 font-mono text-sm" dir="ltr">
+						for _, c := range d.Codes {
+							<li class="rounded bg-white border border-ink-10 px-2 py-1 text-center">{ c }</li>
+						}
+					</ul>
+				</div>
+			}
+			if d.Setup != nil {
+				<div class="grid gap-4 sm:grid-cols-[auto_1fr] items-start">
+					if d.Setup.QR != "" {
+						<img src={ templ.SafeURL(d.Setup.QR) } alt={ t(ctx, "رمز QR لتطبيق المصادقة") } class="size-48 rounded-lg border border-ink-10 bg-white p-2"/>
+					}
+					<div class="space-y-3">
+						<ol class="list-decimal ps-5 text-sm space-y-1">
+							<li>{ t(ctx, "افتح تطبيق المصادقة وامسح الرمز.") }</li>
+							<li>{ t(ctx, "أو أدخل هذا المفتاح يدوياً:") } <code class="font-mono text-xs bg-ink-5 px-1.5 py-0.5 rounded break-all" dir="ltr">{ d.Setup.Secret }</code></li>
+							<li>{ t(ctx, "أدخل الرمز الذي يظهر في التطبيق للتأكيد.") }</li>
+						</ol>
+						<form method="post" action="/account/2fa/confirm" class="flex flex-wrap items-end gap-2">
+							<div>
+								<label class="label" for="code">{ t(ctx, "الرمز") }</label>
+								<input class="input h-10 w-36 text-center tracking-widest" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" required maxlength="6" dir="ltr"/>
+							</div>
+							<button type="submit" class="btn btn-primary">{ t(ctx, "تأكيد وتفعيل") }</button>
+						</form>
+					</div>
+				</div>
+			} else if !d.Enabled {
+				<form method="post" action="/account/2fa/start">
+					<button type="submit" class="btn btn-primary">{ t(ctx, "تفعيل التحقق بخطوتين") }</button>
+				</form>
+			} else {
+				<p class="text-sm text-ink-80">{ tf(ctx, "رموز الاسترداد المتبقية: %d", d.RecoveryLeft) }</p>
+				<div class="grid gap-4 sm:grid-cols-2">
+					<form method="post" action="/account/2fa/recovery" class="rounded-lg border border-ink-10 p-3 space-y-2">
+						<p class="text-sm font-medium">{ t(ctx, "رموز استرداد جديدة") }</p>
+						<input class="input h-10 text-center tracking-widest" name="code" inputmode="numeric" autocomplete="one-time-code" required maxlength="6" dir="ltr" placeholder="000000" aria-label={ t(ctx, "الرمز") }/>
+						<button type="submit" class="btn btn-outline w-full">{ t(ctx, "إنشاء رموز جديدة") }</button>
+					</form>
+					<form method="post" action="/account/2fa/disable" class="rounded-lg border border-fail-20 p-3 space-y-2">
+						<p class="text-sm font-medium text-fail">{ t(ctx, "إيقاف التحقق بخطوتين") }</p>
+						<input class="input h-10" name="password" type="password" autocomplete="current-password" required dir="ltr" placeholder={ t(ctx, "كلمة المرور") } aria-label={ t(ctx, "كلمة المرور") }/>
+						<input class="input h-10 text-center tracking-widest" name="code" autocomplete="one-time-code" required maxlength="11" dir="ltr" placeholder={ t(ctx, "الرمز أو رمز استرداد") } aria-label={ t(ctx, "الرمز") }/>
+						<button type="submit" class="btn btn-danger w-full">{ t(ctx, "إيقاف") }</button>
+					</form>
+				</div>
+			}
+		</section>
+	}
+}

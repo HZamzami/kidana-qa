@@ -6,15 +6,20 @@ require (
 	github.com/a-h/templ v0.3.1118
 	github.com/alexedwards/scs/pgxstore v0.0.0-20261119174900-ed2e92329119
 	github.com/alexedwards/scs/v2 v2.9.0
+	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/hablullah/go-hijri v1.0.2
 	github.com/jackc/pgx/v5 v5.13.0
+	github.com/pquerna/otp v1.5.0
 	github.com/pressly/goose/v3 v3.30.1
 	github.com/xuri/excelize/v2 v2.11.1
 	golang.org/x/crypto v0.59.0
+	golang.org/x/oauth2 v0.38.0
 	golang.org/x/time v0.16.0
 )
 
 require (
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
+	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/hablullah/go-juliandays v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

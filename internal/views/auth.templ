@@ -1,5 +1,8 @@
 package views
 
+// SSOLabel names the single sign-on provider on the login page ("" = off).
+var SSOLabel string
+
 templ LoginPage(email, errMsg string) {
 	@Base(t(ctx, "تسجيل الدخول")) {
 		<div class="fixed top-3 end-3 z-10">
@@ -25,7 +28,11 @@ templ LoginPage(email, errMsg string) {
 						<input class="input" id="password" name="password" type="password" autocomplete="current-password" required dir="ltr"/>
 					</div>
 					<button type="submit" class="btn btn-primary w-full py-2.5">{ t(ctx, "دخول") }</button>
+					<a href="/forgot" class="block text-center text-sm text-ink-80 hover:text-ink">{ t(ctx, "نسيت كلمة المرور؟") }</a>
 				</form>
+				if SSOLabel != "" {
+					<a href="/auth/oidc" class="btn btn-outline w-full py-2.5 mt-3">{ tf(ctx, "الدخول عبر %s", SSOLabel) }</a>
+				}
 				<p class="mt-6 text-center text-xs text-ink-60">{ t(ctx, "شركة كدانة للتنمية والتطوير · إدارة جودة العمليات") }</p>
 			</div>
 		</main>

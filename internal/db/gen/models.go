@@ -650,6 +650,24 @@ type InspectionItem struct {
 	Note         string
 }
 
+type PasswordReset struct {
+	ID        int64
+	UserID    int64
+	TokenHash string
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+	CreatedBy *int64
+	CreatedAt time.Time
+}
+
+type PasswordResetRequest struct {
+	ID        int64
+	UserID    int64
+	CreatedAt time.Time
+	HandledAt *time.Time
+	HandledBy *int64
+}
+
 type Session struct {
 	Token  string
 	Data   []byte
@@ -686,15 +704,20 @@ type TemplateCriterion struct {
 }
 
 type User struct {
-	ID           int64
-	Email        string
-	Name         string
-	Role         UserRole
-	PasswordHash string
-	Active       bool
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	Lang         string
+	ID             int64
+	Email          string
+	Name           string
+	Role           UserRole
+	PasswordHash   string
+	Active         bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Lang           string
+	TotpSecret     string
+	TotpEnabled    bool
+	RecoveryCodes  []string
+	OidcSubject    *string
+	SessionVersion int32
 }
 
 type WorkOrder struct {

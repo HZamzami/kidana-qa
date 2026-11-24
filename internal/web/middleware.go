@@ -17,6 +17,10 @@ import (
 
 const (
 	sessionUserID = "userID"
+	sessionVer    = "sessionVersion" // users.session_version at login
+	sessionTwoFA  = "pending2fa"     // user id that passed the password step
+	sessionTOTP   = "totpSetup"      // unconfirmed authenticator secret
+	sessionOIDC   = "oidcState"      // state|nonce|verifier for Microsoft sign-in
 	sessionFlash  = "flash"
 	sessionFlashT = "flashTone"
 )
@@ -96,10 +100,10 @@ func (s *Server) loadUser(next http.Handler) http.Handler {
 		if id := s.sm.GetInt64(ctx, sessionUserID); id != 0 {
 			u, err := s.q.GetUser(ctx, id)
 			switch {
-			case err == nil && u.Active:
+			case err == nil && u.Active && int64(u.SessionVersion) == s.sm.GetInt64(ctx, sessionVer):
 				ctx = appctx.WithUser(ctx, &u)
 			case err == nil || errors.Is(err, pgx.ErrNoRows):
-				// deactivated or deleted: drop the session
+				// deactivated, deleted, or signed out everywhere (password changed): drop the session
 				_ = s.sm.Destroy(ctx)
 			default:
 				s.serverError(w, r, err)
