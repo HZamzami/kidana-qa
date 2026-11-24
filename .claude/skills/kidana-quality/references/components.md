@@ -7,8 +7,8 @@ Check here before writing markup. templ components live in `internal/views/`, an
 | Class | What |
 |---|---|
 | `.card` | White surface, `border-ink-10`, 10px radius. Add padding yourself (`p-4`/`p-5`). |
-| `.btn` + `.btn-primary` | Charcoal, for strong secondary actions (save, start QA). |
-| `.btn` + `.btn-gold` | **The** primary CTA (submit inspection, export, start QC). One per view. |
+| `.btn` + `.btn-primary` | Charcoal, for strong secondary actions (save, start the during-work inspection). |
+| `.btn` + `.btn-gold` | **The** primary CTA (submit inspection, export, start the after-work inspection). One per view. |
 | `.btn` + `.btn-outline` | Neutral actions (edit, back, view). |
 | `.btn` + `.btn-ghost` | Tertiary actions (reset, cancel, menu triggers). |
 | `.btn` + `.btn-danger` | Confirming a destructive action. |
@@ -40,14 +40,16 @@ To add a nav tab, edit the `nav` slice in `layout.templ`. Set `admin: true` to h
 
 | Component | Input | Renders |
 |---|---|---|
-| `@StagePill(stage)` | `"qa"`/`"qc"` | "QA · أثناء التنفيذ" (sky) / "QC · بعد التنفيذ" (gold) |
+| `@StagePill(stage)` | `"during"`/`"after"` | "أثناء التنفيذ" (sky) / "بعد التنفيذ" (gold) |
 | `@TypePill(t)` | `"PM"`/`"WO"` | صيانة وقائية (green tint) / أمر عمل (ink tint) |
+| `@PriorityPill(p)` | `"normal"`/`"high"`/`"emergency"` | عادي (ink tint) / عالي (gold) / طارئ (fail). The list shows it next to the ref only when not normal |
 | `@WOStatusPill(status)` | wo_status | open, in_progress, completed, accepted, cancelled |
 | `@FindingStatusPill(status, overdue)` | finding_status, bool | status pill + solid "متأخرة" when overdue |
 | `@SeverityPill(sev)` | `"critical"` only | outlined "حرجة" |
 | `@ResultPill(score *float64, passed *bool, critical bool)` | inspection result | "مسودة" / "86% · مطابق" / "62% · غير مطابق · بند حرج" |
 | `@RatingPill(r)` | `"C"/"P"/"N"/"NA"/""` | rating label pill, dashed "غير مقيّم" for empty |
 | `@ScoreBar(v float64, passed bool)` | list scores (`-1` = none) | value + mini bar |
+| `@PrintIcon()` | — | printer glyph for print actions (`size-4`, `currentColor`) |
 
 ## Dates
 
@@ -87,12 +89,12 @@ To add a nav tab, edit the `nav` slice in `layout.templ`. Set `admin: true` to h
 |---|---|
 | `@kpi(label, value, sub, tone)` | KPI tile. tone: `""`, `"sky"`, `"gold"`, `"green"` or `"fail"` (the dot colour). |
 | `@barRow(label, value, sub, critical)` | One 0–100 bar row (green ≥ 80, gold below). |
-| `@groupBars([]domain.Group, max int)` | barRows for a site/contractor/system grouping, capped at `max` with an "و N أخرى" line. |
+| `@groupBars([]domain.Group, max int)` | barRows for a site/contractor/system/asset-group grouping, capped at `max` with an "و N أخرى" line. |
 | `@criteriaCard(stage, []domain.CriterionStat, wide)` | One stage's criterion compliance (use `S.CriteriaFor(stage)`). `wide` = full width with two columns. |
 | `@compactBarRow(domain.CriterionStat)` | One-line criterion row (stacks on phones); tooltip has counts. |
 | `@gradeDonut([]domain.GradeCount)` | SVG donut with legend. |
 
-Option lists for filters and forms: `views.StageOptions` (qa/qc), `views.TypeOptions` (PM/WO), `views.ResultOptions` (pass/fail).
+Option lists for filters and forms: `views.StageOptions` (during/after), `views.TypeOptions` (PM/WO), `views.ResultOptions` (pass/fail).
 
 ## Print report pieces (`data.templ`)
 
@@ -102,14 +104,29 @@ Option lists for filters and forms: `views.StageOptions` (qa/qc), `views.TypeOpt
 | `@reportKPI(label, value, sub)` | Compact bordered KPI tile. |
 | `@reportChart(title) { … }` | Bordered tile wrapping any dashboard chart component (`groupBars`, `criteriaRows`, `gradeDonut`). Use it so print and screen charts stay identical. |
 | `@criteriaRows([]domain.CriterionStat)` | Compact criteria list for a report tile. |
-| `@reportGroup(title, []domain.Group)` | Site/contractor table with pass/fail-tinted averages. |
+| `@reportGroup(title, []domain.Group)` | Site/contractor/system/asset-group table with pass/fail-tinted averages. |
+
+## Work order print record (`print.templ`)
+
+| Component | Use |
+|---|---|
+| `@WorkOrdersPrint(WOPrintData)` | The page: sticky `no-print` toolbar (title, filter scope, رجوع, «طباعة / حفظ PDF»), cap warning, empty state, then one `printSheet` per card. `x-data="printPage"` with `data-auto="1"` opens the print dialog once fonts and images load. |
+| `@printSheet(d, WOPrintCard)` | One A4 `article.sheet`: header (logo, title, ref, priority + status), results strip (verdict, during score, after score, open findings), `pr-facts` details grid, during/after `inspectionPanel`s side by side, findings table, three `signBox`es, footer. |
+| `@scoreBox(stage, *PrintInspection)` | Score, grade, pass word and "المحاولة n من m"; «لم يُسجَّل» when nil. |
+| `@inspectionPanel(stage, *PrintInspection)` | Inspector/date/attempt line, earlier attempts, critical banner, criteria table with `ratingCell`s and a result footer. |
+| `@ratingCell(domain.Rating)` | Tinted label + SVG shape (check / half / cross / dash) so it reads in black and white. |
+| `@printFact(label)`, `@printDate(*time.Time)` | Print-sized fact cell; date with Hijri beneath. |
+| `@findingState(f, today)`, `@signBox(role, name)` | Finding status with closure date or «متأخرة»; signature box. |
+
+CSS (in `input.css`): `.print-root`, `.sheets`, `.sheet` (210 mm on screen, fills the page in print, `break-after: page`), `.pr-label`, `.pr-h2`, `.pr-facts`/`.pr-fact`, `.pr-table`, `.pr-tag`, `.pr-rating`. Type is in **pt** so the PDF matches paper. `@page` sets A4, margins and the «صفحة X من Y» footer for every printed page in the app.
 
 ## Work order actions (`workorders.templ`)
 
 | Action | How |
 |---|---|
-| Save and add another | Second submit button `name="next" value="new"` (new form only). The handler redirects to `/work-orders/new?keep=ctx&from=ID`, which keeps type, site, system and contractor. |
+| Save and add another | Second submit button `name="next" value="new"` (new form only). The handler redirects to `/work-orders/new?keep=ctx&from=ID`, which keeps type, site, system, asset group and contractor. |
 | Copy as new | Link to `/work-orders/new?from=ID`; it prefills everything except the number and dates. |
+| Print | Row action and detail button link to `/work-orders/{id}/print` (`target="_blank"`). «طباعة النتائج PDF» sits in the results header inside `#wo-results`, so htmx re-renders its href (`d.printURL()`, current filters, no page) with every filter change. |
 | Delete (admin) | Shown only when `appctx.IsAdmin(ctx) && d.deletable()` (no submitted inspection), behind `confirmAction`. The server re-checks and refuses otherwise. |
 
 ## Inspection flow (`inspection.templ`)
@@ -130,6 +147,7 @@ Option lists for filters and forms: `views.StageOptions` (qa/qc), `views.TypeOpt
 | `reviewPanel` | `visible` |
 | `disclosure` | `open`, `toggle()`, `close()`. Starts open when `data-open="true"`. |
 | `confirmAction` | `asking`, `ask()`, `cancel()` for in-page confirmations |
+| `printPage` | `print()`; on `data-auto="1"` waits for `document.fonts.ready` and images, then calls `window.print()` |
 | `dateEcho` | `g` (dd/mm/yyyy), `h` (Umm al-Qura digits via `Intl` `formatToParts`); `echo(ev)` |
 
 Global htmx glue in `app.js`: the `toast` event (from HX-Trigger) shows `#toast`, and `422` responses are swapped so validation errors render.

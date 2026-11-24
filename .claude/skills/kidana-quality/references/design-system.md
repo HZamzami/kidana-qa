@@ -19,18 +19,19 @@ Brand: primary **#4C4F53** (ink) and **#B59666** (gold); secondary **#627D4C** (
 | `ink-30` | #C9CACB | Input borders, dashed upload tiles |
 | `ink-10` | #EDEDEE | Card borders, dividers, bar tracks |
 | `ink-5` | #F6F6F6 | Page background, table header, subtle fills |
-| `gold` | #B59666 | **Primary accent**: main CTA (`btn-gold`), active nav underline, focus ring, progress, QC accent |
+| `gold` | #B59666 | **Primary accent**: main CTA (`btn-gold`), active nav underline, focus ring, progress, after-work accent |
 | `gold-80/50/20/10` | #C4AB85 / #DACBB3 / #F0EAE0 / #F8F5F0 | Hover, link underlines, "partial" fill, row hover |
 | `green` | #627D4C | **Pass**: مطابق, accepted, good insights |
 | `green-80/50/20/10` | … | Pass pills and fills |
-| `sky` | #93BBCA | **QA accent**, focus outline, info, in-progress |
-| `sky-60/30/15` | … | QA pill fill, info fills |
+| `sky` | #93BBCA | **During-work accent**, focus outline, info, in-progress |
+| `sky-60/30/15` | … | During-work pill fill, info fills |
 | `fail` | #A65A4E | **Fail**: غير مطابق, overdue, critical. The one non-brand colour, a muted brick chosen to sit with the palette. Never use a pure red. |
 | `fail-20/10` | #F2E1DD / #F9F0EE | Fail fills and borders |
 
 **Semantic mapping (keep it consistent everywhere):**
-- QA → `sky` (`bg-sky-30` pill, `border-t-sky`, timeline dot `bg-sky`)
-- QC → `gold` (`bg-gold-20` pill, `border-t-gold`, dot `bg-gold`)
+- during the work → `sky` (`bg-sky-30` pill, `border-t-sky`, timeline dot `bg-sky`)
+- after the work → `gold` (`bg-gold-20` pill, `border-t-gold`, dot `bg-gold`)
+- priority → عادي `ink-5`, عالي `gold-20`, طارئ `fail-10` + `fail` text
 - pass / compliant → `green-10` bg + `green` text
 - partial → `gold-20` bg + `ink` text
 - fail / non-compliant / open finding → `fail-10` bg + `fail` text
@@ -98,6 +99,8 @@ Use `domain.Count(n, domain.NounX)`, never `fmt.Sprintf("%d فحص")`. Nouns ava
 
 **Timeline** (inspections on a work order): an `ol` with `border-s-2 border-ink-10`, a dot per item coloured by stage, and each item a clickable card.
 
+**Print record (A4)**: follow `print.templ` for anything printed per record. One record per page; identity first (logo, title, ref large and LTR), then the answer (verdict and scores) before the detail, then details as a bordered 4-column fact grid, checklists side by side, findings, sign-off, and a footer with print time and printer. Sizes in pt: body 8.5, labels 7–7.5, section titles 9.5, ref 19. Colour is only a second signal: every rating and verdict also has a word and a shape, so black-and-white copies stay readable. Use light tints for fills, full-contrast text, and `print-avoid-break` on sections. Check the output as a real PDF (Playwright `page.pdf`), not only on screen.
+
 **Field pattern (inspection flow, phone first)**:
 - A sticky header card holds the WO ref, stage pill, site/system/asset line, a **live score box** that tints green or fail, a step text, the rated count, a gold progress bar, and a critical-fail banner.
 - Below it, a horizontal strip of criterion-code chips lets the inspector jump between steps.
@@ -107,7 +110,7 @@ Use `domain.Count(n, domain.NounX)`, never `fmt.Sprintf("%d فحص")`. Nouns ava
 - Autosave on `change` via htmx (`hx-swap="none"`) means there is no save button per item.
 
 **Dashboard layout (must scale with data)**: KPI row (`grid-cols-2 md:grid-cols-3 xl:grid-cols-6`, each a `kpi` tile with a coloured dot, label, value and sub-line), then:
-1. **Criteria, one card per stage** (`criteriaCard`) in `lg:grid-cols-2`: QA and QC side by side at similar heights. When the stage filter is set, only that card shows (`lg:col-span-2`) and its rows flow into two columns.
+1. **Criteria, one card per stage** (`criteriaCard`) in `lg:grid-cols-2`: during and after side by side at similar heights. When the stage filter is set, only that card shows (`lg:col-span-2`) and its rows flow into two columns.
 2. **Three equal-height cards** (`md:grid-cols-3`, stretched): by site, grade donut, by contractor. Lists are capped with `groupBars(groups, 6)` plus an "و N أخرى" line.
 3. **Insights**, full width.
 

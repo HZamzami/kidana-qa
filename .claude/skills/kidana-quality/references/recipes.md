@@ -49,7 +49,7 @@ Example: `building_no`.
 
 Go to Admin → قوائم الفحص → "إصدار جديد من هذه". Edit or add rows, tick حرج for criteria whose failure must fail the whole inspection, then save with "تفعيل" ticked. Old inspections keep their version.
 
-**Changing the seed** (only before the first deploy, or for a fresh install): edit `00002_seed.sql`. Weights per stage should sum to 100. Code prefixes are `Q` for QA and `C` for QC; the Excel export orders columns by them (`excel.SortCriteria`).
+**Changing the seed** (only before the first deploy, or for a fresh install): edit `00002_seed.sql`. Weights per stage should sum to 100. Code prefixes are `D` for during and `A` for after; the Excel export orders columns by them (`excel.SortCriteria`). After changing the seed, reset with `just nuke && just up && just seed`. Keep `cmd/seed` in step with the checklists (its `findingText` keys are criterion codes).
 
 ## 4. Add a new business rule
 
@@ -129,9 +129,22 @@ The admin work order delete is the pattern:
 
 ## 10. Visual check (no browser on the host)
 
-`just ui-check` (stack must be running) runs `scripts/ui_check.py` in a Playwright container. It walks the whole system like a user: login and its failure, work order create/validate/duplicate/edit, the QA phone flow with photo upload and a bad file, a critical fail with its finding, a refused submit, QC attempts 1 and 2, the findings lifecycle, list filters, the dashboard, the print report, the Excel template, the work order import (plus an unrecognised file), export, admin lookups/users/checklist validation, password errors, 404, and the viewer role.
+`just ui-check` (stack must be running) runs `scripts/ui_check.py` in a Playwright container. It walks the whole system like a user: login and its failure, work order create/validate/duplicate/edit, the during-work phone flow with photo upload and a bad file, a critical fail with its finding, a refused submit, after-work attempts 1 and 2, the findings lifecycle, list filters, the dashboard, work order printing (single and filtered), the print report, the Excel template, the work order import (plus an unrecognised file), export, admin lookups/users/checklist validation, password errors, 404, and the viewer role.
 
 - Screenshots go to `tmp/ui-check/NN-name.png` at **390px** (phone) and **1366px** (desktop) widths.
 - At the end it prints **failed steps** and **console/network problems**. Both must say `none`; 4xx lines from deliberate error tests are filtered out.
 - When you add a screen or flow, add a `@step` section to `scripts/ui_check.py`, then actually open the screenshots and check RTL, dates, numbers and empty space.
 - It leaves `DEMO-*` / `IMP-*` records in the dev DB on purpose. Run `just nuke && just up` for a clean slate.
+
+## 11. Add a lookup list (like المنظومة)
+
+1. Migration: a table shaped like `sites` (`name` unique, `active`, `sort`) and a `work_orders.<x>_id` FK (NOT NULL if required) with an index.
+2. Queries in `lookups.sql`: `List…`, `ListActive…`, `Get…ByName`, `Create…`, `Update…` (copy the `systems` block). Join it in `GetWorkOrder`, `ListWorkOrders`, `ListWorkOrdersForPrint` and `ListSubmittedInspections`, and add a `sqlc.narg` filter wherever the others filter.
+3. Add it to `lookupSet` / `lookupOptions` (`web/options.go`), `lookupTitles` and the three switch statements in `admin_handlers.go`, and `adminNav`/`AdminHome`.
+4. Form, list column or sub-line, filter (mind the even filter grid), detail fact, print fact, `woFilter`, `describeWOFilter`, `parseScope`/`describeScope` for reports.
+5. Excel: template column + drop-down list, parser, `lookupResolver` (creates unknown names), export column, then shift the export's styled column indices.
+6. Seeder (`cmd/seed`), tests (`web_test.go` posts, `TestTemplateRoundTrip`), `scripts/ui_check.py` form steps.
+
+## 12. Print another record type
+
+Copy the work order print: a `WithX…ForPrint` query sharing the list's filter function, batch-load children with `= ANY($1)`, assemble cards in the handler, render with `.sheet` pages and the `printPage` Alpine component. Add the row action, the detail button and a «طباعة النتائج» link inside the htmx results region, and a `ui_check` step. Verify by rendering a PDF with Playwright and reading it.

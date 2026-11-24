@@ -7,6 +7,7 @@ and no JSON API.
 
 ```
 cmd/server/            main: config → db pool → migrations → first admin → HTTP server
+cmd/seed/              dummy data for development (`just seed`), never in production
 internal/
   config/              environment variables (12-factor)
   domain/              business rules, no I/O: scoring, acceptance rule, submit validation,
@@ -30,14 +31,18 @@ web/
 ## Domain model
 
 ```
-work_orders 1──* inspections (stage qa|qc, attempt n, template version) 1──* inspection_items (rating, note)
+work_orders (site, system = المنظومة, asset_group = مجموعة الأصل, contractor, priority normal|high|emergency)
+            1──* inspections (stage during|after, attempt n, template version) 1──* inspection_items (rating, note)
             1──* findings (description, corrective action, owner, due date, status)
 inspections 1──* attachments (photos, optionally tied to a criterion)
 checklist_templates (stage, version, active) 1──* template_criteria (code, weight, is_critical)
 ```
 
-* **QA is optional and can repeat** (sampling; several visits on long jobs).
-  **QC can repeat** (attempt 2, 3, … after a failure).
+* **The during-work inspection is optional and can repeat** (sampling; several
+  visits on long jobs). **The after-work inspection can repeat** (attempt 2, 3, …
+  after a failure).
+* Sites, systems (المنظومات), asset groups (مجموعات الأصول) and contractors are
+  independent admin-managed lookup tables. Excel import creates missing names.
 * `work_orders.status` is maintained by `refreshWorkOrderStatus` (web/service.go)
   using `domain.NextWOStatus`. It runs after every change that can affect
   acceptance: inspection submitted/re-opened/deleted, finding
@@ -45,6 +50,12 @@ checklist_templates (stage, version, active) 1──* template_criteria (code, w
 * Scores are computed by `domain.Evaluate` and stored on submit. The client's
   live score in `app.js` mirrors the formula for preview only.
 * Every change is written to `audit_log`.
+* **Printing**: `/work-orders/{id}/print` and `/work-orders/print?<list filters>`
+  render A4 records (`views/print.templ`, `web/print_handlers.go`). The list and
+  the filtered print share `woFilter`, so a print always matches the screen. Data
+  loads in four batch queries; `domain.WOVerdict` gives the overall result.
+  The browser's print-to-PDF keeps Arabic shaping and the brand font, with no
+  server-side PDF engine.
 
 ## Conventions
 
@@ -61,12 +72,12 @@ checklist_templates (stage, version, active) 1──* template_criteria (code, w
 
 * `internal/domain`, `internal/dates`, `internal/excel`, `internal/auth`, `internal/storage`: pure unit tests.
 * `just ui-check`: a Playwright walkthrough of every screen and role (`scripts/ui_check.py`).
-* `internal/web/web_test.go`: integration tests over real HTTP and Postgres (`TEST_DATABASE_URL`). They cover auth, role guards, CSRF and the full QA → QC → acceptance flow.
+* `internal/web/web_test.go`: integration tests over real HTTP and Postgres (`TEST_DATABASE_URL`). They cover auth, role guards, CSRF and the full during → after → acceptance flow.
 
 ## Future extensions (designed for, not built)
 
-* Per-system checklists (e.g. an AC-specific QC list): add `system_id` to `checklist_templates` and pick the template by system + stage.
+* Per-system or per-asset-group checklists: add `system_id` / `asset_group_id` to `checklist_templates` and pick the template by it + stage.
 * SSO (Microsoft Entra ID) via OIDC alongside local accounts.
 * S3/MinIO photo storage: implement `storage.Store`.
-* Server-side PDF via a Gotenberg container that renders `/reports/print`.
-* A combined work-order score (QA + QC weighting) once the business defines it.
+* Server-side PDF via a Gotenberg container that renders `/reports/print` or `/work-orders/print` (for emailing records without a browser).
+* A combined work-order score (during + after weighting) once the business defines it.

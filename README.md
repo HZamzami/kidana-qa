@@ -5,12 +5,19 @@ inspected at two stages:
 
 | Stage | Arabic | When | Checks |
 |---|---|---|---|
-| **QA** | رقابة أثناء التنفيذ | A Kidana inspector goes with the contractor **while the work is done** | Safety (PPE, LOTO, permits), following the procedure, approved materials, technician competence, arrival/SLA |
-| **QC** | فحص بعد التنفيذ | **After** the work is finished | Technical quality, checklist and readings, photos/documentation, site cleanliness, WO closed in CMMS, on-time completion |
+| **During the work** | فحص أثناء التنفيذ | A Kidana inspector goes with the contractor **while the work is done** | Safety and permits (PPE, LOTO, PTW, risk assessment, **critical**), the approved procedure, approved materials, technician competence and calibrated instruments, protection of the site and environment, arrival/response time |
+| **After the work** | فحص بعد التنفيذ | **After** the work is finished | Functional test after maintenance (**critical**), safe return to service (**critical**), checklist and readings, workmanship, site cleanliness, documentation and WO closed in the CMMS |
+
+The business never calls these "QA"/"QC"; use the Arabic names above (short
+form: «أثناء التنفيذ» / «بعد التنفيذ»).
 
 Non-conformities become **findings** (ملاحظات) with a corrective action, owner
-and due date. A work order is **accepted** automatically when its latest QC
-passes and it has no open findings.
+and due date. A work order is **accepted** automatically when its latest
+after-work inspection passes and it has no open findings.
+
+Each work order records a **المنظومة** (e.g. منشأة الجمرات، أبراج كدانة) and a
+**مجموعة الأصل** (e.g. المبردات، المضخات). Both are admin-managed lists, as are
+sites and contractors. Priority is عادي، عالي or طارئ.
 
 Stack: **Go** · **templ** · **HTMX** · **Alpine.js** (CSP build) · **Tailwind v4** · **PostgreSQL 18** · Docker.
 
@@ -30,6 +37,12 @@ Open <http://localhost:8080> and log in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`
 from `.env` (default `admin@kidana.local` / `change-me-now`). Change the
 password from the user menu.
 
+For something to look at, `just seed` fills the dev database with about 150
+realistic dummy work orders, inspections and findings (`just seed -reset`
+replaces them). Demo inspectors log in as `insp1@demo.kidana.local` …
+`insp4@…` with the password `demo-password`. The seeder refuses to run in
+production.
+
 The app hot-reloads: editing `.go`, `.templ`, `.sql` or `.css` files rebuilds
 and restarts it (air). Refresh the browser to see changes.
 
@@ -42,6 +55,7 @@ and restarts it (air). Refresh the browser to see changes.
 | `just test` | Unit + integration tests (uses the `kidana_quality_test` database) |
 | `just lint` | golangci-lint, after regenerating code |
 | `just gen` | Regenerate templ components and sqlc queries |
+| `just seed` | Fill the dev database with dummy data (`-reset` wipes it first) |
 | `just migration add_thing` | New SQL migration in `internal/db/migrations` |
 | `just psql` | psql into the dev database |
 | `just shell` | Shell inside the dev container |
@@ -56,8 +70,8 @@ VS Code or JetBrains with Go, templ, Tailwind and htmx extensions.
 
 | Role | Can |
 |---|---|
-| مدير النظام (admin) | Everything, plus settings: checklists, sites, systems, contractors, users; re-open submitted inspections |
-| مدقق (inspector) | Create work orders, run QA/QC inspections, record and close findings, import/export |
+| مدير النظام (admin) | Everything, plus settings: checklists, sites, المنظومات, مجموعات الأصول, contractors, users; re-open submitted inspections |
+| مدقق (inspector) | Create work orders, run during/after inspections, record and close findings, import/export |
 | مشاهد (viewer) | Read-only |
 
 ## Scoring
@@ -67,8 +81,9 @@ score = Σ(weight × factor) ÷ Σ(weight of applicable criteria) × 100
 factor: مطابق 1 · مطابق جزئياً 0.5 · غير مطابق 0 · لا ينطبق excluded
 ```
 
-An inspection **passes** at ≥ 80% **and** when no *critical* criterion (e.g. QA
-safety) is rated غير مطابق. Grades: ممتاز ≥ 90, جيد جداً ≥ 80, جيد ≥ 70,
+An inspection **passes** at ≥ 80% **and** when no *critical* criterion (safety
+during the work; the functional test and safe return to service after it) is
+rated غير مطابق. Grades: ممتاز ≥ 90, جيد جداً ≥ 80, جيد ≥ 70,
 مقبول ≥ 60, ضعيف below.
 
 Checklists are **versioned**. Editing one creates a new version, so old
@@ -76,6 +91,11 @@ inspections keep the criteria and weights they were scored with.
 
 ## Data in and out
 
+* **Work order PDF**: every row in the work order list has a print action, the
+  detail page has «طباعة», and «طباعة النتائج PDF» prints every work order
+  matching the current filters (up to 300), one A4 record per page with page
+  numbers: verdict, scores, details, both checklists, findings and a
+  sign-off block. Save as PDF from the browser's print dialog.
 * **Export**: Excel (summary with logo, inspections with every rating,
   findings, and the active checklists with the scoring rules), with the
   current dashboard filters, including pass/fail. There is also a

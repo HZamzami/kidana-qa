@@ -1,27 +1,32 @@
 ---
 name: kidana-quality
-description: How to build in the Kidana Quality maintenance-quality app (Go + templ + HTMX + Alpine CSP + Tailwind v4 + Postgres, Arabic RTL, Kidana brand). Use for ANY work in this repo — new pages or screens, UI components, styling/theming, dashboard KPIs or charts, inspection/checklist/criteria changes, work-order or finding features, Excel import/export, migrations and queries, tests — and whenever someone asks what the app is, how its QA/QC model works, or how to make something "look like the rest of the app".
+description: How to build in the Kidana Quality maintenance-quality app (Go + templ + HTMX + Alpine CSP + Tailwind v4 + Postgres, Arabic RTL, Kidana brand). Use for ANY work in this repo — new pages or screens, UI components, styling/theming, dashboard KPIs or charts, inspection/checklist/criteria changes, work-order or finding features, Excel import/export, migrations and queries, tests — and whenever someone asks what the app is, how its during/after inspection model works, how work order printing works, or how to make something "look like the rest of the app".
 ---
 
 # Kidana Quality
 
 A quality system for Kidana's maintenance contractors. Every **work order** (أمر عمل) or preventive maintenance job (صيانة وقائية) can be inspected twice:
 
-- **QA — رقابة أثناء التنفيذ**: a Kidana inspector goes with the contractor *while* the work happens and checks *how* it is done (safety/LOTO/PPE, procedure, materials, technician competence, arrival on time).
-- **QC — فحص بعد التنفيذ**: *after* the work, checks the *result* (technical quality, readings, photos, cleanliness, CMMS closure, on-time completion).
+- **فحص أثناء التنفيذ** (during the work, `during`): a Kidana inspector goes with the contractor *while* the work happens and checks *how* it is done (safety and permits, the approved procedure, materials, technician competence and calibrated instruments, protection of the site, arrival on time).
+- **فحص بعد التنفيذ** (after the work, `after`): checks the *result* (functional test, safe return to service, readings, workmanship, cleanliness, documentation and CMMS closure).
 
-Each failed check becomes a **finding** (ملاحظة) with a corrective action, owner and due date. A work order is **accepted** (معتمد) automatically when its latest QC passes and no findings are open. Read `references/domain.md` before changing any rule, criterion or status.
+**Never write "QA"/"QC"** anywhere (UI, code, docs): the business doesn't use those words. Short labels are «أثناء التنفيذ» / «بعد التنفيذ».
+
+Each failed check becomes a **finding** (ملاحظة) with a corrective action, owner and due date. A work order is **accepted** (معتمد) automatically when its latest after-work inspection passes and no findings are open. Work orders carry a **المنظومة** and a **مجموعة الأصل** (independent admin-managed lists) and a priority of عادي / عالي / طارئ. Read `references/domain.md` before changing any rule, criterion or status.
 
 ## What the app does today (feature map)
 
 | Area | Route(s) | Highlights |
 |---|---|---|
-| Dashboard | `/` | KPIs (QA and QC averages, pass rate, open/overdue findings, on-time rate), bento charts, insights. Filters: stage, type, site, system, contractor, **result (pass/fail)**, date range |
-| Work orders | `/work-orders`, `/work-orders/{id}` | HTMX search and filters; detail page with facts, a QA → QC timeline and findings. **Save and add another**, **copy as new** (`/work-orders/new?from=ID`), **admin delete** (only before any inspection is submitted) |
+| Dashboard | `/` | KPIs (during and after averages, pass rate, open/overdue findings, on-time rate), bento charts, insights. Filters: stage, type, site, المنظومة (`system`), مجموعة الأصل (`group`), contractor, **result (pass/fail)**, date range |
+| Work orders | `/work-orders`, `/work-orders/{id}` | HTMX search and filters (type, status, priority, site, system, group, contractor); detail page with facts, a during → after timeline and findings. **Save and add another**, **copy as new** (`/work-orders/new?from=ID`), **admin delete** (only before any inspection is submitted) |
+| Work order print | `/work-orders/{id}/print`, `/work-orders/print?<list filters>` | A4 quality record per work order (verdict, scores, details, both checklists, findings, sign-off, page numbers). Row print action, detail «طباعة», list «طباعة النتائج PDF» (all matching, capped at 300, one per page). Browser print-to-PDF; the page opens the dialog itself |
 | Inspections | `/inspections/{id}` | Phone-first stepper: one criterion per card, autosave, live score, photos per item, inline findings, server-rendered review and submit; read-only summary after submit; admins can re-open |
 | Findings | `/findings` | Open/overdue/closed views; edit, close with a note, re-open |
 | Data & reports | `/data`, `/reports/print`, `/reports/export.xlsx` | **Print report** (A4: KPIs, the four charts, insights, tables, open findings, inspection log, signatures); **Excel export** (summary with logo, inspections, findings, criteria sheet); work order **import template** with real date cells. All follow the dashboard filters |
-| Settings (admin) | `/admin/...` | Versioned checklists, sites, systems, contractors, users (temporary passwords) |
+| Settings (admin) | `/admin/...` | Versioned checklists, sites, المنظومات (`/admin/lookups/systems`), مجموعات الأصول (`/admin/lookups/asset-groups`), contractors, users (temporary passwords) |
+
+Dev data: `just seed` (or `just seed -reset`) loads ~150 realistic work orders with inspections and findings; never in production.
 
 Everything shows dates as dd/mm/yyyy with the Umm al-Qura Hijri date alongside.
 
@@ -52,7 +57,7 @@ Clean, quiet, data-first ("Style 1": shadcn/Linear-like minimalism) with Kidana'
 
 | Need | Read |
 |---|---|
-| What QA/QC/findings/acceptance mean, scoring, criteria, roles, glossary | `references/domain.md` |
+| What the during/after stages, findings, acceptance and verdict mean, scoring, criteria, lookups, roles, glossary | `references/domain.md` |
 | Colours, type, spacing, layout patterns, RTL, copy tone, do/don't | `references/design-system.md` |
 | Existing templ components and CSS classes, with usage | `references/components.md` |
 | Step-by-step: new page, new field, new criterion/stage, KPI/chart, htmx partial, Alpine component, Excel column, tests | `references/recipes.md` |
@@ -62,6 +67,6 @@ Clean, quiet, data-first ("Style 1": shadcn/Linear-like minimalism) with Kidana'
 
 - `just gen` leaves no diff, and `just test` and `just lint` pass.
 - `just ui-check` (Playwright walkthrough, both widths, all roles) reports no failed steps and no console errors. Look at the screenshots in `tmp/ui-check/` for anything you touched.
-- The screen works at **390px phone** and **desktop** widths, with no horizontal page scroll (only tables scroll, inside `overflow-x-auto`).
+- The screen works at **390px phone** and **desktop** widths, with no horizontal page scroll (only tables scroll, inside `overflow-x-auto`; the A4 print preview scrolls inside `.sheets`).
 - Empty states, validation errors and the viewer role (read-only) are all handled.
 - Text is Arabic and RTL-correct, and numbers use `.num`.
