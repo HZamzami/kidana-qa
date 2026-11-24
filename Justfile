@@ -61,6 +61,10 @@ migrate-status:
 migration name:
     {{run}} goose -dir internal/db/migrations create {{name}} sql
 
+# Fill the dev database with dummy data (refuses in production). Wipe first: just seed -reset
+seed *args:
+    {{dc}} run --rm app go run ./cmd/seed {{args}}
+
 # psql into the dev database
 psql:
     {{dc}} exec db psql -U kidana -d kidana_quality

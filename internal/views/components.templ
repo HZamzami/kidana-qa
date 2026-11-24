@@ -244,8 +244,9 @@ templ EmptyState(title, hint string) {
 templ Fact(label string) {
 	<div class="min-w-0">
 		<dt class="text-xs text-ink-60">{ label }</dt>
-		<dd class="mt-0.5 font-medium break-words">{ children... }
-</dd>
+		<dd class="mt-0.5 font-medium break-words">
+			{ children... }
+		</dd>
 	</div>
 }
 
