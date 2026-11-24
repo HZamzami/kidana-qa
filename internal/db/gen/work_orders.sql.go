@@ -233,10 +233,10 @@ func (q *Queries) GetWorkOrderRefExists(ctx context.Context, arg GetWorkOrderRef
 const listWorkOrders = `-- name: ListWorkOrders :many
 SELECT w.id, w.ref, w.type, w.asset, w.location, w.status, w.priority, w.planned_date, w.actual_date, w.created_at,
        s.name AS site_name, sy.name AS system_name, COALESCE(c.name, '')::text AS contractor_name,
-       COALESCE(qa.score, -1)::double precision AS qa_score,
-       COALESCE(qc.score, -1)::double precision AS qc_score,
-       COALESCE(qc.passed, false)::boolean      AS qc_passed,
-       COALESCE(qc.attempt, 0)::int             AS qc_attempt,
+       COALESCE(dur.score, -1)::double precision AS during_score,
+       COALESCE(aft.score, -1)::double precision AS after_score,
+       COALESCE(aft.passed, false)::boolean      AS after_passed,
+       COALESCE(aft.attempt, 0)::int             AS after_attempt,
        (SELECT count(*) FROM findings f WHERE f.work_order_id = w.id AND f.status <> 'closed')::int AS open_findings,
        (SELECT count(*) FROM inspections d WHERE d.work_order_id = w.id AND d.status = 'draft')::int AS draft_inspections
 FROM work_orders w
@@ -245,14 +245,14 @@ JOIN systems sy ON sy.id = w.system_id
 LEFT JOIN contractors c ON c.id = w.contractor_id
 LEFT JOIN LATERAL (
     SELECT i.score FROM inspections i
-    WHERE i.work_order_id = w.id AND i.stage = 'qa' AND i.status = 'submitted'
+    WHERE i.work_order_id = w.id AND i.stage = 'during' AND i.status = 'submitted'
     ORDER BY i.attempt DESC LIMIT 1
-) qa ON true
+) dur ON true
 LEFT JOIN LATERAL (
     SELECT i.score, i.passed, i.attempt FROM inspections i
-    WHERE i.work_order_id = w.id AND i.stage = 'qc' AND i.status = 'submitted'
+    WHERE i.work_order_id = w.id AND i.stage = 'after' AND i.status = 'submitted'
     ORDER BY i.attempt DESC LIMIT 1
-) qc ON true
+) aft ON true
 WHERE ($1::bigint IS NULL OR w.site_id = $1)
   AND ($2::bigint IS NULL OR w.system_id = $2)
   AND ($3::bigint IS NULL OR w.contractor_id = $3)
@@ -292,16 +292,16 @@ type ListWorkOrdersRow struct {
 	SiteName         string
 	SystemName       string
 	ContractorName   string
-	QaScore          float64
-	QcScore          float64
-	QcPassed         bool
-	QcAttempt        int32
+	DuringScore      float64
+	AfterScore       float64
+	AfterPassed      bool
+	AfterAttempt     int32
 	OpenFindings     int32
 	DraftInspections int32
 }
 
 // Filters are optional: a NULL argument disables that filter.
-// Latest submitted QA/QC scores are reported as -1 when there is none.
+// Latest submitted during/after scores are reported as -1 when there is none.
 func (q *Queries) ListWorkOrders(ctx context.Context, arg ListWorkOrdersParams) ([]ListWorkOrdersRow, error) {
 	rows, err := q.db.Query(ctx, listWorkOrders,
 		arg.SiteID,
@@ -334,10 +334,10 @@ func (q *Queries) ListWorkOrders(ctx context.Context, arg ListWorkOrdersParams) 
 			&i.SiteName,
 			&i.SystemName,
 			&i.ContractorName,
-			&i.QaScore,
-			&i.QcScore,
-			&i.QcPassed,
-			&i.QcAttempt,
+			&i.DuringScore,
+			&i.AfterScore,
+			&i.AfterPassed,
+			&i.AfterAttempt,
 			&i.OpenFindings,
 			&i.DraftInspections,
 		); err != nil {

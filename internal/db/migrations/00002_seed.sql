@@ -1,5 +1,5 @@
 -- +goose Up
--- Reference data: Kidana sites and systems, and the first QA and QC checklists.
+-- Reference data: Kidana sites and systems, and the first during and after checklists.
 
 INSERT INTO sites (name, sort) VALUES
     ('منى', 1), ('عرفات', 2), ('مزدلفة', 3), ('مكة المكرمة', 4), ('المقر الرئيسي', 5);
@@ -9,10 +9,10 @@ INSERT INTO systems (name, sort) VALUES
     ('مكافحة الحريق', 5), ('المصاعد', 6), ('الإنارة', 7), ('الأعمال المدنية', 8),
     ('أنظمة التيار الخفيف', 9);
 
--- QA: during the work — how the contractor works.
+-- During the work — how the contractor works.
 WITH t AS (
     INSERT INTO checklist_templates (stage, version, name, active)
-    VALUES ('qa', 1, 'رقابة أثناء التنفيذ — الإصدار 1', true) RETURNING id
+    VALUES ('during', 1, 'فحص أثناء التنفيذ — الإصدار 1', true) RETURNING id
 )
 INSERT INTO template_criteria (template_id, code, label, description, weight, is_critical, sort)
 SELECT t.id, c.code, c.label, c.descr, c.weight, c.crit, c.sort FROM t, (VALUES
@@ -28,10 +28,10 @@ SELECT t.id, c.code, c.label, c.descr, c.weight, c.crit, c.sort FROM t, (VALUES
      'الوصول في الموعد المجدول للصيانة الوقائية، أو ضمن زمن الاستجابة (SLA) لأمر العمل حسب الأولوية.', 15, false, 5)
 ) AS c(code, label, descr, weight, crit, sort);
 
--- QC: after the work — is the result correct.
+-- After the work — is the result correct.
 WITH t AS (
     INSERT INTO checklist_templates (stage, version, name, active)
-    VALUES ('qc', 1, 'فحص بعد التنفيذ — الإصدار 1', true) RETURNING id
+    VALUES ('after', 1, 'فحص بعد التنفيذ — الإصدار 1', true) RETURNING id
 )
 INSERT INTO template_criteria (template_id, code, label, description, weight, is_critical, sort)
 SELECT t.id, c.code, c.label, c.descr, c.weight, c.crit, c.sort FROM t, (VALUES

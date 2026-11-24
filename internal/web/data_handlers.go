@@ -191,10 +191,10 @@ func (s *Server) exportExcel(w http.ResponseWriter, r *http.Request) {
 	s.sendWorkbook(w, r, book, "Kidana-Quality-Report_"+time.Now().Format(time.DateOnly)+".xlsx")
 }
 
-// activeChecklists returns the active QA and QC checklists for the criteria sheet.
+// activeChecklists returns the active during and after checklists for the criteria sheet.
 func (s *Server) activeChecklists(ctx context.Context) ([]excel.ChecklistExport, error) {
 	var out []excel.ChecklistExport
-	for _, stage := range []gen.InspectionStage{gen.InspectionStageQa, gen.InspectionStageQc} {
+	for _, stage := range []gen.InspectionStage{gen.InspectionStageDuring, gen.InspectionStageAfter} {
 		t, err := s.q.GetActiveTemplate(ctx, stage)
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue

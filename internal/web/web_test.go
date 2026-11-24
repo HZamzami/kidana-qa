@@ -159,8 +159,8 @@ func TestAuthAndGuards(t *testing.T) {
 	}
 }
 
-// TestInspectionFlow walks a work order through a failed QA (critical
-// criterion), a passing QC and the closing of the finding.
+// TestInspectionFlow walks a work order through a failed during inspection (critical
+// criterion), a passing after inspection and the closing of the finding.
 func TestInspectionFlow(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
@@ -234,41 +234,41 @@ func TestInspectionFlow(t *testing.T) {
 		}
 	}
 
-	// QA: the critical safety criterion fails → inspection fails and is flagged critical.
-	qa := start("qa")
-	rateAll(qa, func(it gen.ListInspectionItemsRow) string {
+	// During: the critical safety criterion fails → inspection fails and is flagged critical.
+	during := start("during")
+	rateAll(during, func(it gen.ListInspectionItemsRow) string {
 		if it.IsCritical {
 			return "N"
 		}
 		return "C"
 	})
-	if res := e.post(c, "/inspections/"+idStr(qa)+"/submit", nil); res.StatusCode != http.StatusUnprocessableEntity {
-		t.Fatalf("submit failed QA without finding should be refused: %d", res.StatusCode)
+	if res := e.post(c, "/inspections/"+idStr(during)+"/submit", nil); res.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("submit failed during inspection without finding should be refused: %d", res.StatusCode)
 	}
-	if res := e.post(c, "/inspections/"+idStr(qa)+"/findings", url.Values{"description": {"لا يوجد LOTO"}, "corrective_action": {"إيقاف العمل وتطبيق العزل"}, "critical": {"on"}}); res.StatusCode != http.StatusOK {
+	if res := e.post(c, "/inspections/"+idStr(during)+"/findings", url.Values{"description": {"لا يوجد LOTO"}, "corrective_action": {"إيقاف العمل وتطبيق العزل"}, "critical": {"on"}}); res.StatusCode != http.StatusOK {
 		t.Fatalf("add finding: %d", res.StatusCode)
 	}
-	if res := e.post(c, "/inspections/"+idStr(qa)+"/submit", nil); res.StatusCode != http.StatusSeeOther {
-		t.Fatalf("submit QA: %d", res.StatusCode)
+	if res := e.post(c, "/inspections/"+idStr(during)+"/submit", nil); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("submit during: %d", res.StatusCode)
 	}
-	in := must(e.q.GetInspection(ctx, qa))
+	in := must(e.q.GetInspection(ctx, during))
 	if in.Passed == nil || *in.Passed || !in.CriticalFailed || in.Score == nil || *in.Score != 70 {
-		t.Fatalf("QA result: passed=%v critical=%v score=%v", in.Passed, in.CriticalFailed, in.Score)
+		t.Fatalf("during result: passed=%v critical=%v score=%v", in.Passed, in.CriticalFailed, in.Score)
 	}
 	if st := must(e.q.GetWorkOrder(ctx, wo.ID)).Status; st != gen.WoStatusInProgress {
-		t.Fatalf("after QA: status %s", st)
+		t.Fatalf("after during: status %s", st)
 	}
 	// Submitted inspections are read-only.
-	items := must(e.q.ListInspectionItems(ctx, qa))
-	if res := e.post(c, "/inspections/"+idStr(qa)+"/items/"+idStr(items[0].CriterionID), url.Values{"rating": {"C"}}); res.StatusCode != http.StatusBadRequest {
+	items := must(e.q.ListInspectionItems(ctx, during))
+	if res := e.post(c, "/inspections/"+idStr(during)+"/items/"+idStr(items[0].CriterionID), url.Values{"rating": {"C"}}); res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("edit submitted: %d", res.StatusCode)
 	}
 
-	// QC passes, but the open QA finding blocks acceptance.
-	qc := start("qc")
-	rateAll(qc, func(gen.ListInspectionItemsRow) string { return "C" })
-	if res := e.post(c, "/inspections/"+idStr(qc)+"/submit", nil); res.StatusCode != http.StatusSeeOther {
-		t.Fatalf("submit QC: %d", res.StatusCode)
+	// After passes, but the open during finding blocks acceptance.
+	after := start("after")
+	rateAll(after, func(gen.ListInspectionItemsRow) string { return "C" })
+	if res := e.post(c, "/inspections/"+idStr(after)+"/submit", nil); res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("submit after: %d", res.StatusCode)
 	}
 	if st := must(e.q.GetWorkOrder(ctx, wo.ID)).Status; st == gen.WoStatusAccepted {
 		t.Fatal("must not be accepted while a finding is open")
@@ -291,7 +291,7 @@ func TestInspectionFlow(t *testing.T) {
 	}
 
 	// Pages render with data.
-	for _, p := range []string{"/", "/work-orders", "/work-orders/" + idStr(wo.ID), "/inspections/" + idStr(qa), "/findings?scope=all", "/reports/print", "/data", "/?result=fail", "/reports/print?result=pass&stage=qc"} {
+	for _, p := range []string{"/", "/work-orders", "/work-orders/" + idStr(wo.ID), "/inspections/" + idStr(during), "/findings?scope=all", "/reports/print", "/data", "/?result=fail", "/reports/print?result=pass&stage=after"} {
 		if res, body := e.get(c, p); res.StatusCode != http.StatusOK || !strings.Contains(body, "</html>") {
 			t.Fatalf("GET %s: %d", p, res.StatusCode)
 		}

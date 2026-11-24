@@ -291,7 +291,7 @@ func ReportPrint(d ReportData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<main class=\"mx-auto max-w-5xl px-6 py-6 bg-white text-[12px]\"><div class=\"no-print mb-4 flex items-center gap-2 rounded-lg bg-gold-10 border border-gold-50 px-3 py-2 text-sm\"><span>للحفظ PDF: اطبع الصفحة (Ctrl+P) واختر «حفظ بتنسيق PDF».</span> <a href=\"/\" class=\"btn btn-ghost ms-auto\">رجوع</a></div><header class=\"flex items-start gap-4 border-b-2 border-gold pb-3\"><div><h1 class=\"text-xl font-semibold\">تقرير جودة الصيانة</h1><p class=\"text-ink-80\">رقابة أثناء التنفيذ وفحص بعد التنفيذ — إدارة جودة العمليات · قطاع العمليات</p></div><img src=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<main class=\"mx-auto max-w-5xl px-6 py-6 bg-white text-[12px]\"><div class=\"no-print mb-4 flex items-center gap-2 rounded-lg bg-gold-10 border border-gold-50 px-3 py-2 text-sm\"><span>للحفظ PDF: اطبع الصفحة (Ctrl+P) واختر «حفظ بتنسيق PDF».</span> <a href=\"/\" class=\"btn btn-ghost ms-auto\">رجوع</a></div><header class=\"flex items-start gap-4 border-b-2 border-gold pb-3\"><div><h1 class=\"text-xl font-semibold\">تقرير جودة الصيانة</h1><p class=\"text-ink-80\">فحص أثناء التنفيذ وفحص بعد التنفيذ — إدارة جودة العمليات · قطاع العمليات</p></div><img src=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -347,11 +347,11 @@ func ReportPrint(d ReportData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = reportKPI("متوسط QA", domain.Pct(d.S.AvgQA), domain.Count(d.S.QACount, domain.NounInspection)).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = reportKPI("متوسط أثناء التنفيذ", domain.Pct(d.S.AvgDuring), domain.Count(d.S.DuringCount, domain.NounInspection)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = reportKPI("متوسط QC", domain.Pct(d.S.AvgQC), domain.Count(d.S.QCCount, domain.NounInspection)).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = reportKPI("متوسط بعد التنفيذ", domain.Pct(d.S.AvgAfter), domain.Count(d.S.AfterCount, domain.NounInspection)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -387,13 +387,13 @@ func ReportPrint(d ReportData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = criteriaRows(d.S.CriteriaFor(domain.StageQA)).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = criteriaRows(d.S.CriteriaFor(domain.StageDuring)).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = reportChart("نسبة المطابقة لكل معيار — QA").Render(templ.WithChildren(ctx, templ_7745c5c3_Var17), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = reportChart("نسبة المطابقة لكل معيار — أثناء التنفيذ").Render(templ.WithChildren(ctx, templ_7745c5c3_Var17), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -409,13 +409,13 @@ func ReportPrint(d ReportData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = criteriaRows(d.S.CriteriaFor(domain.StageQC)).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = criteriaRows(d.S.CriteriaFor(domain.StageAfter)).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = reportChart("نسبة المطابقة لكل معيار — QC").Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = reportChart("نسبة المطابقة لكل معيار — بعد التنفيذ").Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

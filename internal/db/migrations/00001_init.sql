@@ -49,7 +49,7 @@ CREATE TABLE contractors (
 -- ---------------------------------------------------------------- work orders
 CREATE TYPE wo_type     AS ENUM ('PM', 'WO');
 CREATE TYPE wo_priority AS ENUM ('emergency', 'high', 'medium', 'low');
--- accepted = latest QC passed and no open findings (maintained by the app)
+-- accepted = latest after-work inspection passed and no open findings (maintained by the app)
 CREATE TYPE wo_status   AS ENUM ('open', 'in_progress', 'completed', 'accepted', 'cancelled');
 
 CREATE TABLE work_orders (
@@ -77,7 +77,7 @@ CREATE INDEX work_orders_contractor_idx ON work_orders (contractor_id);
 CREATE INDEX work_orders_status_idx     ON work_orders (status);
 
 -- ---------------------------------------------------------------- checklists (versioned)
-CREATE TYPE inspection_stage AS ENUM ('qa', 'qc');
+CREATE TYPE inspection_stage AS ENUM ('during', 'after');
 
 CREATE TABLE checklist_templates (
     id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

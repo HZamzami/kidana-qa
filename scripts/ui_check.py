@@ -190,38 +190,38 @@ with sync_playwright() as p:
         shot(page, "work-order-deleted", full=False)
     s_wo_extras()
 
-    @step("QA inspection on phone (critical fail, finding, photo)")
-    def s_qa():
+    @step("during inspection on phone (critical fail, finding, photo)")
+    def s_during():
         page.goto(state["wo_url"])
-        page.click("text=بدء رقابة أثناء التنفيذ"); page.wait_for_load_state("networkidle")
-        state["qa_url"] = page.url
-        pp.goto(state["qa_url"]); pp.wait_for_load_state("networkidle")
-        shot(pp, "phone-qa-start", full=False)
+        page.click("text=بدء فحص أثناء التنفيذ"); page.wait_for_load_state("networkidle")
+        state["during_url"] = page.url
+        pp.goto(state["during_url"]); pp.wait_for_load_state("networkidle")
+        shot(pp, "phone-during-start", full=False)
         # photo on the first criterion
         sec = visible_section(pp)
         sec.locator("input[type=file]").set_input_files({"name": "loto.png", "mimeType": "image/png", "buffer": png_bytes()})
         pp.wait_for_timeout(1200)
-        shot(pp, "phone-qa-photo-uploaded")
+        shot(pp, "phone-during-photo-uploaded")
         # wrong file type
         sec.locator("input[type=file]").set_input_files({"name": "note.txt", "mimeType": "text/plain", "buffer": b"not an image"})
         pp.wait_for_timeout(1000)
-        shot(pp, "phone-qa-bad-file-toast", full=False)
+        shot(pp, "phone-during-bad-file-toast", full=False)
         rate_flow(pp, ["غير مطابق", "مطابق", "مطابق جزئياً", "مطابق", "مطابق"], finding_on=0)
-        shot(pp, "phone-qa-review")
+        shot(pp, "phone-during-review")
         pp.click("text=إرسال الفحص"); pp.wait_for_load_state("networkidle")
-        shot(pp, "phone-after-qa-submit")
-    s_qa()
+        shot(pp, "phone-after-during-submit")
+    s_during()
 
-    @step("submit refused without finding (QC fail)")
-    def s_qc_fail():
+    @step("submit refused without finding (after fail)")
+    def s_after_fail():
         page.goto(state["wo_url"])
         page.click("text=بدء فحص بعد التنفيذ"); page.wait_for_load_state("networkidle")
-        state["qc1_url"] = page.url
-        pp.goto(state["qc1_url"]); pp.wait_for_load_state("networkidle")
+        state["after1_url"] = page.url
+        pp.goto(state["after1_url"]); pp.wait_for_load_state("networkidle")
         count = pp.locator("nav[aria-label='البنود'] button").count() - 1
         rate_flow(pp, ["غير مطابق"] + ["مطابق"] * (count - 1))
         pp.click("text=إرسال الفحص"); pp.wait_for_load_state("networkidle")
-        shot(pp, "phone-qc-submit-refused")
+        shot(pp, "phone-after-submit-refused")
         # add a general finding from the review step, then submit
         box = pp.locator("#finding-box-general")
         box.locator("text=＋ تسجيل ملاحظة / عدم مطابقة").click()
@@ -229,24 +229,24 @@ with sync_playwright() as p:
         box.locator("textarea[name=corrective_action]").fill("إعادة شحن الفريون وفحص الضاغط")
         box.locator("text=حفظ الملاحظة").click(); pp.wait_for_timeout(800)
         pp.click("text=إرسال الفحص"); pp.wait_for_load_state("networkidle")
-    s_qc_fail()
+    s_after_fail()
 
-    @step("QC re-inspection passes (attempt 2)")
-    def s_qc_pass():
+    @step("after re-inspection passes (attempt 2)")
+    def s_after_pass():
         page.goto(state["wo_url"])
         page.click("text=بدء فحص بعد التنفيذ"); page.wait_for_load_state("networkidle")
         pp.goto(page.url); pp.wait_for_load_state("networkidle")
         count = pp.locator("nav[aria-label='البنود'] button").count() - 1
         rate_flow(pp, ["مطابق"] * (count - 1) + ["لا ينطبق"])
-        shot(pp, "phone-qc2-review")
+        shot(pp, "phone-after2-review")
         pp.click("text=إرسال الفحص"); pp.wait_for_load_state("networkidle")
         page.goto(state["wo_url"]); shot(page, "work-order-timeline")
-    s_qc_pass()
+    s_after_pass()
 
     @step("inspection read-only summary")
     def s_summary():
-        page.goto(state["qa_url"]); shot(page, "qa-summary-desktop")
-        pp.goto(state["qa_url"]); shot(pp, "phone-qa-summary")
+        page.goto(state["during_url"]); shot(page, "during-summary-desktop")
+        pp.goto(state["during_url"]); shot(pp, "phone-during-summary")
     s_summary()
 
     @step("findings: list, edit validation, close, reopen, close")
@@ -290,17 +290,17 @@ with sync_playwright() as p:
     @step("dashboard with data + filters")
     def s_dash():
         page.goto(BASE + "/"); shot(page, "dashboard")
-        page.select_option("#flt_stage", "qc"); page.wait_for_timeout(1000)
-        shot(page, "dashboard-qc-only")
+        page.select_option("#flt_stage", "after"); page.wait_for_timeout(1000)
+        shot(page, "dashboard-after-only")
         page.goto(BASE + "/?result=fail"); shot(page, "dashboard-fail-only")
         pp.goto(BASE + "/"); shot(pp, "phone-dashboard")
     s_dash()
 
     @step("print report")
     def s_print():
-        # leave one open finding (on a QA draft) so the report's findings table has a row
+        # leave one open finding (on a during draft) so the report's findings table has a row
         page.goto(state["wo_url"])
-        page.click("text=بدء رقابة أثناء التنفيذ"); page.wait_for_load_state("networkidle")
+        page.click("text=بدء فحص أثناء التنفيذ"); page.wait_for_load_state("networkidle")
         page.click("nav[aria-label='البنود'] >> text=مراجعة"); page.wait_for_timeout(1200)
         box = page.locator("#finding-box-general")
         box.locator("text=＋ تسجيل ملاحظة / عدم مطابقة").click()

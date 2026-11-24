@@ -67,10 +67,10 @@ DELETE FROM inspections WHERE id = $1 AND status = 'draft';
 SELECT
     w.status,
     EXISTS (SELECT 1 FROM inspections i WHERE i.work_order_id = w.id AND i.status = 'submitted')::boolean AS has_submitted,
-    EXISTS (SELECT 1 FROM inspections i WHERE i.work_order_id = w.id AND i.stage = 'qc' AND i.status = 'submitted')::boolean AS has_submitted_qc,
+    EXISTS (SELECT 1 FROM inspections i WHERE i.work_order_id = w.id AND i.stage = 'after' AND i.status = 'submitted')::boolean AS has_submitted_after,
     COALESCE((SELECT i.passed FROM inspections i
-              WHERE i.work_order_id = w.id AND i.stage = 'qc' AND i.status = 'submitted'
-              ORDER BY i.attempt DESC LIMIT 1), false)::boolean AS latest_qc_passed,
+              WHERE i.work_order_id = w.id AND i.stage = 'after' AND i.status = 'submitted'
+              ORDER BY i.attempt DESC LIMIT 1), false)::boolean AS latest_after_passed,
     (SELECT count(*) FROM findings f WHERE f.work_order_id = w.id AND f.status <> 'closed')::int AS open_findings
 FROM work_orders w
 WHERE w.id = $1;

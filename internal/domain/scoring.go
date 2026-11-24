@@ -1,4 +1,4 @@
-// Package domain holds the business rules of the QA/QC system. It has no I/O
+// Package domain holds the business rules of the maintenance quality system. It has no I/O
 // and no dependencies on the database or HTTP layers, so it is easy to test.
 package domain
 

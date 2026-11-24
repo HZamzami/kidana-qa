@@ -201,13 +201,13 @@ func StagePill(stage string) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		if stage == "qa" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<span class=\"pill bg-sky-30 text-ink\" title=\"رقابة أثناء التنفيذ\">QA · أثناء التنفيذ</span>")
+		if stage == "during" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<span class=\"pill bg-sky-30 text-ink\" title=\"فحص أثناء التنفيذ\">أثناء التنفيذ</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<span class=\"pill bg-gold-20 text-ink\" title=\"فحص بعد التنفيذ\">QC · بعد التنفيذ</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<span class=\"pill bg-gold-20 text-ink\" title=\"فحص بعد التنفيذ\">بعد التنفيذ</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

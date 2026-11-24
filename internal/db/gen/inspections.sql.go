@@ -14,21 +14,21 @@ const acceptanceFacts = `-- name: AcceptanceFacts :one
 SELECT
     w.status,
     EXISTS (SELECT 1 FROM inspections i WHERE i.work_order_id = w.id AND i.status = 'submitted')::boolean AS has_submitted,
-    EXISTS (SELECT 1 FROM inspections i WHERE i.work_order_id = w.id AND i.stage = 'qc' AND i.status = 'submitted')::boolean AS has_submitted_qc,
+    EXISTS (SELECT 1 FROM inspections i WHERE i.work_order_id = w.id AND i.stage = 'after' AND i.status = 'submitted')::boolean AS has_submitted_after,
     COALESCE((SELECT i.passed FROM inspections i
-              WHERE i.work_order_id = w.id AND i.stage = 'qc' AND i.status = 'submitted'
-              ORDER BY i.attempt DESC LIMIT 1), false)::boolean AS latest_qc_passed,
+              WHERE i.work_order_id = w.id AND i.stage = 'after' AND i.status = 'submitted'
+              ORDER BY i.attempt DESC LIMIT 1), false)::boolean AS latest_after_passed,
     (SELECT count(*) FROM findings f WHERE f.work_order_id = w.id AND f.status <> 'closed')::int AS open_findings
 FROM work_orders w
 WHERE w.id = $1
 `
 
 type AcceptanceFactsRow struct {
-	Status         WoStatus
-	HasSubmitted   bool
-	HasSubmittedQc bool
-	LatestQcPassed bool
-	OpenFindings   int32
+	Status            WoStatus
+	HasSubmitted      bool
+	HasSubmittedAfter bool
+	LatestAfterPassed bool
+	OpenFindings      int32
 }
 
 func (q *Queries) AcceptanceFacts(ctx context.Context, id int64) (AcceptanceFactsRow, error) {
@@ -37,8 +37,8 @@ func (q *Queries) AcceptanceFacts(ctx context.Context, id int64) (AcceptanceFact
 	err := row.Scan(
 		&i.Status,
 		&i.HasSubmitted,
-		&i.HasSubmittedQc,
-		&i.LatestQcPassed,
+		&i.HasSubmittedAfter,
+		&i.LatestAfterPassed,
 		&i.OpenFindings,
 	)
 	return i, err

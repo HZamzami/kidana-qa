@@ -18,7 +18,7 @@ import (
 	"github.com/HZamzami/kidana-quality/internal/views"
 )
 
-// inspectionStart creates a draft QA or QC inspection for a work order
+// inspectionStart creates a draft during or after inspection for a work order
 // (or resumes the existing draft of that stage).
 func (s *Server) inspectionStart(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

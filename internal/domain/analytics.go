@@ -65,8 +65,8 @@ type GradeCount struct {
 
 // Summary is everything the dashboard, report and Excel summary show.
 type Summary struct {
-	Total, QACount, QCCount int
-	AvgScore, AvgQA, AvgQC  *float64
+	Total, DuringCount, AfterCount int
+	AvgScore, AvgDuring, AvgAfter  *float64
 	PassCount, FailCount    int
 	PassRate                *float64
 	CriticalFails           int
@@ -90,18 +90,18 @@ type AssetFails struct {
 // Summarize aggregates submitted inspections.
 func Summarize(rows []InspectionRow, items []ItemRow, fs FindingStats) Summary {
 	S := Summary{Total: len(rows), Findings: fs}
-	var all, qa, qc []float64
+	var all, during, after []float64
 	woDelay := map[int64]*int{}
 	failsByAsset := map[string]int{}
 
 	for _, r := range rows {
 		all = append(all, r.Score)
-		if r.Stage == StageQA {
-			S.QACount++
-			qa = append(qa, r.Score)
+		if r.Stage == StageDuring {
+			S.DuringCount++
+			during = append(during, r.Score)
 		} else {
-			S.QCCount++
-			qc = append(qc, r.Score)
+			S.AfterCount++
+			after = append(after, r.Score)
 		}
 		if r.Passed {
 			S.PassCount++
@@ -116,7 +116,7 @@ func Summarize(rows []InspectionRow, items []ItemRow, fs FindingStats) Summary {
 		}
 		woDelay[r.WorkOrderID] = r.DelayDays
 	}
-	S.AvgScore, S.AvgQA, S.AvgQC = avg(all), avg(qa), avg(qc)
+	S.AvgScore, S.AvgDuring, S.AvgAfter = avg(all), avg(during), avg(after)
 	if S.Total > 0 {
 		v := float64(S.PassCount) / float64(S.Total) * 100
 		S.PassRate = &v
@@ -241,10 +241,10 @@ func criteriaStats(items []ItemRow) []CriterionStat {
 		a.Compliance = a.sum / float64(a.N)
 		out = append(out, a.CriterionStat)
 	}
-	// QA before QC, then by code.
+	// During before after, then by code.
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Stage != out[j].Stage {
-			return out[i].Stage == StageQA
+			return out[i].Stage == StageDuring
 		}
 		return out[i].Code < out[j].Code
 	})
@@ -298,11 +298,11 @@ func Fmt1(v float64) string {
 	return strings.TrimSuffix(s, ".0")
 }
 
-// Insights derives patterns and recommendations, including QA/QC gaps and
+// Insights derives patterns and recommendations, including during/after gaps and
 // critical-criteria alerts.
 func Insights(S Summary) []Insight {
 	if S.Total == 0 {
-		return []Insight{{"info", "لا توجد فحوصات مرسلة ضمن النطاق المحدد بعد. ابدأ بفتح أمر عمل وتسجيل رقابة أثناء التنفيذ أو فحص بعد التنفيذ."}}
+		return []Insight{{"info", "لا توجد فحوصات مرسلة ضمن النطاق المحدد بعد. ابدأ بفتح أمر عمل وتسجيل فحص أثناء التنفيذ أو فحص بعد التنفيذ."}}
 	}
 	var out []Insight
 	if S.PassRate != nil {
@@ -361,12 +361,12 @@ func Insights(S Summary) []Insight {
 		}
 		out = append(out, Insight{"risk", fmt.Sprintf("إخفاق متكرر على أصول: %s. يوصى بتحليل السبب الجذري (RCA).", strings.Join(parts, "، "))})
 	}
-	if S.AvgQA != nil && S.AvgQC != nil {
-		diff := *S.AvgQA - *S.AvgQC
+	if S.AvgDuring != nil && S.AvgAfter != nil {
+		diff := *S.AvgDuring - *S.AvgAfter
 		if diff >= 10 {
-			out = append(out, Insight{"info", fmt.Sprintf("أداء أثناء التنفيذ (%s) أعلى من نتيجة الفحص بعد التنفيذ (%s): العمل يُنفَّذ بطريقة سليمة لكن النتيجة النهائية أضعف — راجع جودة المخرجات والتوثيق.", Pct(S.AvgQA), Pct(S.AvgQC))})
+			out = append(out, Insight{"info", fmt.Sprintf("أداء أثناء التنفيذ (%s) أعلى من نتيجة الفحص بعد التنفيذ (%s): العمل يُنفَّذ بطريقة سليمة لكن النتيجة النهائية أضعف — راجع جودة المخرجات والتوثيق.", Pct(S.AvgDuring), Pct(S.AvgAfter))})
 		} else if diff <= -10 {
-			out = append(out, Insight{"info", fmt.Sprintf("نتيجة الفحص بعد التنفيذ (%s) أعلى من الرقابة أثناء التنفيذ (%s): النتائج مقبولة لكن طريقة العمل تحتاج ضبطاً — ركّز على السلامة والإجراءات.", Pct(S.AvgQC), Pct(S.AvgQA))})
+			out = append(out, Insight{"info", fmt.Sprintf("نتيجة الفحص بعد التنفيذ (%s) أعلى من الفحص أثناء التنفيذ (%s): النتائج مقبولة لكن طريقة العمل تحتاج ضبطاً — ركّز على السلامة والإجراءات.", Pct(S.AvgAfter), Pct(S.AvgDuring))})
 		}
 	}
 	return out

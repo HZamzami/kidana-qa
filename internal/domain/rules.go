@@ -6,25 +6,25 @@ import "fmt"
 type Stage string
 
 const (
-	StageQA Stage = "qa" // during the work: how the contractor works
-	StageQC Stage = "qc" // after the work: is the result correct
+	StageDuring Stage = "during" // during the work: how the contractor works
+	StageAfter Stage = "after" // after the work: is the result correct
 )
 
-func (s Stage) Valid() bool { return s == StageQA || s == StageQC }
+func (s Stage) Valid() bool { return s == StageDuring || s == StageAfter }
 
 func (s Stage) Label() string {
-	if s == StageQA {
-		return "رقابة أثناء التنفيذ"
+	if s == StageDuring {
+		return "فحص أثناء التنفيذ"
 	}
 	return "فحص بعد التنفيذ"
 }
 
 // Short is the compact badge text.
 func (s Stage) Short() string {
-	if s == StageQA {
-		return "QA"
+	if s == StageDuring {
+		return "أثناء التنفيذ"
 	}
-	return "QC"
+	return "بعد التنفيذ"
 }
 
 // WOStatus mirrors the wo_status enum.
@@ -61,14 +61,14 @@ var ManualWOStatuses = []WOStatus{WOOpen, WOInProgress, WOCompleted, WOCancelled
 // AcceptanceInput summarises what NextWOStatus needs to know about a work order.
 type AcceptanceInput struct {
 	Current          WOStatus
-	HasSubmittedQC   bool
-	LatestQCPassed   bool // result of the most recent submitted QC attempt
+	HasSubmittedAfter   bool
+	LatestAfterPassed   bool // result of the most recent submitted after-work attempt
 	OpenFindings     int
-	HasSubmittedWork bool // any submitted inspection (QA or QC)
+	HasSubmittedWork bool // any submitted inspection (during or after)
 }
 
 // NextWOStatus applies the acceptance rule: a work order is accepted when its
-// latest QC passed and it has no open findings. It also moves an open work
+// latest after-work inspection passed and it has no open findings. It also moves an open work
 // order to "in progress" once an inspection was submitted, and steps an
 // accepted work order back to "completed" if the rule no longer holds
 // (e.g. a finding was re-opened).
@@ -76,7 +76,7 @@ func NextWOStatus(in AcceptanceInput) WOStatus {
 	if in.Current == WOCancelled {
 		return WOCancelled
 	}
-	if in.HasSubmittedQC && in.LatestQCPassed && in.OpenFindings == 0 {
+	if in.HasSubmittedAfter && in.LatestAfterPassed && in.OpenFindings == 0 {
 		return WOAccepted
 	}
 	if in.Current == WOAccepted {

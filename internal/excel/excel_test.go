@@ -88,14 +88,14 @@ func TestTemplateRoundTrip(t *testing.T) {
 }
 
 func TestReportBuilds(t *testing.T) {
-	S := domain.Summarize([]domain.InspectionRow{{ID: 1, WorkOrderID: 1, Stage: domain.StageQC, Score: 90, Passed: true, Site: "منى"}}, nil, domain.FindingStats{})
+	S := domain.Summarize([]domain.InspectionRow{{ID: 1, WorkOrderID: 1, Stage: domain.StageAfter, Score: 90, Passed: true, Site: "منى"}}, nil, domain.FindingStats{})
 	due := time.Date(2026, 11, 30, 0, 0, 0, 0, time.UTC)
 	f, err := Report(ReportInput{
 		Scope: "الكل", Summary: S, Insights: domain.Insights(S),
-		Rows:       []InspectionExport{{Ref: "WO-1", Stage: "qc", Score: 90, Passed: true, Ratings: map[string]domain.Rating{"C1": "C"}}},
+		Rows:       []InspectionExport{{Ref: "WO-1", Stage: "after", Score: 90, Passed: true, Ratings: map[string]domain.Rating{"C1": "C"}}},
 		Criteria:   []CriterionColumn{{"C1", "جودة"}},
 		Findings:   []FindingExport{{ID: 1, Ref: "WO-1", DueDate: &due, CreatedAt: due}},
-		Checklists: []ChecklistExport{{Stage: "qc", Name: "فحص", Version: 1, Criteria: []CriterionExport{{Code: "C1", Label: "جودة", Weight: 100}}}},
+		Checklists: []ChecklistExport{{Stage: "after", Name: "فحص", Version: 1, Criteria: []CriterionExport{{Code: "C1", Label: "جودة", Weight: 100}}}},
 		Logo:       png1x1,
 	})
 	if err != nil {

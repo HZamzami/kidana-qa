@@ -30,7 +30,7 @@ type DashboardData struct {
 	Contractors []Option
 }
 
-var StageOptions = []Option{{"qa", "QA · أثناء التنفيذ"}, {"qc", "QC · بعد التنفيذ"}}
+var StageOptions = []Option{{"during", "أثناء التنفيذ"}, {"after", "بعد التنفيذ"}}
 var TypeOptions = []Option{{"PM", "صيانة وقائية"}, {"WO", "أمر عمل"}}
 var ResultOptions = []Option{{"pass", "مطابق"}, {"fail", "غير مطابق"}}
 
@@ -109,7 +109,7 @@ func Dashboard(d DashboardData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = PageHeader("لوحة المؤشرات", "أداء الرقابة أثناء التنفيذ والفحص بعد التنفيذ").Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = PageHeader("لوحة المؤشرات", "أداء الفحص أثناء التنفيذ وبعده").Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -179,14 +179,14 @@ func Dashboard(d DashboardData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if d.F.Stage != "qc" {
-				templ_7745c5c3_Err = criteriaCard(domain.StageQA, d.S.CriteriaFor(domain.StageQA), d.F.Stage == "qa").Render(ctx, templ_7745c5c3_Buffer)
+			if d.F.Stage != "after" {
+				templ_7745c5c3_Err = criteriaCard(domain.StageDuring, d.S.CriteriaFor(domain.StageDuring), d.F.Stage == "during").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			if d.F.Stage != "qa" {
-				templ_7745c5c3_Err = criteriaCard(domain.StageQC, d.S.CriteriaFor(domain.StageQC), d.F.Stage == "qc").Render(ctx, templ_7745c5c3_Buffer)
+			if d.F.Stage != "during" {
+				templ_7745c5c3_Err = criteriaCard(domain.StageAfter, d.S.CriteriaFor(domain.StageAfter), d.F.Stage == "after").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -312,15 +312,15 @@ func dashKPIs(S domain.Summary) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = kpi("الفحوصات المرسلة", itoa(S.Total), fmt.Sprintf("QA %d · QC %d · %s", S.QACount, S.QCCount, domain.Count(S.WorkOrders, domain.NounWorkOrder)), "").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = kpi("الفحوصات المرسلة", itoa(S.Total), fmt.Sprintf("أثناء %d · بعد %d · %s", S.DuringCount, S.AfterCount, domain.Count(S.WorkOrders, domain.NounWorkOrder)), "").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = kpi("متوسط QA", domain.Pct(S.AvgQA), "رقابة أثناء التنفيذ", "sky").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = kpi("متوسط أثناء التنفيذ", domain.Pct(S.AvgDuring), "فحص أثناء التنفيذ", "sky").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = kpi("متوسط QC", domain.Pct(S.AvgQC), "فحص بعد التنفيذ", "gold").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = kpi("متوسط بعد التنفيذ", domain.Pct(S.AvgAfter), "فحص بعد التنفيذ", "gold").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

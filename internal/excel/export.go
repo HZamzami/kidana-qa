@@ -176,7 +176,7 @@ func summarySheet(f *excelize.File, st styles, scope string, S domain.Summary, i
 			r = 4
 		}
 	}
-	_ = f.SetCellValue(sh, axis(1, r), "تقرير جودة الصيانة — رقابة أثناء التنفيذ وفحص بعد التنفيذ")
+	_ = f.SetCellValue(sh, axis(1, r), "تقرير جودة الصيانة — فحص أثناء التنفيذ وفحص بعد التنفيذ")
 	_ = f.SetCellStyle(sh, axis(1, r), axis(1, r), st.title)
 	r++
 	_ = f.SetCellValue(sh, axis(1, r), fmt.Sprintf("إدارة جودة العمليات · تاريخ التقرير %s · النطاق: %s", dates.Both(time.Now().In(dates.Riyadh)), scope))
@@ -189,8 +189,8 @@ func summarySheet(f *excelize.File, st styles, scope string, S domain.Summary, i
 	}
 	title("المؤشرات الرئيسية")
 	kpis := [][]any{
-		{"الفحوصات المرسلة", S.Total}, {"رقابة أثناء التنفيذ (QA)", S.QACount}, {"فحص بعد التنفيذ (QC)", S.QCCount},
-		{"أوامر العمل", S.WorkOrders}, {"متوسط QA %", round1(S.AvgQA)}, {"متوسط QC %", round1(S.AvgQC)},
+		{"الفحوصات المرسلة", S.Total}, {"فحص أثناء التنفيذ", S.DuringCount}, {"فحص بعد التنفيذ", S.AfterCount},
+		{"أوامر العمل", S.WorkOrders}, {"متوسط أثناء التنفيذ %", round1(S.AvgDuring)}, {"متوسط بعد التنفيذ %", round1(S.AvgAfter)},
 		{"متوسط النتيجة %", round1(S.AvgScore)}, {"نسبة المطابقة %", round1(S.PassRate)},
 		{"غير مطابق", S.FailCount}, {"إخفاق في بند حرج", S.CriticalFails},
 		{"ملاحظات مفتوحة", S.Findings.Open}, {"ملاحظات متأخرة الإغلاق", S.Findings.Overdue},
@@ -406,7 +406,7 @@ func round1(v *float64) any {
 
 func boolPtr(b bool) *bool { return &b }
 
-// SortCriteria orders criterion columns: QA codes, then QC codes, then any others.
+// SortCriteria orders criterion columns: during codes, then after codes, then any others.
 func SortCriteria(cs []CriterionColumn) {
 	rank := func(code string) int {
 		switch {

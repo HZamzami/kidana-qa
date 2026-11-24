@@ -33,7 +33,7 @@ func New(cfg config.Config, log *slog.Logger, pool *pgxpool.Pool, store storage.
 	sm.Store = pgxstore.New(pool)
 	sm.Lifetime = cfg.SessionLifetime
 	sm.IdleTimeout = 4 * time.Hour
-	sm.Cookie.Name = "kqa_session"
+	sm.Cookie.Name = "kidana_session"
 	sm.Cookie.HttpOnly = true
 	sm.Cookie.SameSite = http.SameSiteLaxMode
 	sm.Cookie.Secure = cfg.SessionSecure

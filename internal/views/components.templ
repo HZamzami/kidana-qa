@@ -43,10 +43,10 @@ templ DateInline(t time.Time) {
 // ---------------------------------------------------------------- status pills
 
 templ StagePill(stage string) {
-	if stage == "qa" {
-		<span class="pill bg-sky-30 text-ink" title="رقابة أثناء التنفيذ">QA · أثناء التنفيذ</span>
+	if stage == "during" {
+		<span class="pill bg-sky-30 text-ink" title="فحص أثناء التنفيذ">أثناء التنفيذ</span>
 	} else {
-		<span class="pill bg-gold-20 text-ink" title="فحص بعد التنفيذ">QC · بعد التنفيذ</span>
+		<span class="pill bg-gold-20 text-ink" title="فحص بعد التنفيذ">بعد التنفيذ</span>
 	}
 }
 

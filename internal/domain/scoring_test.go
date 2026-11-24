@@ -91,12 +91,12 @@ func TestNextWOStatus(t *testing.T) {
 		want WOStatus
 	}{
 		{"open, nothing submitted", AcceptanceInput{Current: WOOpen}, WOOpen},
-		{"QA submitted moves to in progress", AcceptanceInput{Current: WOOpen, HasSubmittedWork: true}, WOInProgress},
-		{"passing QC, no findings => accepted", AcceptanceInput{Current: WOCompleted, HasSubmittedQC: true, LatestQCPassed: true, HasSubmittedWork: true}, WOAccepted},
-		{"passing QC with open finding stays", AcceptanceInput{Current: WOCompleted, HasSubmittedQC: true, LatestQCPassed: true, OpenFindings: 1, HasSubmittedWork: true}, WOCompleted},
-		{"failed latest QC", AcceptanceInput{Current: WOInProgress, HasSubmittedQC: true, HasSubmittedWork: true}, WOInProgress},
-		{"accepted but finding reopened steps back", AcceptanceInput{Current: WOAccepted, HasSubmittedQC: true, LatestQCPassed: true, OpenFindings: 1, HasSubmittedWork: true}, WOCompleted},
-		{"cancelled is sticky", AcceptanceInput{Current: WOCancelled, HasSubmittedQC: true, LatestQCPassed: true}, WOCancelled},
+		{"during submitted moves to in progress", AcceptanceInput{Current: WOOpen, HasSubmittedWork: true}, WOInProgress},
+		{"passing after, no findings => accepted", AcceptanceInput{Current: WOCompleted, HasSubmittedAfter: true, LatestAfterPassed: true, HasSubmittedWork: true}, WOAccepted},
+		{"passing after with open finding stays", AcceptanceInput{Current: WOCompleted, HasSubmittedAfter: true, LatestAfterPassed: true, OpenFindings: 1, HasSubmittedWork: true}, WOCompleted},
+		{"failed latest after", AcceptanceInput{Current: WOInProgress, HasSubmittedAfter: true, HasSubmittedWork: true}, WOInProgress},
+		{"accepted but finding reopened steps back", AcceptanceInput{Current: WOAccepted, HasSubmittedAfter: true, LatestAfterPassed: true, OpenFindings: 1, HasSubmittedWork: true}, WOCompleted},
+		{"cancelled is sticky", AcceptanceInput{Current: WOCancelled, HasSubmittedAfter: true, LatestAfterPassed: true}, WOCancelled},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -150,7 +150,7 @@ func AdminHome() templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = adminCard("/admin/checklists", "قوائم الفحص", "بنود الرقابة أثناء التنفيذ والفحص بعد التنفيذ وأوزانها. أي تعديل يُنشئ إصداراً جديداً ولا يغيّر نتائج سابقة.").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = adminCard("/admin/checklists", "قوائم الفحص", "بنود الفحص أثناء التنفيذ والفحص بعد التنفيذ وأوزانها. أي تعديل يُنشئ إصداراً جديداً ولا يغيّر نتائج سابقة.").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

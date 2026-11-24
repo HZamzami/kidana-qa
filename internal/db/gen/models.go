@@ -132,8 +132,8 @@ func AllFindingStatusValues() []FindingStatus {
 type InspectionStage string
 
 const (
-	InspectionStageQa InspectionStage = "qa"
-	InspectionStageQc InspectionStage = "qc"
+	InspectionStageDuring InspectionStage = "during"
+	InspectionStageAfter  InspectionStage = "after"
 )
 
 func (e *InspectionStage) Scan(src interface{}) error {
@@ -173,8 +173,8 @@ func (ns NullInspectionStage) Value() (driver.Value, error) {
 
 func (e InspectionStage) Valid() bool {
 	switch e {
-	case InspectionStageQa,
-		InspectionStageQc:
+	case InspectionStageDuring,
+		InspectionStageAfter:
 		return true
 	}
 	return false
@@ -182,8 +182,8 @@ func (e InspectionStage) Valid() bool {
 
 func AllInspectionStageValues() []InspectionStage {
 	return []InspectionStage{
-		InspectionStageQa,
-		InspectionStageQc,
+		InspectionStageDuring,
+		InspectionStageAfter,
 	}
 }
 

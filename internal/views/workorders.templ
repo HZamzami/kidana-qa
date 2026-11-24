@@ -34,7 +34,7 @@ func (d WOListData) Pages() int {
 
 templ WorkOrdersPage(d WOListData) {
 	@App("أوامر العمل") {
-		@PageHeader("أوامر العمل", "كل أمر عمل يجمع الرقابة أثناء التنفيذ (QA) والفحص بعد التنفيذ (QC) والملاحظات") {
+		@PageHeader("أوامر العمل", "كل أمر عمل يجمع الفحص أثناء التنفيذ والفحص بعد التنفيذ والملاحظات") {
 			<a href="/work-orders" class="btn btn-ghost">إعادة ضبط الفلاتر</a>
 			if appctx.CanEdit(ctx) {
 				<a href="/work-orders/new" class="btn btn-primary">＋ أمر عمل جديد</a>
@@ -81,8 +81,8 @@ templ WorkOrdersResults(d WOListData) {
 							<th>النظام</th>
 							<th>الأصل</th>
 							<th>المقاول</th>
-							<th>QA</th>
-							<th>QC</th>
+							<th>أثناء التنفيذ</th>
+							<th>بعد التنفيذ</th>
 							<th>ملاحظات مفتوحة</th>
 							<th>الحالة</th>
 						</tr>
@@ -104,10 +104,10 @@ templ WorkOrdersResults(d WOListData) {
 								<td class="max-w-40 truncate" title={ w.Asset }>{ orDash(w.Asset) }</td>
 								<td class="max-w-40 truncate" title={ w.ContractorName }>{ orDash(w.ContractorName) }</td>
 								<td>
-									@ScoreBar(w.QaScore, w.QaScore >= domain.PassThreshold)
+									@ScoreBar(w.DuringScore, w.DuringScore >= domain.PassThreshold)
 								</td>
 								<td>
-									@ScoreBar(w.QcScore, w.QcPassed)
+									@ScoreBar(w.AfterScore, w.AfterPassed)
 								</td>
 								<td class="num text-center">
 									if w.OpenFindings > 0 {
@@ -314,17 +314,17 @@ templ WorkOrderShow(d WOShowData) {
 			<section class="lg:col-span-3">
 				<div class="flex items-center gap-2 mb-3">
 					<h2 class="font-semibold">الفحوصات</h2>
-					<span class="text-xs text-ink-60">QA أثناء التنفيذ ← QC بعد التنفيذ</span>
+					<span class="text-xs text-ink-60">أثناء التنفيذ ← بعد التنفيذ</span>
 				</div>
 				if appctx.CanEdit(ctx) && d.WO.Status != gen.WoStatusCancelled {
 					<div class="grid gap-3 sm:grid-cols-2 mb-4">
-						@startCard(d, "qa", "رقابة أثناء التنفيذ", "مرافقة المقاول أثناء العمل: السلامة، الإجراء، المواد، كفاءة الفني.")
-						@startCard(d, "qc", "فحص بعد التنفيذ", "التحقق من النتيجة: جودة العمل، القراءات، التوثيق، النظافة، الإغلاق.")
+						@startCard(d, "during", "فحص أثناء التنفيذ", "مرافقة المقاول أثناء العمل: السلامة، الإجراء، المواد، كفاءة الفني.")
+						@startCard(d, "after", "فحص بعد التنفيذ", "التحقق من النتيجة: جودة العمل، القراءات، التوثيق، النظافة، الإغلاق.")
 					</div>
 				}
 				if len(d.Inspections) == 0 {
 					<div class="card">
-						@EmptyState("لم يُسجَّل أي فحص بعد", "ابدأ برقابة أثناء التنفيذ إن كان العمل جارياً، أو بفحص بعد التنفيذ إن انتهى.")
+						@EmptyState("لم يُسجَّل أي فحص بعد", "ابدأ بفحص أثناء التنفيذ إن كان العمل جارياً، أو بفحص بعد التنفيذ إن انتهى.")
 					</div>
 				} else {
 					<ol class="relative border-s-2 border-ink-10 ms-3 space-y-3">
@@ -332,8 +332,8 @@ templ WorkOrderShow(d WOShowData) {
 							<li class="ps-5 relative">
 								<span
 									class={ "absolute -start-[9px] top-4 size-4 rounded-full border-2 border-white",
-										templ.KV("bg-sky", in.Stage == gen.InspectionStageQa),
-										templ.KV("bg-gold", in.Stage == gen.InspectionStageQc) }
+										templ.KV("bg-sky", in.Stage == gen.InspectionStageDuring),
+										templ.KV("bg-gold", in.Stage == gen.InspectionStageAfter) }
 								></span>
 								<a href={ u("/inspections/%d", in.ID) } class="card p-4 flex flex-wrap items-center gap-x-4 gap-y-2 hover:border-gold-50 transition-colors">
 									<div class="flex items-center gap-2">
@@ -369,10 +369,9 @@ templ WorkOrderShow(d WOShowData) {
 }
 
 templ startCard(d WOShowData, stage, title, hint string) {
-	<div class={ "card p-4 border-t-4", templ.KV("border-t-sky", stage == "qa"), templ.KV("border-t-gold", stage == "qc") }>
+	<div class={ "card p-4 border-t-4", templ.KV("border-t-sky", stage == "during"), templ.KV("border-t-gold", stage == "after") }>
 		<div class="flex items-center gap-2">
 			<span class="font-semibold">{ title }</span>
-			<span class="text-xs text-ink-60">{ tern(stage == "qa", "QA", "QC") }</span>
 		</div>
 		<p class="text-xs text-ink-80 mt-1 mb-3">{ hint }</p>
 		if draft := d.hasDraft(stage); draft != 0 {
@@ -380,8 +379,8 @@ templ startCard(d WOShowData, stage, title, hint string) {
 		} else {
 			<form method="post" action={ u("/work-orders/%d/inspections", d.WO.ID) }>
 				<input type="hidden" name="stage" value={ stage }/>
-				<button type="submit" class={ "btn w-full", templ.KV("btn-primary", stage == "qa"), templ.KV("btn-gold", stage == "qc") }>
-					{ tern(stage == "qa", "بدء رقابة أثناء التنفيذ", "بدء فحص بعد التنفيذ") }
+				<button type="submit" class={ "btn w-full", templ.KV("btn-primary", stage == "during"), templ.KV("btn-gold", stage == "after") }>
+					{ tern(stage == "during", "بدء فحص أثناء التنفيذ", "بدء فحص بعد التنفيذ") }
 				</button>
 			</form>
 		}

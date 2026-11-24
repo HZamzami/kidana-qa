@@ -16,8 +16,8 @@ func (s *Server) refreshWorkOrderStatus(ctx context.Context, q *gen.Queries, woI
 	}
 	next := domain.NextWOStatus(domain.AcceptanceInput{
 		Current:          domain.WOStatus(f.Status),
-		HasSubmittedQC:   f.HasSubmittedQc,
-		LatestQCPassed:   f.LatestQcPassed,
+		HasSubmittedAfter:   f.HasSubmittedAfter,
+		LatestAfterPassed:   f.LatestAfterPassed,
 		OpenFindings:     int(f.OpenFindings),
 		HasSubmittedWork: f.HasSubmitted,
 	})
