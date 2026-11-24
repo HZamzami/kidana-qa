@@ -154,8 +154,8 @@ SELECT a.id, a.code, a.name, a.name_en, a.site_id, a.system_id, a.asset_group_id
          WHERE w.asset_id = a.id AND f.status <> 'closed')::int AS open_findings,
        (SELECT count(*) FROM inspections i JOIN work_orders w ON w.id = i.work_order_id
          WHERE w.asset_id = a.id AND i.status = 'submitted' AND NOT i.passed)::int AS failures,
-       (SELECT max(i.inspected_on) FROM inspections i JOIN work_orders w ON w.id = i.work_order_id
-         WHERE w.asset_id = a.id AND i.status = 'submitted')::date AS last_inspected
+       COALESCE((SELECT max(i.inspected_on) FROM inspections i JOIN work_orders w ON w.id = i.work_order_id
+         WHERE w.asset_id = a.id AND i.status = 'submitted'), '0001-01-01')::date AS last_inspected -- zero = never
 FROM assets a
 LEFT JOIN sites s ON s.id = a.site_id
 LEFT JOIN systems sy ON sy.id = a.system_id

@@ -37,7 +37,9 @@ def shot(page, name, full=True):
 
 def watch(page, tag):
     # 4xx "Failed to load resource" lines come from the deliberate error-path tests.
+    # htmx logs its own error for the deliberately failed offline save; it is expected there.
     page.on("console", lambda m: m.type in ("error", "warning") and "Failed to load resource" not in m.text
+            and not (tag == "offline" and m.text.startswith(("htmx:sendError", "htmx:afterRequest")))
             and problems.append(f"[{tag}] console {m.type}: {m.text}"))
     page.on("pageerror", lambda e: problems.append(f"[{tag}] pageerror: {e}"))
     page.on("response", lambda r: r.status >= 500 and problems.append(f"[{tag}] HTTP {r.status} {r.url}"))
@@ -436,6 +438,104 @@ with sync_playwright() as p:
         vp.goto(BASE + "/admin"); shot(vp, "viewer-admin-403", full=False)
         vctx.close()
     s_viewer()
+
+    @step("english: key screens in LTR")
+    def s_english():
+        ectx = browser.new_context(viewport={"width": 1366, "height": 900}, locale="en-US")
+        ectx.add_cookies([{"name": "lang", "value": "en", "url": BASE}])
+        ep = login(ectx, EMAIL, PASSWORD, "admin-en")
+        assert ep.evaluate("document.documentElement.dir") == "ltr", "English must be LTR"
+        for name, path in [("en-dashboard", "/"), ("en-work-orders", "/work-orders"), ("en-findings", "/findings?scope=all"),
+                           ("en-tasks", "/my/tasks"), ("en-contractors", "/contractors"), ("en-admin", "/admin")]:
+            ep.goto(BASE + path); ep.wait_for_load_state("networkidle"); shot(ep, name, full=False)
+        ep.goto(state["wo_url"]); shot(ep, "en-work-order")
+        ep.locator("header form[action='/lang'] button").click(); ep.wait_for_load_state("networkidle")
+        assert ep.evaluate("document.documentElement.dir") == "rtl", "toggle back to Arabic"
+        ectx.close()
+    s_english()
+
+    @step("new screens: tasks, notifications, assets, scorecards, search, settings")
+    def s_new_screens():
+        for name, path in [("tasks", "/my/tasks"), ("notifications", "/notifications"), ("assets", "/assets"),
+                           ("contractors", "/contractors"), ("search", "/search?q=DEMO"), ("admin-sampling", "/admin/sampling"),
+                           ("admin-sla", "/admin/sla"), ("admin-audit", "/admin/audit"), ("admin-api", "/admin/api"),
+                           ("account-security", "/account/security")]:
+            page.goto(BASE + path); page.wait_for_load_state("networkidle"); shot(page, name, full=False)
+        page.goto(BASE + "/assets"); page.locator("#assets-results a[href^='/assets/']").first.click(); page.wait_for_load_state("networkidle")
+        shot(page, "asset-page")
+        page.goto(state["wo_url"]); shot(page, "work-order-history")
+        pp.goto(BASE + "/my/tasks"); shot(pp, "phone-tasks", full=False)
+        pp.locator("nav button:has-text('المزيد')").click(); pp.wait_for_timeout(300); shot(pp, "phone-more-menu", full=False)
+    s_new_screens()
+
+    @step("contractor: own findings, respond with photo")
+    def s_contractor():
+        # make a contractor user for the demo work order's contractor via the admin UI
+        page.goto(BASE + "/admin/lookups/contractors")
+        page.fill("#f_name", f"مقاول {TAG}"); page.locator("main form button:has-text('إضافة')").first.click(); page.wait_for_load_state("networkidle")
+        page.goto(BASE + "/admin/users")
+        page.fill("#f_name", "ممثل مقاول"); page.fill("#f_email", f"con{TAG}@kidana.local"); page.select_option("#f_role", "contractor")
+        page.select_option("#f_contractor_id", label=f"مقاول {TAG}"); page.fill("#f_password", "contractor-pass-1")
+        page.click("main form button:has-text('إضافة مستخدم')"); page.wait_for_load_state("networkidle")
+        cctx = browser.new_context(viewport={"width": 390, "height": 844}, locale="ar-SA")
+        cp = login(cctx, f"con{TAG}@kidana.local", "contractor-pass-1", "contractor")
+        assert "/my/tasks" in cp.url, "contractor lands on tasks"
+        shot(cp, "contractor-tasks", full=False)
+        cp.goto(BASE + "/data"); assert "403" in cp.content() or cp.locator("text=403").count(), "contractor blocked from data"
+        cp.goto(BASE + "/work-orders"); shot(cp, "contractor-work-orders", full=False)
+        cctx.close()
+    s_contractor()
+
+    @step("2FA: enable with a code from the secret")
+    def s_2fa():
+        import base64, hashlib, hmac, struct as st, time as tm, re as rx
+        def totp(secret):
+            key = base64.b32decode(secret + "=" * (-len(secret) % 8))
+            msg = st.pack(">Q", int(tm.time()) // 30)
+            h = hmac.new(key, msg, hashlib.sha1).digest()
+            o = h[-1] & 15
+            return "%06d" % ((st.unpack(">I", h[o:o + 4])[0] & 0x7FFFFFFF) % 1000000)
+        tctx = browser.new_context(viewport={"width": 1366, "height": 900}, locale="ar-SA")
+        tp = login(tctx, f"viewer{TAG}@kidana.local", "viewer-password-1", "viewer-2fa")
+        tp.goto(BASE + "/account/security"); tp.click("text=تفعيل التحقق بخطوتين"); tp.wait_for_load_state("networkidle")
+        shot(tp, "2fa-setup", full=False)
+        secret = rx.search(r"[A-Z2-7]{16,}", tp.locator("code").inner_text()).group(0)
+        tp.fill("#code", totp(secret)); tp.click("text=تأكيد وتفعيل"); tp.wait_for_load_state("networkidle")
+        assert tp.locator("li.font-mono, ul.font-mono li").count() == 8, "recovery codes shown"
+        shot(tp, "2fa-recovery-codes", full=False)
+        tctx.close()
+        lctx = browser.new_context(viewport={"width": 390, "height": 844}, locale="ar-SA")
+        lp = lctx.new_page(); watch(lp, "2fa-login")
+        lp.goto(BASE + "/login"); lp.fill("#email", f"viewer{TAG}@kidana.local"); lp.fill("#password", "viewer-password-1")
+        lp.click("main button[type=submit]"); lp.wait_for_load_state("networkidle")
+        assert "/login/2fa" in lp.url, "second step"
+        shot(lp, "2fa-login-step", full=False)
+        lp.fill("#code", totp(secret)); lp.click("main button[type=submit]"); lp.wait_for_load_state("networkidle")
+        assert "/login" not in lp.url, "signed in after the code"
+        lctx.close()
+    s_2fa()
+
+    @step("offline: a rating saved offline reaches the server")
+    def s_offline():
+        octx = browser.new_context(viewport={"width": 390, "height": 844}, locale="ar-SA",
+                                   geolocation={"latitude": 21.4133, "longitude": 39.8933}, permissions=["geolocation"])
+        op = login(octx, EMAIL, PASSWORD, "offline")
+        op.goto(BASE + "/work-orders/new")
+        op.select_option("#f_type", "WO"); op.fill("#f_ref", f"OFF-{TAG}")
+        op.select_option("#f_site_id", index=1); op.select_option("#f_system_id", index=1); op.select_option("#f_asset_group_id", index=1)
+        op.click("main button[type=submit]"); op.wait_for_load_state("networkidle")
+        op.click("text=بدء فحص أثناء التنفيذ"); op.wait_for_load_state("networkidle")
+        op.reload(); op.wait_for_load_state("networkidle"); op.wait_for_timeout(800)
+        octx.set_offline(True)
+        visible_section(op).locator("label.rate:has(span:text-is('مطابق'))").click(); op.wait_for_timeout(1200)
+        assert "(1)" in op.locator("[x-data=offlineStatus]").inner_text(), "offline banner counts the queued save"
+        shot(op, "offline-banner", full=False)
+        octx.set_offline(False); op.wait_for_timeout(1500); op.evaluate("window.kqQueue.replay()"); op.wait_for_timeout(2000)
+        assert op.evaluate("window.kqQueue.count") == 0, "queue flushed"
+        op.reload(); op.wait_for_load_state("networkidle")
+        assert op.locator("input[type=radio]:checked").count() >= 1, "rating saved on the server"
+        octx.close()
+    s_offline()
 
     @step("user menu + logout")
     def s_logout():
