@@ -62,9 +62,9 @@ func (q *Queries) CreatePasswordResetRequest(ctx context.Context, userID int64) 
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (email, name, role, password_hash)
-VALUES ($1, $2, $3, $4)
-RETURNING id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version
+INSERT INTO users (email, name, role, password_hash, contractor_id)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version, contractor_id
 `
 
 type CreateUserParams struct {
@@ -72,6 +72,7 @@ type CreateUserParams struct {
 	Name         string
 	Role         UserRole
 	PasswordHash string
+	ContractorID *int64
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -80,6 +81,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.Name,
 		arg.Role,
 		arg.PasswordHash,
+		arg.ContractorID,
 	)
 	var i User
 	err := row.Scan(
@@ -97,6 +99,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.RecoveryCodes,
 		&i.OidcSubject,
 		&i.SessionVersion,
+		&i.ContractorID,
 	)
 	return i, err
 }
@@ -139,7 +142,7 @@ func (q *Queries) GetPasswordReset(ctx context.Context, tokenHash string) (GetPa
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version FROM users WHERE id = $1
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version, contractor_id FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
@@ -160,12 +163,13 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.RecoveryCodes,
 		&i.OidcSubject,
 		&i.SessionVersion,
+		&i.ContractorID,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version FROM users WHERE email = $1
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version, contractor_id FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -186,12 +190,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.RecoveryCodes,
 		&i.OidcSubject,
 		&i.SessionVersion,
+		&i.ContractorID,
 	)
 	return i, err
 }
 
 const getUserByOIDCSubject = `-- name: GetUserByOIDCSubject :one
-SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version FROM users WHERE oidc_subject = $1
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version, contractor_id FROM users WHERE oidc_subject = $1
 `
 
 func (q *Queries) GetUserByOIDCSubject(ctx context.Context, oidcSubject *string) (User, error) {
@@ -212,6 +217,7 @@ func (q *Queries) GetUserByOIDCSubject(ctx context.Context, oidcSubject *string)
 		&i.RecoveryCodes,
 		&i.OidcSubject,
 		&i.SessionVersion,
+		&i.ContractorID,
 	)
 	return i, err
 }
@@ -231,7 +237,7 @@ func (q *Queries) HandlePasswordResetRequests(ctx context.Context, arg HandlePas
 }
 
 const listAdmins = `-- name: ListAdmins :many
-SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version FROM users WHERE role = 'admin' AND active
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version, contractor_id FROM users WHERE role = 'admin' AND active
 `
 
 func (q *Queries) ListAdmins(ctx context.Context) ([]User, error) {
@@ -258,6 +264,48 @@ func (q *Queries) ListAdmins(ctx context.Context) ([]User, error) {
 			&i.RecoveryCodes,
 			&i.OidcSubject,
 			&i.SessionVersion,
+			&i.ContractorID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listContractorUsers = `-- name: ListContractorUsers :many
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version, contractor_id FROM users WHERE contractor_id = $1 AND active ORDER BY name
+`
+
+// Active users of a contractor (the contractor portal).
+func (q *Queries) ListContractorUsers(ctx context.Context, contractorID *int64) ([]User, error) {
+	rows, err := q.db.Query(ctx, listContractorUsers, contractorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.Role,
+			&i.PasswordHash,
+			&i.Active,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Lang,
+			&i.TotpSecret,
+			&i.TotpEnabled,
+			&i.RecoveryCodes,
+			&i.OidcSubject,
+			&i.SessionVersion,
+			&i.ContractorID,
 		); err != nil {
 			return nil, err
 		}
@@ -311,7 +359,7 @@ func (q *Queries) ListOpenPasswordResetRequests(ctx context.Context) ([]ListOpen
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version FROM users ORDER BY active DESC, name
+SELECT id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version, contractor_id FROM users ORDER BY active DESC, name
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -338,6 +386,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.RecoveryCodes,
 			&i.OidcSubject,
 			&i.SessionVersion,
+			&i.ContractorID,
 		); err != nil {
 			return nil, err
 		}
@@ -413,17 +462,18 @@ func (q *Queries) SetUserLang(ctx context.Context, arg SetUserLangParams) error 
 }
 
 const updateUser = `-- name: UpdateUser :one
-UPDATE users SET email = $2, name = $3, role = $4, active = $5, updated_at = now()
+UPDATE users SET email = $2, name = $3, role = $4, active = $5, contractor_id = $6, updated_at = now()
 WHERE id = $1
-RETURNING id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version
+RETURNING id, email, name, role, password_hash, active, created_at, updated_at, lang, totp_secret, totp_enabled, recovery_codes, oidc_subject, session_version, contractor_id
 `
 
 type UpdateUserParams struct {
-	ID     int64
-	Email  string
-	Name   string
-	Role   UserRole
-	Active bool
+	ID           int64
+	Email        string
+	Name         string
+	Role         UserRole
+	Active       bool
+	ContractorID *int64
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
@@ -433,6 +483,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		arg.Name,
 		arg.Role,
 		arg.Active,
+		arg.ContractorID,
 	)
 	var i User
 	err := row.Scan(
@@ -450,6 +501,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.RecoveryCodes,
 		&i.OidcSubject,
 		&i.SessionVersion,
+		&i.ContractorID,
 	)
 	return i, err
 }

@@ -10,6 +10,128 @@ import (
 	"time"
 )
 
+type AssignmentReason string
+
+const (
+	AssignmentReasonManual       AssignmentReason = "manual"
+	AssignmentReasonSampling     AssignmentReason = "sampling"
+	AssignmentReasonReinspection AssignmentReason = "reinspection"
+)
+
+func (e *AssignmentReason) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AssignmentReason(s)
+	case string:
+		*e = AssignmentReason(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AssignmentReason: %T", src)
+	}
+	return nil
+}
+
+type NullAssignmentReason struct {
+	AssignmentReason AssignmentReason
+	Valid            bool // Valid is true if AssignmentReason is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAssignmentReason) Scan(value interface{}) error {
+	if value == nil {
+		ns.AssignmentReason, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AssignmentReason.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAssignmentReason) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AssignmentReason), nil
+}
+
+func (e AssignmentReason) Valid() bool {
+	switch e {
+	case AssignmentReasonManual,
+		AssignmentReasonSampling,
+		AssignmentReasonReinspection:
+		return true
+	}
+	return false
+}
+
+func AllAssignmentReasonValues() []AssignmentReason {
+	return []AssignmentReason{
+		AssignmentReasonManual,
+		AssignmentReasonSampling,
+		AssignmentReasonReinspection,
+	}
+}
+
+type AssignmentStatus string
+
+const (
+	AssignmentStatusOpen      AssignmentStatus = "open"
+	AssignmentStatusDone      AssignmentStatus = "done"
+	AssignmentStatusCancelled AssignmentStatus = "cancelled"
+)
+
+func (e *AssignmentStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AssignmentStatus(s)
+	case string:
+		*e = AssignmentStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AssignmentStatus: %T", src)
+	}
+	return nil
+}
+
+type NullAssignmentStatus struct {
+	AssignmentStatus AssignmentStatus
+	Valid            bool // Valid is true if AssignmentStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAssignmentStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.AssignmentStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AssignmentStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAssignmentStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AssignmentStatus), nil
+}
+
+func (e AssignmentStatus) Valid() bool {
+	switch e {
+	case AssignmentStatusOpen,
+		AssignmentStatusDone,
+		AssignmentStatusCancelled:
+		return true
+	}
+	return false
+}
+
+func AllAssignmentStatusValues() []AssignmentStatus {
+	return []AssignmentStatus{
+		AssignmentStatusOpen,
+		AssignmentStatusDone,
+		AssignmentStatusCancelled,
+	}
+}
+
 type FindingSeverity string
 
 const (
@@ -73,6 +195,7 @@ type FindingStatus string
 const (
 	FindingStatusOpen       FindingStatus = "open"
 	FindingStatusInProgress FindingStatus = "in_progress"
+	FindingStatusResponded  FindingStatus = "responded"
 	FindingStatusClosed     FindingStatus = "closed"
 )
 
@@ -115,6 +238,7 @@ func (e FindingStatus) Valid() bool {
 	switch e {
 	case FindingStatusOpen,
 		FindingStatusInProgress,
+		FindingStatusResponded,
 		FindingStatusClosed:
 		return true
 	}
@@ -125,6 +249,7 @@ func AllFindingStatusValues() []FindingStatus {
 	return []FindingStatus{
 		FindingStatusOpen,
 		FindingStatusInProgress,
+		FindingStatusResponded,
 		FindingStatusClosed,
 	}
 }
@@ -309,12 +434,89 @@ func AllRatingValues() []Rating {
 	}
 }
 
+type RootCause string
+
+const (
+	RootCausePeople      RootCause = "people"
+	RootCauseProcedure   RootCause = "procedure"
+	RootCauseMaterials   RootCause = "materials"
+	RootCauseEquipment   RootCause = "equipment"
+	RootCauseSupervision RootCause = "supervision"
+	RootCauseDesign      RootCause = "design"
+	RootCauseExternal    RootCause = "external"
+	RootCauseOther       RootCause = "other"
+)
+
+func (e *RootCause) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RootCause(s)
+	case string:
+		*e = RootCause(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RootCause: %T", src)
+	}
+	return nil
+}
+
+type NullRootCause struct {
+	RootCause RootCause
+	Valid     bool // Valid is true if RootCause is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRootCause) Scan(value interface{}) error {
+	if value == nil {
+		ns.RootCause, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RootCause.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRootCause) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RootCause), nil
+}
+
+func (e RootCause) Valid() bool {
+	switch e {
+	case RootCausePeople,
+		RootCauseProcedure,
+		RootCauseMaterials,
+		RootCauseEquipment,
+		RootCauseSupervision,
+		RootCauseDesign,
+		RootCauseExternal,
+		RootCauseOther:
+		return true
+	}
+	return false
+}
+
+func AllRootCauseValues() []RootCause {
+	return []RootCause{
+		RootCausePeople,
+		RootCauseProcedure,
+		RootCauseMaterials,
+		RootCauseEquipment,
+		RootCauseSupervision,
+		RootCauseDesign,
+		RootCauseExternal,
+		RootCauseOther,
+	}
+}
+
 type UserRole string
 
 const (
-	UserRoleAdmin     UserRole = "admin"
-	UserRoleInspector UserRole = "inspector"
-	UserRoleViewer    UserRole = "viewer"
+	UserRoleAdmin      UserRole = "admin"
+	UserRoleInspector  UserRole = "inspector"
+	UserRoleViewer     UserRole = "viewer"
+	UserRoleContractor UserRole = "contractor"
 )
 
 func (e *UserRole) Scan(src interface{}) error {
@@ -356,7 +558,8 @@ func (e UserRole) Valid() bool {
 	switch e {
 	case UserRoleAdmin,
 		UserRoleInspector,
-		UserRoleViewer:
+		UserRoleViewer,
+		UserRoleContractor:
 		return true
 	}
 	return false
@@ -367,6 +570,7 @@ func AllUserRoleValues() []UserRole {
 		UserRoleAdmin,
 		UserRoleInspector,
 		UserRoleViewer,
+		UserRoleContractor,
 	}
 }
 
@@ -575,6 +779,7 @@ type Attachment struct {
 	SizeBytes    int64
 	UploadedBy   *int64
 	CreatedAt    time.Time
+	Purpose      string
 }
 
 type AuditLog struct {
@@ -607,22 +812,30 @@ type Contractor struct {
 }
 
 type Finding struct {
-	ID               int64
-	WorkOrderID      int64
-	InspectionID     *int64
-	CriterionID      *int64
-	Severity         FindingSeverity
-	Description      string
-	CorrectiveAction string
-	Owner            string
-	DueDate          *time.Time
-	Status           FindingStatus
-	ClosureNote      string
-	ClosedAt         *time.Time
-	ClosedBy         *int64
-	CreatedBy        *int64
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID                int64
+	WorkOrderID       int64
+	InspectionID      *int64
+	CriterionID       *int64
+	Severity          FindingSeverity
+	Description       string
+	CorrectiveAction  string
+	Owner             string
+	DueDate           *time.Time
+	Status            FindingStatus
+	ClosureNote       string
+	ClosedAt          *time.Time
+	ClosedBy          *int64
+	CreatedBy         *int64
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	RootCauseCategory *RootCause
+	RootCause         string
+	OwnerUserID       *int64
+	ResponseNote      string
+	RespondedBy       *int64
+	RespondedAt       *time.Time
+	RejectionNote     string
+	RepeatOf          *int64
 }
 
 type Inspection struct {
@@ -643,11 +856,37 @@ type Inspection struct {
 	UpdatedAt      time.Time
 }
 
+type InspectionAssignment struct {
+	ID           int64
+	WorkOrderID  int64
+	Stage        InspectionStage
+	AssigneeID   *int64
+	DueDate      *time.Time
+	Reason       AssignmentReason
+	Status       AssignmentStatus
+	Note         string
+	InspectionID *int64
+	CreatedBy    *int64
+	CreatedAt    time.Time
+	DoneAt       *time.Time
+}
+
 type InspectionItem struct {
 	InspectionID int64
 	CriterionID  int64
 	Rating       *Rating
 	Note         string
+}
+
+type Notification struct {
+	ID        int64
+	UserID    int64
+	Kind      string
+	Params    []byte
+	Link      string
+	Dedupe    *string
+	ReadAt    *time.Time
+	CreatedAt time.Time
 }
 
 type PasswordReset struct {
@@ -666,6 +905,15 @@ type PasswordResetRequest struct {
 	CreatedAt time.Time
 	HandledAt *time.Time
 	HandledBy *int64
+}
+
+type SamplingRule struct {
+	ID       int64
+	Stage    InspectionStage
+	WoType   *WoType
+	Priority *WoPriority
+	Percent  int32
+	Active   bool
 }
 
 type Session struct {
@@ -718,6 +966,7 @@ type User struct {
 	RecoveryCodes  []string
 	OidcSubject    *string
 	SessionVersion int32
+	ContractorID   *int64
 }
 
 type WorkOrder struct {

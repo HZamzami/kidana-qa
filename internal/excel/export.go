@@ -487,3 +487,20 @@ func criteriaSheet(l i18n.Lang, f *excelize.File, st styles, lists []ChecklistEx
 
 // Fmt1 formats a number with at most one decimal (plain text for Excel).
 func Fmt1(v float64) string { return domain.Fmt1(v) }
+
+// FindingsWorkbook exports a filtered findings list on its own.
+func FindingsWorkbook(l i18n.Lang, items []FindingExport) (*excelize.File, error) {
+	f := excelize.NewFile()
+	st, err := newStyles(f)
+	if err != nil {
+		return nil, err
+	}
+	if err := findingsSheet(l, f, st, items); err != nil {
+		return nil, err
+	}
+	if err := f.DeleteSheet("Sheet1"); err != nil {
+		return nil, err
+	}
+	f.SetActiveSheet(0)
+	return f, nil
+}

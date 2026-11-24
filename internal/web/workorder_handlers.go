@@ -68,6 +68,9 @@ func woFilter(r *http.Request) gen.CountWorkOrdersParams {
 	if p := gen.WoPriority(q.Get("priority")); p.Valid() {
 		f.Priority = &p
 	}
+	if scope := appctx.ContractorScope(r.Context()); scope != nil {
+		f.ContractorID = scope // contractor users see only their own work orders
+	}
 	return f
 }
 
@@ -201,6 +204,9 @@ func (s *Server) workOrderCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(ctx, s.q, "work_order", wo.ID, "created", map[string]any{"ref": wo.Ref})
+	if err := s.sampleNewWorkOrder(ctx, s.q, wo); err != nil {
+		s.log.Warn("sampling", "work_order", wo.ID, "err", err)
+	}
 	s.flash(ctx, appctx.T(ctx, "تم إنشاء أمر العمل ")+wo.Ref, "ok")
 	if r.PostFormValue("next") == "new" {
 		// "save and add another": keep type, site, system, asset group and contractor
@@ -222,6 +228,10 @@ func (s *Server) workOrderShow(w http.ResponseWriter, r *http.Request) {
 		s.dbError(w, r, err)
 		return
 	}
+	if !canSeeContractor(ctx, wo.ContractorID) {
+		s.notFound(w, r)
+		return
+	}
 	ins, err := s.q.ListInspectionsByWorkOrder(ctx, id)
 	if err != nil {
 		s.serverError(w, r, err)
@@ -232,9 +242,19 @@ func (s *Server) workOrderShow(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	s.render(w, r, http.StatusOK, views.WorkOrderShow(views.WOShowData{
-		WO: wo, Inspections: ins, Findings: fs, Today: time.Now().Format(time.DateOnly),
-	}))
+	as, err := s.q.ListAssignmentsByWorkOrder(ctx, id)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	d := views.WOShowData{WO: wo, Inspections: ins, Findings: fs, Assignments: as, Today: time.Now().Format(time.DateOnly)}
+	if appctx.CanEdit(ctx) {
+		if d.Assignees, err = s.assignees(r); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+	}
+	s.render(w, r, http.StatusOK, views.WorkOrderShow(d))
 }
 
 func (s *Server) workOrderEdit(w http.ResponseWriter, r *http.Request) {

@@ -154,3 +154,6 @@ func checklistName(ctx context.Context, name string) string {
 	}
 	return t(ctx, name)
 }
+
+// today is the current Riyadh date as yyyy-mm-dd, for overdue checks.
+func today() string { return dates.Today().Format(time.DateOnly) }

@@ -389,11 +389,15 @@ func (s *Server) importWorkOrders(ctx context.Context, res *excel.Result, out *v
 			if err != nil {
 				return err
 			}
-			if _, err := q.CreateWorkOrder(ctx, gen.CreateWorkOrderParams{
+			wo, err := q.CreateWorkOrder(ctx, gen.CreateWorkOrderParams{
 				Ref: row.Ref, Type: gen.WoType(row.Type), SiteID: siteID, Location: row.Location, SystemID: systemID, AssetGroupID: assetGroupID,
 				Asset: row.Asset, ContractorID: contractorID, Technician: row.Technician, Priority: gen.WoPriority(row.Priority),
 				Description: row.Description, PlannedDate: row.PlannedDate, ActualDate: row.ActualDate, CreatedBy: currentUserID(ctx),
-			}); err != nil {
+			})
+			if err != nil {
+				return err
+			}
+			if err := s.sampleNewWorkOrder(ctx, q, wo); err != nil {
 				return err
 			}
 			out.Created++

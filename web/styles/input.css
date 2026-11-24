@@ -215,6 +215,12 @@
   font-size: 8.5pt;
   line-height: 1.5;
 }
+/* Lists print across: an A4 landscape sheet. */
+.sheet-landscape {
+  width: 297mm;
+  min-height: 210mm;
+  page: landscape;
+}
 .sheet .pill {
   font-size: 7.5pt;
   padding: 0.05rem 0.5rem;
@@ -263,6 +269,10 @@
   font-size: 7.5pt;
 }
 
+@page landscape {
+  size: A4 landscape;
+}
+
 /* Print: A4 with page numbers in the bottom margin. */
 @media print {
   @page {
@@ -302,5 +312,8 @@
   }
   .sheet:last-child {
     break-after: auto;
+  }
+  .sheet-landscape {
+    min-height: 0;
   }
 }

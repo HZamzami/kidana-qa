@@ -10,9 +10,9 @@ import (
 )
 
 const createAttachment = `-- name: CreateAttachment :one
-INSERT INTO attachments (inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at
+INSERT INTO attachments (inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, purpose)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose
 `
 
 type CreateAttachmentParams struct {
@@ -24,6 +24,7 @@ type CreateAttachmentParams struct {
 	ContentType  string
 	SizeBytes    int64
 	UploadedBy   *int64
+	Purpose      string
 }
 
 func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error) {
@@ -36,6 +37,7 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 		arg.ContentType,
 		arg.SizeBytes,
 		arg.UploadedBy,
+		arg.Purpose,
 	)
 	var i Attachment
 	err := row.Scan(
@@ -49,6 +51,7 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 		&i.SizeBytes,
 		&i.UploadedBy,
 		&i.CreatedAt,
+		&i.Purpose,
 	)
 	return i, err
 }
@@ -63,7 +66,7 @@ func (q *Queries) DeleteAttachment(ctx context.Context, id int64) error {
 }
 
 const getAttachment = `-- name: GetAttachment :one
-SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at FROM attachments WHERE id = $1
+SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose FROM attachments WHERE id = $1
 `
 
 func (q *Queries) GetAttachment(ctx context.Context, id int64) (Attachment, error) {
@@ -80,12 +83,13 @@ func (q *Queries) GetAttachment(ctx context.Context, id int64) (Attachment, erro
 		&i.SizeBytes,
 		&i.UploadedBy,
 		&i.CreatedAt,
+		&i.Purpose,
 	)
 	return i, err
 }
 
 const listAttachmentsByFinding = `-- name: ListAttachmentsByFinding :many
-SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at FROM attachments WHERE finding_id = $1 ORDER BY created_at
+SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose FROM attachments WHERE finding_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListAttachmentsByFinding(ctx context.Context, findingID *int64) ([]Attachment, error) {
@@ -108,6 +112,7 @@ func (q *Queries) ListAttachmentsByFinding(ctx context.Context, findingID *int64
 			&i.SizeBytes,
 			&i.UploadedBy,
 			&i.CreatedAt,
+			&i.Purpose,
 		); err != nil {
 			return nil, err
 		}
@@ -120,7 +125,7 @@ func (q *Queries) ListAttachmentsByFinding(ctx context.Context, findingID *int64
 }
 
 const listAttachmentsByInspection = `-- name: ListAttachmentsByInspection :many
-SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at FROM attachments WHERE inspection_id = $1 ORDER BY created_at
+SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose FROM attachments WHERE inspection_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListAttachmentsByInspection(ctx context.Context, inspectionID *int64) ([]Attachment, error) {
@@ -143,6 +148,7 @@ func (q *Queries) ListAttachmentsByInspection(ctx context.Context, inspectionID 
 			&i.SizeBytes,
 			&i.UploadedBy,
 			&i.CreatedAt,
+			&i.Purpose,
 		); err != nil {
 			return nil, err
 		}
@@ -155,7 +161,7 @@ func (q *Queries) ListAttachmentsByInspection(ctx context.Context, inspectionID 
 }
 
 const listAttachmentsByWorkOrder = `-- name: ListAttachmentsByWorkOrder :many
-SELECT a.id, a.inspection_id, a.criterion_id, a.finding_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.uploaded_by, a.created_at FROM attachments a
+SELECT a.id, a.inspection_id, a.criterion_id, a.finding_id, a.storage_key, a.filename, a.content_type, a.size_bytes, a.uploaded_by, a.created_at, a.purpose FROM attachments a
 LEFT JOIN inspections i ON i.id = a.inspection_id
 LEFT JOIN findings f ON f.id = a.finding_id
 WHERE i.work_order_id = $1 OR f.work_order_id = $1
@@ -181,6 +187,7 @@ func (q *Queries) ListAttachmentsByWorkOrder(ctx context.Context, workOrderID in
 			&i.SizeBytes,
 			&i.UploadedBy,
 			&i.CreatedAt,
+			&i.Purpose,
 		); err != nil {
 			return nil, err
 		}

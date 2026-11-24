@@ -188,6 +188,12 @@ func (s *Server) usersPage(w http.ResponseWriter, r *http.Request, status int, d
 		return
 	}
 	d.Users = users
+	lk, err := s.lookupOptions(r.Context(), false)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	d.Contractors = lk.Contractors
 	if d.Requests, err = s.q.ListOpenPasswordResetRequests(r.Context()); err != nil {
 		s.serverError(w, r, err)
 		return
@@ -216,6 +222,15 @@ func (s *Server) userCreate(w http.ResponseWriter, r *http.Request) {
 	if !role.Valid() {
 		f.Errors["role"] = appctx.T(ctx, "اختر الصلاحية")
 	}
+	// A contractor user belongs to exactly one contractor; staff to none.
+	contractor := f.OptID("contractor_id")
+	d.New.ContractorID = f.Str("contractor_id")
+	if role == gen.UserRoleContractor && contractor == nil {
+		f.Errors["contractor_id"] = appctx.T(ctx, "اختر المقاول لهذا الحساب")
+	}
+	if role != gen.UserRoleContractor {
+		contractor = nil
+	}
 	password := r.PostFormValue("password")
 	generated := false
 	if password == "" {
@@ -233,7 +248,7 @@ func (s *Server) userCreate(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	u, err := s.q.CreateUser(ctx, gen.CreateUserParams{Email: d.New.Email, Name: d.New.Name, Role: role, PasswordHash: hash})
+	u, err := s.q.CreateUser(ctx, gen.CreateUserParams{Email: d.New.Email, Name: d.New.Name, Role: role, PasswordHash: hash, ContractorID: contractor})
 	if isUniqueViolation(err) {
 		d.Errors = map[string]string{"email": appctx.T(ctx, "البريد مسجل لمستخدم آخر")}
 		s.usersPage(w, r, http.StatusUnprocessableEntity, d)
@@ -262,7 +277,11 @@ func (s *Server) userUpdate(w http.ResponseWriter, r *http.Request) {
 	name, email := f.Str("name"), strings.ToLower(f.Str("email"))
 	role := gen.UserRole(f.Str("role"))
 	active := f.Bool("active")
-	if _, err := mail.ParseAddress(email); err != nil || name == "" || !role.Valid() {
+	contractor := f.OptID("contractor_id")
+	if role != gen.UserRoleContractor {
+		contractor = nil
+	}
+	if _, err := mail.ParseAddress(email); err != nil || name == "" || !role.Valid() || (role == gen.UserRoleContractor && contractor == nil) {
 		s.flash(ctx, appctx.T(ctx, "بيانات غير صالحة: تحقق من الاسم والبريد والصلاحية"), "warn")
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 		return
@@ -273,7 +292,7 @@ func (s *Server) userUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 		return
 	}
-	_, err := s.q.UpdateUser(ctx, gen.UpdateUserParams{ID: id, Email: email, Name: name, Role: role, Active: active})
+	_, err := s.q.UpdateUser(ctx, gen.UpdateUserParams{ID: id, Email: email, Name: name, Role: role, Active: active, ContractorID: contractor})
 	switch {
 	case isUniqueViolation(err):
 		s.flash(ctx, appctx.T(ctx, "البريد مسجل لمستخدم آخر"), "warn")

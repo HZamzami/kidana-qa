@@ -12,12 +12,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -143,6 +145,7 @@ type contractor struct {
 	ID      int64
 	Name    string
 	Quality float64 // chance a criterion is fully compliant
+	User    int64   // the contractor's portal user
 }
 
 type seeder struct {
@@ -244,7 +247,14 @@ func (s *seeder) createPeople(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		s.contractors = append(s.contractors, contractor{x.ID, c.name, c.quality})
+		u, err := s.q.CreateUser(ctx, gen.CreateUserParams{
+			Email: fmt.Sprintf("contractor%d@%s", len(s.contractors)+1, demoDomain), Name: c.contact,
+			Role: gen.UserRoleContractor, PasswordHash: s.hash, ContractorID: &x.ID,
+		})
+		if err != nil {
+			return err
+		}
+		s.contractors = append(s.contractors, contractor{x.ID, c.name, c.quality, u.ID})
 	}
 	return nil
 }
@@ -392,6 +402,9 @@ func (s *seeder) workOrder(ctx context.Context, planned time.Time, seq map[gen.W
 				return err
 			}
 		}
+		if err := s.assign(ctx, wo.ID, gen.InspectionStageAfter, planned.AddDate(0, 0, 3), gen.AssignmentReasonSampling); err != nil {
+			return err
+		}
 		return s.finish(ctx, wo.ID, false)
 	}
 	if s.chance(0.03) {
@@ -407,12 +420,17 @@ func (s *seeder) workOrder(ctx context.Context, planned time.Time, seq map[gen.W
 		}
 	}
 	if s.chance(0.1) {
-		return s.finish(ctx, wo.ID, true) // done, after-work inspection still pending
+		// done, after-work inspection still pending
+		if err := s.assign(ctx, wo.ID, gen.InspectionStageAfter, actual.AddDate(0, 0, 2), gen.AssignmentReasonManual); err != nil {
+			return err
+		}
+		return s.finish(ctx, wo.ID, true)
 	}
 	day := minDate(actual.AddDate(0, 0, s.rng.IntN(3)), s.today)
+	passed := false
 	for attempt := 1; attempt <= 3; attempt++ {
-		passed, err := s.inspect(ctx, wo.ID, gen.InspectionStageAfter, attempt, day, c)
-		if err != nil {
+		var err error
+		if passed, err = s.inspect(ctx, wo.ID, gen.InspectionStageAfter, attempt, day, c); err != nil {
 			return err
 		}
 		next := day.AddDate(0, 0, 3+s.rng.IntN(5))
@@ -421,6 +439,11 @@ func (s *seeder) workOrder(ctx context.Context, planned time.Time, seq map[gen.W
 		}
 		day = next
 		c.Quality = min(c.Quality+0.08, 0.97) // the re-inspection follows a fix
+	}
+	if !passed {
+		if err := s.assign(ctx, wo.ID, gen.InspectionStageAfter, day.AddDate(0, 0, 7), gen.AssignmentReasonReinspection); err != nil {
+			return err
+		}
 	}
 	return s.finish(ctx, wo.ID, true)
 }
@@ -540,6 +563,10 @@ func weakest(ratings []domain.Rating) int {
 }
 
 func (s *seeder) finding(ctx context.Context, woID, inID int64, cr gen.TemplateCriterion, day time.Time, by int64, c contractor, critical bool) error {
+	var ref string
+	if err := s.tx.QueryRow(ctx, "SELECT ref FROM work_orders WHERE id = $1", woID).Scan(&ref); err != nil {
+		return err
+	}
 	text, ok := findingText[cr.Code]
 	if !ok {
 		text = [2]string{"عدم مطابقة في بند: " + cr.Label, "معالجة الملاحظة وإبلاغ المفتش لإعادة التحقق"}
@@ -562,18 +589,33 @@ func (s *seeder) finding(ctx context.Context, woID, inID int64, cr gen.TemplateC
 	s.findings++
 	// Older findings are mostly closed; recent ones are still being worked on.
 	age := int(s.today.Sub(day).Hours() / 24)
+	closed := false
 	switch {
 	case age > 30 && s.chance(0.8), age > 10 && s.chance(0.45):
+		closed = true
 		if err := s.q.CloseFinding(ctx, gen.CloseFindingParams{ID: f.ID, ClosureNote: "تم التحقق من تنفيذ الإجراء التصحيحي في الموقع", ClosedBy: &by}); err != nil {
 			return err
 		}
 		closed := minDate(day.AddDate(0, 0, 1+s.rng.IntN(9)), s.today).Add(10 * time.Hour)
 		_, err = s.tx.Exec(ctx, "UPDATE findings SET closed_at = $2, created_at = $3, updated_at = $2 WHERE id = $1", f.ID, closed, day.Add(9*time.Hour))
+	case s.chance(0.35):
+		// The contractor answered; the inspector has yet to verify.
+		rc := []gen.RootCause{gen.RootCauseEquipment, gen.RootCauseProcedure, gen.RootCausePeople, gen.RootCauseMaterials}[s.rng.IntN(4)]
+		_, err = s.q.RespondFinding(ctx, gen.RespondFindingParams{
+			ID: f.ID, ResponseNote: "تمت المعالجة حسب الإجراء التصحيحي، والصور مرفقة في نظام المقاول.", RespondedBy: &c.User,
+			RootCauseCategory: &rc, RootCause: "",
+		})
+		if err == nil {
+			s.note(ctx, by, "finding_responded", map[string]string{"ref": ref}, "/findings/"+strconv.FormatInt(f.ID, 10)+"/edit")
+		}
 	case s.chance(0.3):
 		_, err = s.q.UpdateFinding(ctx, gen.UpdateFindingParams{
 			ID: f.ID, Description: f.Description, CorrectiveAction: f.CorrectiveAction, Owner: f.Owner,
 			DueDate: f.DueDate, Severity: f.Severity, Status: gen.FindingStatusInProgress,
 		})
+	}
+	if err == nil && !closed {
+		s.note(ctx, c.User, "finding_raised", map[string]string{"ref": ref, "desc": f.Description}, "/findings/"+strconv.FormatInt(f.ID, 10)+"/edit")
 	}
 	return err
 }
@@ -595,4 +637,39 @@ func (s *seeder) finish(ctx context.Context, woID int64, done bool) error {
 		OpenFindings: int(f.OpenFindings), HasSubmittedWork: f.HasSubmitted,
 	})
 	return s.q.SetWorkOrderStatus(ctx, gen.SetWorkOrderStatusParams{ID: woID, Status: gen.WoStatus(next)})
+}
+
+// assign books an inspection: half go to an inspector (who is notified),
+// the rest wait in the pool.
+func (s *seeder) assign(ctx context.Context, woID int64, stage gen.InspectionStage, due time.Time, reason gen.AssignmentReason) error {
+	var who *int64
+	if reason == gen.AssignmentReasonReinspection || s.chance(0.5) {
+		id := s.inspectors[s.rng.IntN(len(s.inspectors))]
+		who = &id
+	}
+	a, err := s.q.CreateAssignment(ctx, gen.CreateAssignmentParams{
+		WorkOrderID: woID, Stage: stage, AssigneeID: who, DueDate: &due, Reason: reason,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil || who == nil {
+		return err
+	}
+	var ref string
+	if err := s.tx.QueryRow(ctx, "SELECT ref FROM work_orders WHERE id = $1", woID).Scan(&ref); err != nil {
+		return err
+	}
+	kind := "assigned"
+	if reason == gen.AssignmentReasonReinspection {
+		kind = "reinspection"
+	}
+	s.note(ctx, *who, kind, map[string]string{"ref": ref, "stage": string(a.Stage), "due": dates.DMY(due)}, "/work-orders/"+strconv.FormatInt(woID, 10))
+	return nil
+}
+
+// note adds an in-app notification for the demo.
+func (s *seeder) note(ctx context.Context, user int64, kind string, params map[string]string, link string) {
+	b, _ := json.Marshal(params)
+	_ = s.q.CreateNotification(ctx, gen.CreateNotificationParams{UserID: user, Kind: kind, Params: b, Link: link})
 }

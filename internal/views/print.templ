@@ -495,3 +495,117 @@ templ signBox(role, name string) {
 		</div>
 	</div>
 }
+
+// ---------------------------------------------------------------- findings list (A4 landscape)
+
+type FindingsPrintData struct {
+	Rows      []gen.ListFindingsRow
+	Scope     string
+	Back      string
+	Printed   time.Time
+	PrintedBy string
+}
+
+templ FindingsPrint(d FindingsPrintData) {
+	@Base(t(ctx, "الملاحظات والإجراءات التصحيحية")) {
+		<div class="print-root" x-data="printPage" data-auto={ tern(len(d.Rows) > 0, "1", "0") }>
+			<div class="no-print sticky top-0 z-10 bg-white border-b border-ink-10 shadow-sm">
+				<div class="mx-auto max-w-[297mm] px-4 py-3 flex flex-wrap items-center gap-3">
+					<img src={ asset("/static/img/kidana-logo.png") } alt={ t(ctx, "كدانة") } class="h-8 w-auto"/>
+					<div class="min-w-0">
+						<p class="font-semibold">{ t(ctx, "الملاحظات والإجراءات التصحيحية") + " — " + count(ctx, len(d.Rows), domain.NounFinding) }</p>
+						if d.Scope != "" {
+							<p class="text-xs text-ink-80">{ d.Scope }</p>
+						}
+					</div>
+					<div class="ms-auto flex gap-2">
+						<a href={ templ.SafeURL(d.Back) } class="btn btn-ghost">{ t(ctx, "رجوع") }</a>
+						if len(d.Rows) > 0 {
+							<button type="button" class="btn btn-primary" @click="print">{ t(ctx, "طباعة / حفظ PDF") }</button>
+						}
+					</div>
+				</div>
+			</div>
+			<div class="sheets">
+				<article class="sheet sheet-landscape">
+					<header class="flex items-center gap-4 pb-3 border-b-2 border-gold">
+						<img src={ asset("/static/img/kidana-logo.png") } alt={ t(ctx, "كدانة") } class="h-10 w-auto"/>
+						<div>
+							<p class="pr-label">{ t(ctx, "إدارة جودة العمليات · قطاع العمليات") }</p>
+							<h1 class="text-[14pt] font-bold leading-tight">{ t(ctx, "الملاحظات والإجراءات التصحيحية") }</h1>
+						</div>
+						<div class="ms-auto text-end text-[8pt] text-ink-80">
+							<p>{ count(ctx, len(d.Rows), domain.NounFinding) }</p>
+							if d.Scope != "" {
+								<p>{ d.Scope }</p>
+							}
+						</div>
+					</header>
+					if len(d.Rows) == 0 {
+						<p class="mt-6 text-ink-80">{ t(ctx, "لا توجد ملاحظات ضمن هذا العرض") }</p>
+					} else {
+						<table class="pr-table mt-3">
+							<thead>
+								<tr>
+									<th class="w-6">#</th>
+									<th class="w-20">{ t(ctx, "أمر العمل") }</th>
+									<th class="w-24">{ t(ctx, "الموقع") }</th>
+									<th class="w-28">{ t(ctx, "المقاول") }</th>
+									<th>{ t(ctx, "الملاحظة والإجراء التصحيحي") }</th>
+									<th class="w-24">{ t(ctx, "المسؤول") }</th>
+									<th class="w-20">{ t(ctx, "الاستحقاق") }</th>
+									<th class="w-20">{ t(ctx, "الحالة") }</th>
+								</tr>
+							</thead>
+							<tbody>
+								for i, f := range d.Rows {
+									<tr class="print-avoid-break">
+										<td class="num text-center">{ itoa(i + 1) }</td>
+										<td class="num">{ f.WoRef }</td>
+										<td>{ nm(ctx, f.SiteName, f.SiteNameEn) }</td>
+										<td>{ orDash(nm(ctx, f.ContractorName, f.ContractorNameEn)) }</td>
+										<td>
+											if f.Severity == gen.FindingSeverityCritical {
+												<span class="pr-tag bg-fail-10 text-fail me-1">{ t(ctx, "حرجة") }</span>
+											}
+											if f.RepeatOf != nil {
+												<span class="pr-tag bg-fail-10 text-fail me-1">{ t(ctx, "متكررة") }</span>
+											}
+											if f.CriterionCode != "" {
+												<span class="num text-ink-80 me-1">{ f.CriterionCode }</span>
+											}
+											<span class="font-medium">{ f.Description }</span>
+											<span class="block text-ink-80"><span class="text-ink-60">{ t(ctx, "الإجراء:") } </span>{ f.CorrectiveAction }</span>
+										</td>
+										<td>{ orDash(ownerName(f.OwnerUserName, f.Owner)) }</td>
+										<td>
+											@printDate(f.DueDate)
+										</td>
+										<td>
+											<span class="block">{ t(ctx, domain.Label(domain.FindingStatusLabels, string(f.Status))) }</span>
+											if f.Status != gen.FindingStatusClosed && f.DueDate != nil && isoDate(f.DueDate) < d.Printed.Format(time.DateOnly) {
+												<span class="pr-tag bg-fail-10 text-fail">{ t(ctx, "متأخرة") }</span>
+											}
+										</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					}
+					<footer class="mt-auto pt-3">
+						<div class="flex items-center gap-3 border-t border-ink-10 pt-1.5 text-[7pt] text-ink-60">
+							<span>{ t(ctx, "سجل جودة — يُحفظ ضمن سجلات إدارة جودة العمليات") }</span>
+							<span class="mx-auto">
+								{ t(ctx, "طُبع في ") }
+								<span class="num">{ dates.DMYTime(d.Printed) }</span>
+								if d.PrintedBy != "" {
+									{ t(ctx, " · بواسطة ") + d.PrintedBy }
+								}
+							</span>
+						</div>
+					</footer>
+				</article>
+			</div>
+		</div>
+	}
+}

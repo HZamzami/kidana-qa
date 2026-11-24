@@ -97,6 +97,8 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) routes(mux *http.ServeMux) {
 	edit := s.requireRole(gen.UserRoleAdmin, gen.UserRoleInspector)
+	staff := s.requireRole(gen.UserRoleAdmin, gen.UserRoleInspector, gen.UserRoleViewer) // not contractors
+	contractor := s.requireRole(gen.UserRoleContractor)
 	admin := s.requireRole(gen.UserRoleAdmin)
 
 	mux.HandleFunc("POST /logout", s.logout)
@@ -122,6 +124,17 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /work-orders/{id}", edit(s.workOrderUpdate))
 	mux.HandleFunc("POST /work-orders/{id}/inspections", edit(s.inspectionStart))
 	mux.HandleFunc("POST /work-orders/{id}/delete", admin(s.workOrderDelete))
+	mux.HandleFunc("POST /work-orders/{id}/assignments", edit(s.assignmentCreate))
+
+	// tasks, assignments and notifications
+	mux.HandleFunc("GET /my/tasks", s.tasksPage)
+	mux.HandleFunc("POST /assignments/{id}/claim", edit(s.assignmentClaim))
+	mux.HandleFunc("POST /assignments/{id}", edit(s.assignmentUpdate))
+	mux.HandleFunc("POST /assignments/{id}/cancel", edit(s.assignmentCancel))
+	mux.HandleFunc("GET /notifications", s.notificationsPage)
+	mux.HandleFunc("GET /notifications/bell", s.notificationsBell)
+	mux.HandleFunc("POST /notifications/{id}/open", s.notificationOpen)
+	mux.HandleFunc("POST /notifications/read-all", s.notificationsReadAll)
 
 	// inspections
 	mux.HandleFunc("GET /inspections/{id}", s.inspectionShow)
@@ -136,7 +149,13 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	// findings
 	mux.HandleFunc("GET /findings", s.findingsList)
-	mux.HandleFunc("GET /findings/{id}/edit", edit(s.findingEdit))
+	mux.HandleFunc("GET /findings/export.xlsx", s.findingsExport)
+	mux.HandleFunc("GET /findings/print", s.findingsPrint)
+	mux.HandleFunc("POST /findings/bulk", edit(s.findingsBulk))
+	mux.HandleFunc("POST /findings/{id}/respond", contractor(s.findingRespond))
+	mux.HandleFunc("POST /findings/{id}/reject", edit(s.findingReject))
+	mux.HandleFunc("POST /findings/{id}/photos", edit(s.findingPhotoUpload))
+	mux.HandleFunc("GET /findings/{id}/edit", s.findingEdit)
 	mux.HandleFunc("POST /findings/{id}", edit(s.findingUpdate))
 	mux.HandleFunc("POST /findings/{id}/close", edit(s.findingClose))
 	mux.HandleFunc("POST /findings/{id}/reopen", edit(s.findingReopen))
@@ -147,9 +166,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /attachments/{id}/delete", edit(s.attachmentDelete))
 
 	// reports & data
-	mux.HandleFunc("GET /reports/print", s.reportPrint)
-	mux.HandleFunc("GET /reports/export.xlsx", s.exportExcel)
-	mux.HandleFunc("GET /data", s.dataPage)
+	mux.HandleFunc("GET /reports/print", staff(s.reportPrint))
+	mux.HandleFunc("GET /reports/export.xlsx", staff(s.exportExcel))
+	mux.HandleFunc("GET /data", staff(s.dataPage))
 	mux.HandleFunc("GET /data/work-orders-template.xlsx", edit(s.workOrderTemplate))
 	mux.HandleFunc("POST /data/import", edit(s.importExcel))
 
@@ -164,6 +183,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/users/{id}/password", admin(s.userResetPassword))
 	mux.HandleFunc("POST /admin/users/{id}/reset-link", admin(s.adminResetLink))
 	mux.HandleFunc("POST /admin/users/{id}/2fa-reset", admin(s.adminReset2FA))
+	mux.HandleFunc("GET /admin/sampling", admin(s.samplingPage))
+	mux.HandleFunc("POST /admin/sampling", admin(s.samplingCreate))
+	mux.HandleFunc("POST /admin/sampling/{id}", admin(s.samplingUpdate))
 	mux.HandleFunc("GET /admin/checklists", admin(s.checklistsList))
 	mux.HandleFunc("GET /admin/checklists/{id}", admin(s.checklistShow))
 	mux.HandleFunc("GET /admin/checklists/{id}/new-version", admin(s.checklistNewVersion))

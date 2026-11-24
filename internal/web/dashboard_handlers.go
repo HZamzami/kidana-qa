@@ -124,6 +124,10 @@ func (s *Server) loadReport(ctx context.Context, sc reportScope) (reportData, er
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	if appctx.IsContractor(ctx) {
+		http.Redirect(w, r, "/my/tasks", http.StatusSeeOther) // contractors start at their tasks
+		return
+	}
 	sc := parseScope(r)
 	rep, err := s.loadReport(ctx, sc)
 	if err != nil {

@@ -86,6 +86,7 @@ templ FindingStatusPill(status string, overdue bool) {
 		class={ "pill",
 			templ.KV("bg-fail-10 text-fail", status == "open"),
 			templ.KV("bg-gold-20 text-ink", status == "in_progress"),
+			templ.KV("bg-sky-30 text-ink", status == "responded"),
 			templ.KV("bg-green-10 text-green", status == "closed") }
 	>
 		{ t(ctx, domain.Label(domain.FindingStatusLabels, status)) }

@@ -1,6 +1,6 @@
 -- name: CreateAttachment :one
-INSERT INTO attachments (inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO attachments (inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, purpose)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, sqlc.arg(purpose))
 RETURNING *;
 
 -- name: GetAttachment :one

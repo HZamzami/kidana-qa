@@ -110,6 +110,9 @@ func (s *Server) loadInspection(ctx context.Context, id int64) (views.Inspection
 	if err != nil {
 		return d, err
 	}
+	if !canSeeContractor(ctx, wo.ContractorID) {
+		return d, pgx.ErrNoRows // another contractor's: answer as not found
+	}
 	items, err := s.q.ListInspectionItems(ctx, id)
 	if err != nil {
 		return d, err
@@ -320,14 +323,35 @@ func (s *Server) inspectionFindingCreate(w http.ResponseWriter, r *http.Request)
 	if f.Valid() {
 		err := db.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 			q := s.q.WithTx(tx)
+			wo, err := q.GetWorkOrder(ctx, in.WorkOrderID)
+			if err != nil {
+				return err
+			}
+			// Same criterion failing again on the same asset is a repeat.
+			var repeatOf *int64
+			if cid != nil && wo.Asset != "" {
+				if prev, err := q.FindRepeatOf(ctx, gen.FindRepeatOfParams{
+					Asset: wo.Asset, CriterionID: cid, WorkOrderID: wo.ID,
+					Since: time.Now().AddDate(0, 0, -domain.RepeatWindowDays),
+				}); err == nil {
+					repeatOf = &prev
+				} else if !isNoRows(err) {
+					return err
+				}
+			}
 			fd, err := q.CreateFinding(ctx, gen.CreateFindingParams{
 				WorkOrderID: in.WorkOrderID, InspectionID: &in.ID, CriterionID: cid, Severity: sev,
 				Description: desc, CorrectiveAction: action, Owner: owner, DueDate: due, CreatedBy: currentUserID(ctx),
+				RepeatOf: repeatOf,
 			})
 			if err != nil {
 				return err
 			}
-			s.audit(ctx, q, "finding", fd.ID, "created", map[string]any{"inspection": in.ID})
+			s.audit(ctx, q, "finding", fd.ID, "created", map[string]any{"inspection": in.ID, "repeat_of": repeatOf})
+			s.notify(ctx, q, s.contractorUserIDs(ctx, wo.ContractorID), note{
+				kind: notifyFindingRaised, link: "/findings/" + idStr(fd.ID) + "/edit", dedupe: "raised:" + idStr(fd.ID),
+				params: map[string]string{"ref": wo.Ref, "desc": clip(desc, 80)},
+			})
 			return s.refreshWorkOrderStatus(ctx, q, in.WorkOrderID)
 		})
 		if err != nil {
@@ -452,6 +476,16 @@ func (s *Server) inspectionSubmit(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		s.audit(ctx, q, "inspection", in.ID, "submitted", map[string]any{"score": score, "passed": passed})
+		// A re-inspection is due when the latest finding should be fixed.
+		var due *time.Time
+		for _, f := range d.Findings {
+			if f.DueDate != nil && (due == nil || f.DueDate.After(*due)) {
+				due = f.DueDate
+			}
+		}
+		if err := s.afterInspectionSubmitted(ctx, q, in, passed, due); err != nil {
+			return err
+		}
 		return s.refreshWorkOrderStatus(ctx, q, in.WorkOrderID)
 	})
 	if err != nil {
@@ -549,6 +583,10 @@ func (s *Server) attachmentGet(w http.ResponseWriter, r *http.Request) {
 		s.dbError(w, r, err)
 		return
 	}
+	if appctx.IsContractor(ctx) && !s.attachmentVisible(ctx, a) {
+		s.notFound(w, r)
+		return
+	}
 	f, err := s.store.Open(ctx, a.StorageKey)
 	if err != nil {
 		s.notFound(w, r)
@@ -593,4 +631,28 @@ func (s *Server) attachmentDelete(w http.ResponseWriter, r *http.Request) {
 	_ = s.store.Delete(ctx, a.StorageKey)
 	s.audit(ctx, s.q, "attachment", id, "deleted", map[string]any{"inspection": in.ID})
 	s.renderPhotoStrip(w, r, in.ID, a.CriterionID)
+}
+
+// attachmentVisible checks a contractor user may see an attachment: it must
+// belong to one of their contractor's work orders.
+func (s *Server) attachmentVisible(ctx context.Context, a gen.Attachment) bool {
+	var woID int64
+	switch {
+	case a.InspectionID != nil:
+		in, err := s.q.GetInspection(ctx, *a.InspectionID)
+		if err != nil {
+			return false
+		}
+		woID = in.WorkOrderID
+	case a.FindingID != nil:
+		f, err := s.q.GetFinding(ctx, *a.FindingID)
+		if err != nil {
+			return false
+		}
+		woID = f.WorkOrderID
+	default:
+		return false
+	}
+	wo, err := s.q.GetWorkOrder(ctx, woID)
+	return err == nil && canSeeContractor(ctx, wo.ContractorID)
 }

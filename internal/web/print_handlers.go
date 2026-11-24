@@ -30,7 +30,7 @@ func (s *Server) workOrderPrint(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	if len(rows) == 0 {
+	if len(rows) == 0 || !canSeeContractor(r.Context(), rows[0].ContractorID) {
 		s.notFound(w, r)
 		return
 	}

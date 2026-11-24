@@ -112,3 +112,10 @@ func BothIn(l i18n.Lang, t time.Time) string {
 	}
 	return DMY(t)
 }
+
+// Today is the current Riyadh calendar date as midnight UTC, the same form
+// DATE columns come back in.
+func Today() time.Time {
+	y, m, d := time.Now().In(Riyadh).Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}

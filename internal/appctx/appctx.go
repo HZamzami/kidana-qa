@@ -104,3 +104,16 @@ func ReturnURI(ctx context.Context) string {
 	s, _ := ctx.Value(uriKey).(string)
 	return s
 }
+
+// IsContractor is true for contractor users, who only see their own
+// contractor's work orders and findings.
+func IsContractor(ctx context.Context) bool { return Can(ctx, gen.UserRoleContractor) }
+
+// ContractorScope is the contractor a contractor user is limited to, or nil
+// for staff.
+func ContractorScope(ctx context.Context) *int64 {
+	if u := User(ctx); u != nil && u.Role == gen.UserRoleContractor {
+		return u.ContractorID
+	}
+	return nil
+}

@@ -67,9 +67,12 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
+	app := web.New(cfg, log, pool, store)
+	go app.RunScheduler(ctx) // reminders and scheduled reports
+
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           web.New(cfg, log, pool, store).Handler(),
+		Handler:           app.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       60 * time.Second, // photo uploads on slow site networks
 		WriteTimeout:      60 * time.Second,

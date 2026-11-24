@@ -10,6 +10,36 @@ import (
 	"time"
 )
 
+const bulkUpdateFindings = `-- name: BulkUpdateFindings :execrows
+UPDATE findings SET
+    due_date = COALESCE($1, due_date),
+    owner = COALESCE($2, owner),
+    status = CASE WHEN $3::boolean AND status = 'open' THEN 'in_progress'::finding_status ELSE status END,
+    updated_at = now()
+WHERE id = ANY($4::bigint[]) AND status <> 'closed'
+`
+
+type BulkUpdateFindingsParams struct {
+	DueDate        *time.Time
+	Owner          *string
+	MarkInProgress bool
+	Ids            []int64
+}
+
+// Bulk changes from the findings list. NULL leaves a field as it is.
+func (q *Queries) BulkUpdateFindings(ctx context.Context, arg BulkUpdateFindingsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, bulkUpdateFindings,
+		arg.DueDate,
+		arg.Owner,
+		arg.MarkInProgress,
+		arg.Ids,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const closeFinding = `-- name: CloseFinding :exec
 UPDATE findings SET status = 'closed', closure_note = $2, closed_at = now(), closed_by = $3, updated_at = now()
 WHERE id = $1
@@ -39,9 +69,9 @@ func (q *Queries) CountFindingsByInspection(ctx context.Context, inspectionID *i
 
 const createFinding = `-- name: CreateFinding :one
 INSERT INTO findings (work_order_id, inspection_id, criterion_id, severity, description,
-                      corrective_action, owner, due_date, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, work_order_id, inspection_id, criterion_id, severity, description, corrective_action, owner, due_date, status, closure_note, closed_at, closed_by, created_by, created_at, updated_at
+                      corrective_action, owner, due_date, created_by, owner_user_id, repeat_of)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, work_order_id, inspection_id, criterion_id, severity, description, corrective_action, owner, due_date, status, closure_note, closed_at, closed_by, created_by, created_at, updated_at, root_cause_category, root_cause, owner_user_id, response_note, responded_by, responded_at, rejection_note, repeat_of
 `
 
 type CreateFindingParams struct {
@@ -54,6 +84,8 @@ type CreateFindingParams struct {
 	Owner            string
 	DueDate          *time.Time
 	CreatedBy        *int64
+	OwnerUserID      *int64
+	RepeatOf         *int64
 }
 
 func (q *Queries) CreateFinding(ctx context.Context, arg CreateFindingParams) (Finding, error) {
@@ -67,6 +99,8 @@ func (q *Queries) CreateFinding(ctx context.Context, arg CreateFindingParams) (F
 		arg.Owner,
 		arg.DueDate,
 		arg.CreatedBy,
+		arg.OwnerUserID,
+		arg.RepeatOf,
 	)
 	var i Finding
 	err := row.Scan(
@@ -86,6 +120,14 @@ func (q *Queries) CreateFinding(ctx context.Context, arg CreateFindingParams) (F
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RootCauseCategory,
+		&i.RootCause,
+		&i.OwnerUserID,
+		&i.ResponseNote,
+		&i.RespondedBy,
+		&i.RespondedAt,
+		&i.RejectionNote,
+		&i.RepeatOf,
 	)
 	return i, err
 }
@@ -99,35 +141,80 @@ func (q *Queries) DeleteFinding(ctx context.Context, id int64) error {
 	return err
 }
 
+const findRepeatOf = `-- name: FindRepeatOf :one
+SELECT f.id FROM findings f JOIN work_orders w ON w.id = f.work_order_id
+WHERE w.asset <> '' AND lower(w.asset) = lower($1::text) AND f.criterion_id = $2
+  AND f.work_order_id <> $3 AND f.created_at >= $4::timestamptz
+ORDER BY f.created_at DESC LIMIT 1
+`
+
+type FindRepeatOfParams struct {
+	Asset       string
+	CriterionID *int64
+	WorkOrderID int64
+	Since       time.Time
+}
+
+// An earlier finding on the same asset and criterion within the window.
+func (q *Queries) FindRepeatOf(ctx context.Context, arg FindRepeatOfParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findRepeatOf,
+		arg.Asset,
+		arg.CriterionID,
+		arg.WorkOrderID,
+		arg.Since,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getFinding = `-- name: GetFinding :one
-SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, w.ref AS wo_ref, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
+SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, f.root_cause_category, f.root_cause, f.owner_user_id, f.response_note, f.responded_by, f.responded_at, f.rejection_note, f.repeat_of, w.ref AS wo_ref, w.contractor_id AS wo_contractor_id,
+       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en,
+       COALESCE(ou.name, '')::text AS owner_user_name, COALESCE(ru.name, '')::text AS responded_by_name,
+       COALESCE(i.stage::text, '')::text AS inspection_stage
 FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id
 LEFT JOIN template_criteria c ON c.id = f.criterion_id
+LEFT JOIN users ou ON ou.id = f.owner_user_id
+LEFT JOIN users ru ON ru.id = f.responded_by
+LEFT JOIN inspections i ON i.id = f.inspection_id
 WHERE f.id = $1
 `
 
 type GetFindingRow struct {
-	ID               int64
-	WorkOrderID      int64
-	InspectionID     *int64
-	CriterionID      *int64
-	Severity         FindingSeverity
-	Description      string
-	CorrectiveAction string
-	Owner            string
-	DueDate          *time.Time
-	Status           FindingStatus
-	ClosureNote      string
-	ClosedAt         *time.Time
-	ClosedBy         *int64
-	CreatedBy        *int64
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	WoRef            string
-	CriterionCode    string
-	CriterionLabel   string
-	CriterionLabelEn string
+	ID                int64
+	WorkOrderID       int64
+	InspectionID      *int64
+	CriterionID       *int64
+	Severity          FindingSeverity
+	Description       string
+	CorrectiveAction  string
+	Owner             string
+	DueDate           *time.Time
+	Status            FindingStatus
+	ClosureNote       string
+	ClosedAt          *time.Time
+	ClosedBy          *int64
+	CreatedBy         *int64
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	RootCauseCategory *RootCause
+	RootCause         string
+	OwnerUserID       *int64
+	ResponseNote      string
+	RespondedBy       *int64
+	RespondedAt       *time.Time
+	RejectionNote     string
+	RepeatOf          *int64
+	WoRef             string
+	WoContractorID    *int64
+	CriterionCode     string
+	CriterionLabel    string
+	CriterionLabelEn  string
+	OwnerUserName     string
+	RespondedByName   string
+	InspectionStage   string
 }
 
 func (q *Queries) GetFinding(ctx context.Context, id int64) (GetFindingRow, error) {
@@ -150,31 +237,52 @@ func (q *Queries) GetFinding(ctx context.Context, id int64) (GetFindingRow, erro
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RootCauseCategory,
+		&i.RootCause,
+		&i.OwnerUserID,
+		&i.ResponseNote,
+		&i.RespondedBy,
+		&i.RespondedAt,
+		&i.RejectionNote,
+		&i.RepeatOf,
 		&i.WoRef,
+		&i.WoContractorID,
 		&i.CriterionCode,
 		&i.CriterionLabel,
 		&i.CriterionLabelEn,
+		&i.OwnerUserName,
+		&i.RespondedByName,
+		&i.InspectionStage,
 	)
 	return i, err
 }
 
 const listFindings = `-- name: ListFindings :many
-SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, w.ref AS wo_ref, s.name AS site_name, s.name_en AS site_name_en, COALESCE(ct.name, '')::text AS contractor_name, COALESCE(ct.name_en, '')::text AS contractor_name_en,
+SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, f.root_cause_category, f.root_cause, f.owner_user_id, f.response_note, f.responded_by, f.responded_at, f.rejection_note, f.repeat_of, w.ref AS wo_ref, COALESCE(ou.name, '')::text AS owner_user_name,
+       COALESCE(i.stage::text, '')::text AS inspection_stage, s.name AS site_name, s.name_en AS site_name_en, COALESCE(ct.name, '')::text AS contractor_name, COALESCE(ct.name_en, '')::text AS contractor_name_en,
        COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
 FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id
 JOIN sites s ON s.id = w.site_id
 LEFT JOIN contractors ct ON ct.id = w.contractor_id
 LEFT JOIN template_criteria c ON c.id = f.criterion_id
+LEFT JOIN users ou ON ou.id = f.owner_user_id
+LEFT JOIN inspections i ON i.id = f.inspection_id
 WHERE ($1::finding_status IS NULL OR f.status = $1)
   AND (NOT $2::boolean OR f.status <> 'closed')
   AND (NOT $3::boolean OR (f.status <> 'closed' AND f.due_date < CURRENT_DATE))
-  AND ($4::bigint IS NULL OR w.site_id = $4)
-  AND ($5::bigint IS NULL OR w.contractor_id = $5)
-  AND ($6::text IS NULL
-       OR w.ref ILIKE '%' || $6 || '%'
-       OR f.description ILIKE '%' || $6 || '%'
-       OR f.owner ILIKE '%' || $6 || '%')
+  AND (NOT $4::boolean OR f.repeat_of IS NOT NULL)
+  AND ($5::bigint IS NULL OR w.site_id = $5)
+  AND ($6::bigint IS NULL OR w.contractor_id = $6)
+  AND ($7::bigint IS NULL OR w.system_id = $7)
+  AND ($8::bigint IS NULL OR w.asset_group_id = $8)
+  AND ($9::finding_severity IS NULL OR f.severity = $9)
+  AND ($10::inspection_stage IS NULL OR i.stage = $10)
+  AND ($11::bigint IS NULL OR f.owner_user_id = $11)
+  AND ($12::text IS NULL
+       OR w.ref ILIKE '%' || $12 || '%'
+       OR f.description ILIKE '%' || $12 || '%'
+       OR f.owner ILIKE '%' || $12 || '%')
 ORDER BY (f.status <> 'closed') DESC, f.due_date NULLS LAST, f.created_at DESC
 LIMIT 500
 `
@@ -183,36 +291,52 @@ type ListFindingsParams struct {
 	Status       *FindingStatus
 	OpenOnly     bool
 	OverdueOnly  bool
+	RepeatOnly   bool
 	SiteID       *int64
 	ContractorID *int64
+	SystemID     *int64
+	AssetGroupID *int64
+	Severity     *FindingSeverity
+	Stage        *InspectionStage
+	OwnerUserID  *int64
 	Q            *string
 }
 
 type ListFindingsRow struct {
-	ID               int64
-	WorkOrderID      int64
-	InspectionID     *int64
-	CriterionID      *int64
-	Severity         FindingSeverity
-	Description      string
-	CorrectiveAction string
-	Owner            string
-	DueDate          *time.Time
-	Status           FindingStatus
-	ClosureNote      string
-	ClosedAt         *time.Time
-	ClosedBy         *int64
-	CreatedBy        *int64
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	WoRef            string
-	SiteName         string
-	SiteNameEn       string
-	ContractorName   string
-	ContractorNameEn string
-	CriterionCode    string
-	CriterionLabel   string
-	CriterionLabelEn string
+	ID                int64
+	WorkOrderID       int64
+	InspectionID      *int64
+	CriterionID       *int64
+	Severity          FindingSeverity
+	Description       string
+	CorrectiveAction  string
+	Owner             string
+	DueDate           *time.Time
+	Status            FindingStatus
+	ClosureNote       string
+	ClosedAt          *time.Time
+	ClosedBy          *int64
+	CreatedBy         *int64
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	RootCauseCategory *RootCause
+	RootCause         string
+	OwnerUserID       *int64
+	ResponseNote      string
+	RespondedBy       *int64
+	RespondedAt       *time.Time
+	RejectionNote     string
+	RepeatOf          *int64
+	WoRef             string
+	OwnerUserName     string
+	InspectionStage   string
+	SiteName          string
+	SiteNameEn        string
+	ContractorName    string
+	ContractorNameEn  string
+	CriterionCode     string
+	CriterionLabel    string
+	CriterionLabelEn  string
 }
 
 func (q *Queries) ListFindings(ctx context.Context, arg ListFindingsParams) ([]ListFindingsRow, error) {
@@ -220,8 +344,14 @@ func (q *Queries) ListFindings(ctx context.Context, arg ListFindingsParams) ([]L
 		arg.Status,
 		arg.OpenOnly,
 		arg.OverdueOnly,
+		arg.RepeatOnly,
 		arg.SiteID,
 		arg.ContractorID,
+		arg.SystemID,
+		arg.AssetGroupID,
+		arg.Severity,
+		arg.Stage,
+		arg.OwnerUserID,
 		arg.Q,
 	)
 	if err != nil {
@@ -248,7 +378,17 @@ func (q *Queries) ListFindings(ctx context.Context, arg ListFindingsParams) ([]L
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RootCauseCategory,
+			&i.RootCause,
+			&i.OwnerUserID,
+			&i.ResponseNote,
+			&i.RespondedBy,
+			&i.RespondedAt,
+			&i.RejectionNote,
+			&i.RepeatOf,
 			&i.WoRef,
+			&i.OwnerUserName,
+			&i.InspectionStage,
 			&i.SiteName,
 			&i.SiteNameEn,
 			&i.ContractorName,
@@ -268,7 +408,7 @@ func (q *Queries) ListFindings(ctx context.Context, arg ListFindingsParams) ([]L
 }
 
 const listFindingsByInspection = `-- name: ListFindingsByInspection :many
-SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
+SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, f.root_cause_category, f.root_cause, f.owner_user_id, f.response_note, f.responded_by, f.responded_at, f.rejection_note, f.repeat_of, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
 FROM findings f
 LEFT JOIN template_criteria c ON c.id = f.criterion_id
 WHERE f.inspection_id = $1
@@ -276,25 +416,33 @@ ORDER BY f.created_at
 `
 
 type ListFindingsByInspectionRow struct {
-	ID               int64
-	WorkOrderID      int64
-	InspectionID     *int64
-	CriterionID      *int64
-	Severity         FindingSeverity
-	Description      string
-	CorrectiveAction string
-	Owner            string
-	DueDate          *time.Time
-	Status           FindingStatus
-	ClosureNote      string
-	ClosedAt         *time.Time
-	ClosedBy         *int64
-	CreatedBy        *int64
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	CriterionCode    string
-	CriterionLabel   string
-	CriterionLabelEn string
+	ID                int64
+	WorkOrderID       int64
+	InspectionID      *int64
+	CriterionID       *int64
+	Severity          FindingSeverity
+	Description       string
+	CorrectiveAction  string
+	Owner             string
+	DueDate           *time.Time
+	Status            FindingStatus
+	ClosureNote       string
+	ClosedAt          *time.Time
+	ClosedBy          *int64
+	CreatedBy         *int64
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	RootCauseCategory *RootCause
+	RootCause         string
+	OwnerUserID       *int64
+	ResponseNote      string
+	RespondedBy       *int64
+	RespondedAt       *time.Time
+	RejectionNote     string
+	RepeatOf          *int64
+	CriterionCode     string
+	CriterionLabel    string
+	CriterionLabelEn  string
 }
 
 func (q *Queries) ListFindingsByInspection(ctx context.Context, inspectionID *int64) ([]ListFindingsByInspectionRow, error) {
@@ -323,6 +471,14 @@ func (q *Queries) ListFindingsByInspection(ctx context.Context, inspectionID *in
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RootCauseCategory,
+			&i.RootCause,
+			&i.OwnerUserID,
+			&i.ResponseNote,
+			&i.RespondedBy,
+			&i.RespondedAt,
+			&i.RejectionNote,
+			&i.RepeatOf,
 			&i.CriterionCode,
 			&i.CriterionLabel,
 			&i.CriterionLabelEn,
@@ -338,7 +494,7 @@ func (q *Queries) ListFindingsByInspection(ctx context.Context, inspectionID *in
 }
 
 const listFindingsByWorkOrder = `-- name: ListFindingsByWorkOrder :many
-SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en,
+SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, f.root_cause_category, f.root_cause, f.owner_user_id, f.response_note, f.responded_by, f.responded_at, f.rejection_note, f.repeat_of, COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en,
        COALESCE(i.stage::text, '')::text AS inspection_stage, COALESCE(i.attempt, 0)::int AS inspection_attempt
 FROM findings f
 LEFT JOIN template_criteria c ON c.id = f.criterion_id
@@ -364,6 +520,14 @@ type ListFindingsByWorkOrderRow struct {
 	CreatedBy         *int64
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+	RootCauseCategory *RootCause
+	RootCause         string
+	OwnerUserID       *int64
+	ResponseNote      string
+	RespondedBy       *int64
+	RespondedAt       *time.Time
+	RejectionNote     string
+	RepeatOf          *int64
 	CriterionCode     string
 	CriterionLabel    string
 	CriterionLabelEn  string
@@ -397,6 +561,14 @@ func (q *Queries) ListFindingsByWorkOrder(ctx context.Context, workOrderID int64
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RootCauseCategory,
+			&i.RootCause,
+			&i.OwnerUserID,
+			&i.ResponseNote,
+			&i.RespondedBy,
+			&i.RespondedAt,
+			&i.RejectionNote,
+			&i.RepeatOf,
 			&i.CriterionCode,
 			&i.CriterionLabel,
 			&i.CriterionLabelEn,
@@ -478,6 +650,69 @@ func (q *Queries) ListFindingsForWorkOrders(ctx context.Context, ids []int64) ([
 	return items, nil
 }
 
+const listFindingsToVerify = `-- name: ListFindingsToVerify :many
+SELECT f.id, f.description, f.response_note, f.responded_at, w.ref AS wo_ref, w.id AS work_order_id
+FROM findings f JOIN work_orders w ON w.id = f.work_order_id
+WHERE f.status = 'responded' AND ($1::bigint IS NULL OR f.created_by = $1)
+ORDER BY f.responded_at
+`
+
+type ListFindingsToVerifyRow struct {
+	ID           int64
+	Description  string
+	ResponseNote string
+	RespondedAt  *time.Time
+	WoRef        string
+	WorkOrderID  int64
+}
+
+// Responses waiting for an inspector: the one who raised the finding, or everyone when NULL.
+func (q *Queries) ListFindingsToVerify(ctx context.Context, createdBy *int64) ([]ListFindingsToVerifyRow, error) {
+	rows, err := q.db.Query(ctx, listFindingsToVerify, createdBy)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFindingsToVerifyRow{}
+	for rows.Next() {
+		var i ListFindingsToVerifyRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Description,
+			&i.ResponseNote,
+			&i.RespondedAt,
+			&i.WoRef,
+			&i.WorkOrderID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const rejectFindingResponse = `-- name: RejectFindingResponse :execrows
+UPDATE findings SET status = 'open', rejection_note = $2, updated_at = now()
+WHERE id = $1 AND status = 'responded'
+`
+
+type RejectFindingResponseParams struct {
+	ID            int64
+	RejectionNote string
+}
+
+// The inspector does not accept the answer: back to open, with the reason.
+func (q *Queries) RejectFindingResponse(ctx context.Context, arg RejectFindingResponseParams) (int64, error) {
+	result, err := q.db.Exec(ctx, rejectFindingResponse, arg.ID, arg.RejectionNote)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const reopenFinding = `-- name: ReopenFinding :exec
 UPDATE findings SET status = 'open', closed_at = NULL, closed_by = NULL, updated_at = now()
 WHERE id = $1
@@ -488,21 +723,57 @@ func (q *Queries) ReopenFinding(ctx context.Context, id int64) error {
 	return err
 }
 
+const respondFinding = `-- name: RespondFinding :execrows
+UPDATE findings SET status = 'responded', response_note = $2, responded_by = $3, responded_at = now(),
+                    root_cause_category = COALESCE($4, root_cause_category),
+                    root_cause = CASE WHEN $5::text = '' THEN root_cause ELSE $5::text END,
+                    rejection_note = '', updated_at = now()
+WHERE id = $1 AND status IN ('open', 'in_progress')
+`
+
+type RespondFindingParams struct {
+	ID                int64
+	ResponseNote      string
+	RespondedBy       *int64
+	RootCauseCategory *RootCause
+	RootCause         string
+}
+
+// The contractor's answer: what was done (photos are attachments).
+func (q *Queries) RespondFinding(ctx context.Context, arg RespondFindingParams) (int64, error) {
+	result, err := q.db.Exec(ctx, respondFinding,
+		arg.ID,
+		arg.ResponseNote,
+		arg.RespondedBy,
+		arg.RootCauseCategory,
+		arg.RootCause,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateFinding = `-- name: UpdateFinding :one
 UPDATE findings SET description = $2, corrective_action = $3, owner = $4, due_date = $5,
-                    severity = $6, status = $7, updated_at = now()
+                    severity = $6, status = $7, owner_user_id = $8,
+                    root_cause_category = $9, root_cause = $10,
+                    updated_at = now()
 WHERE id = $1
-RETURNING id, work_order_id, inspection_id, criterion_id, severity, description, corrective_action, owner, due_date, status, closure_note, closed_at, closed_by, created_by, created_at, updated_at
+RETURNING id, work_order_id, inspection_id, criterion_id, severity, description, corrective_action, owner, due_date, status, closure_note, closed_at, closed_by, created_by, created_at, updated_at, root_cause_category, root_cause, owner_user_id, response_note, responded_by, responded_at, rejection_note, repeat_of
 `
 
 type UpdateFindingParams struct {
-	ID               int64
-	Description      string
-	CorrectiveAction string
-	Owner            string
-	DueDate          *time.Time
-	Severity         FindingSeverity
-	Status           FindingStatus
+	ID                int64
+	Description       string
+	CorrectiveAction  string
+	Owner             string
+	DueDate           *time.Time
+	Severity          FindingSeverity
+	Status            FindingStatus
+	OwnerUserID       *int64
+	RootCauseCategory *RootCause
+	RootCause         string
 }
 
 func (q *Queries) UpdateFinding(ctx context.Context, arg UpdateFindingParams) (Finding, error) {
@@ -514,6 +785,9 @@ func (q *Queries) UpdateFinding(ctx context.Context, arg UpdateFindingParams) (F
 		arg.DueDate,
 		arg.Severity,
 		arg.Status,
+		arg.OwnerUserID,
+		arg.RootCauseCategory,
+		arg.RootCause,
 	)
 	var i Finding
 	err := row.Scan(
@@ -533,6 +807,14 @@ func (q *Queries) UpdateFinding(ctx context.Context, arg UpdateFindingParams) (F
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RootCauseCategory,
+		&i.RootCause,
+		&i.OwnerUserID,
+		&i.ResponseNote,
+		&i.RespondedBy,
+		&i.RespondedAt,
+		&i.RejectionNote,
+		&i.RepeatOf,
 	)
 	return i, err
 }

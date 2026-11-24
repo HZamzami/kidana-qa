@@ -53,7 +53,7 @@ func (q *Queries) FindingStats(ctx context.Context, arg FindingStatsParams) (Fin
 }
 
 const listAllFindingsForExport = `-- name: ListAllFindingsForExport :many
-SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, w.ref AS wo_ref, s.name AS site_name, s.name_en AS site_name_en, COALESCE(ct.name, '')::text AS contractor_name, COALESCE(ct.name_en, '')::text AS contractor_name_en,
+SELECT f.id, f.work_order_id, f.inspection_id, f.criterion_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date, f.status, f.closure_note, f.closed_at, f.closed_by, f.created_by, f.created_at, f.updated_at, f.root_cause_category, f.root_cause, f.owner_user_id, f.response_note, f.responded_by, f.responded_at, f.rejection_note, f.repeat_of, w.ref AS wo_ref, s.name AS site_name, s.name_en AS site_name_en, COALESCE(ct.name, '')::text AS contractor_name, COALESCE(ct.name_en, '')::text AS contractor_name_en,
        COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label, COALESCE(c.label_en, '')::text AS criterion_label_en
 FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id
@@ -64,30 +64,38 @@ ORDER BY f.created_at
 `
 
 type ListAllFindingsForExportRow struct {
-	ID               int64
-	WorkOrderID      int64
-	InspectionID     *int64
-	CriterionID      *int64
-	Severity         FindingSeverity
-	Description      string
-	CorrectiveAction string
-	Owner            string
-	DueDate          *time.Time
-	Status           FindingStatus
-	ClosureNote      string
-	ClosedAt         *time.Time
-	ClosedBy         *int64
-	CreatedBy        *int64
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	WoRef            string
-	SiteName         string
-	SiteNameEn       string
-	ContractorName   string
-	ContractorNameEn string
-	CriterionCode    string
-	CriterionLabel   string
-	CriterionLabelEn string
+	ID                int64
+	WorkOrderID       int64
+	InspectionID      *int64
+	CriterionID       *int64
+	Severity          FindingSeverity
+	Description       string
+	CorrectiveAction  string
+	Owner             string
+	DueDate           *time.Time
+	Status            FindingStatus
+	ClosureNote       string
+	ClosedAt          *time.Time
+	ClosedBy          *int64
+	CreatedBy         *int64
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	RootCauseCategory *RootCause
+	RootCause         string
+	OwnerUserID       *int64
+	ResponseNote      string
+	RespondedBy       *int64
+	RespondedAt       *time.Time
+	RejectionNote     string
+	RepeatOf          *int64
+	WoRef             string
+	SiteName          string
+	SiteNameEn        string
+	ContractorName    string
+	ContractorNameEn  string
+	CriterionCode     string
+	CriterionLabel    string
+	CriterionLabelEn  string
 }
 
 func (q *Queries) ListAllFindingsForExport(ctx context.Context) ([]ListAllFindingsForExportRow, error) {
@@ -116,6 +124,14 @@ func (q *Queries) ListAllFindingsForExport(ctx context.Context) ([]ListAllFindin
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RootCauseCategory,
+			&i.RootCause,
+			&i.OwnerUserID,
+			&i.ResponseNote,
+			&i.RespondedBy,
+			&i.RespondedAt,
+			&i.RejectionNote,
+			&i.RepeatOf,
 			&i.WoRef,
 			&i.SiteName,
 			&i.SiteNameEn,

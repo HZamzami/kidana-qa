@@ -1,6 +1,8 @@
 package views
 
 import (
+	"context"
+
 	"github.com/HZamzami/kidana-quality/internal/appctx"
 	"github.com/HZamzami/kidana-quality/internal/domain"
 )
@@ -35,18 +37,33 @@ templ Base(title string) {
 	</html>
 }
 
+// navItem is a main navigation tab. who: "" everyone, "staff" not
+// contractors, "tasks" editors and contractors, "admin" admins only.
 type navItem struct {
 	href  string
 	label string
-	admin bool
+	who   string
 }
 
 var nav = []navItem{
-	{"/", "لوحة المؤشرات", false},
-	{"/work-orders", "أوامر العمل", false},
-	{"/findings", "الملاحظات", false},
-	{"/data", "البيانات والتقارير", false},
-	{"/admin", "الإعدادات", true},
+	{"/", "لوحة المؤشرات", "staff"},
+	{"/my/tasks", "مهامي", "tasks"},
+	{"/work-orders", "أوامر العمل", ""},
+	{"/findings", "الملاحظات", ""},
+	{"/data", "البيانات والتقارير", "staff"},
+	{"/admin", "الإعدادات", "admin"},
+}
+
+func navVisible(ctx context.Context, n navItem) bool {
+	switch n.who {
+	case "staff":
+		return !appctx.IsContractor(ctx)
+	case "tasks":
+		return appctx.CanEdit(ctx) || appctx.IsContractor(ctx)
+	case "admin":
+		return appctx.IsAdmin(ctx)
+	}
+	return true
 }
 
 // App is the authenticated page shell: header, navigation and content.
@@ -64,12 +81,13 @@ templ App(title string) {
 					</a>
 					<div class="ms-auto flex items-center gap-1">
 						@LangToggle()
+						@bellSlot()
 						@userMenu()
 					</div>
 				</div>
 				<nav class="-mb-px flex gap-1 overflow-x-auto" aria-label={ t(ctx, "القائمة الرئيسية") }>
 					for _, n := range nav {
-						if !n.admin || appctx.IsAdmin(ctx) {
+						if navVisible(ctx, n) {
 							<a
 								href={ templ.URL(n.href) }
 								class={ "whitespace-nowrap px-3 py-2.5 text-sm border-b-2 transition-colors",
@@ -92,6 +110,13 @@ templ App(title string) {
 			{ t(ctx, "شركة كدانة للتنمية والتطوير · إدارة جودة العمليات") }
 		</footer>
 	}
+}
+
+// bellSlot loads the notification bell after the page (keeps pages fast).
+templ bellSlot() {
+	<span hx-get="/notifications/bell" hx-trigger="load" hx-swap="outerHTML">
+		@Bell(0)
+	</span>
 }
 
 templ userMenu() {

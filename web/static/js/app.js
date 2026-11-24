@@ -127,6 +127,16 @@ document.addEventListener("alpine:init", () => {
     print() { window.print(); },
   }));
 
+  // Row selection for bulk actions in a list: checkboxes carry
+  // x-on:change="recount", the header box x-on:change="toggleAll".
+  Alpine.data("bulkSelect", () => ({
+    count: 0,
+    boxes() { return [...this.$root.querySelectorAll('input[name="ids"]')]; },
+    recount() { this.count = this.boxes().filter((b) => b.checked).length; },
+    toggleAll(ev) { for (const b of this.boxes()) b.checked = ev.target.checked; this.recount(); },
+    get selectedText() { return (document.documentElement.lang === "en" ? "Selected: " : "المحدد: ") + this.count; },
+  }));
+
   // Confirmation step built into the page (no window.confirm in the flow).
   Alpine.data("confirmAction", () => ({
     asking: false,

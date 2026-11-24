@@ -24,7 +24,8 @@ templ AdminHome() {
 			@adminCard("/admin/lookups/systems", t(ctx, "المنظومات"), t(ctx, "التكييف والتبريد، الكهرباء، مكافحة الحريق…"))
 			@adminCard("/admin/lookups/asset-groups", t(ctx, "مجموعات الأصول"), t(ctx, "المبردات، المضخات، لوحات التوزيع…"))
 			@adminCard("/admin/lookups/contractors", t(ctx, "المقاولون"), t(ctx, "الجهات المنفذة وبيانات التواصل."))
-			@adminCard("/admin/users", t(ctx, "المستخدمون"), t(ctx, "الحسابات والصلاحيات: مدير، مدقق، مشاهد."))
+			@adminCard("/admin/users", t(ctx, "المستخدمون"), t(ctx, "الحسابات والصلاحيات: مدير، مدقق، مشاهد، مقاول."))
+			@adminCard("/admin/sampling", t(ctx, "قواعد العينة"), t(ctx, "أي أوامر العمل الجديدة يُسند لها فحص تلقائياً، حسب النوع والأولوية."))
 		</div>
 	}
 }
@@ -120,13 +121,14 @@ templ LookupPage(d LookupData) {
 // ---------------------------------------------------------------- users
 
 type UsersData struct {
-	Users     []gen.User
-	Requests  []gen.ListOpenPasswordResetRequestsRow // «نسيت كلمة المرور» awaiting an admin
-	Errors    map[string]string
-	New       struct{ Email, Name, Role string }
-	Info      string // e.g. a generated temporary password to hand over
-	ResetLink string // a one-time reset link to hand over, shown once
-	ResetFor  string
+	Users       []gen.User
+	Requests    []gen.ListOpenPasswordResetRequestsRow // «نسيت كلمة المرور» awaiting an admin
+	Errors      map[string]string
+	New         struct{ Email, Name, Role, ContractorID string }
+	Contractors []Option
+	Info        string // e.g. a generated temporary password to hand over
+	ResetLink   string // a one-time reset link to hand over, shown once
+	ResetFor    string
 }
 
 func roleOptions() []Option {
@@ -139,7 +141,7 @@ func roleOptions() []Option {
 
 templ UsersPage(d UsersData) {
 	@App(t(ctx, "المستخدمون")) {
-		@PageHeader(t(ctx, "المستخدمون"), t(ctx, "المدقق يسجّل الفحوصات والملاحظات، والمشاهد يطّلع فقط، والمدير يدير الإعدادات."))
+		@PageHeader(t(ctx, "المستخدمون"), t(ctx, "المدقق يسجّل الفحوصات والملاحظات، والمشاهد يطّلع فقط، والمقاول يرد على ملاحظات أعماله، والمدير يدير الإعدادات."))
 		@adminNav("/admin/users")
 		if d.Info != "" {
 			<div role="status" class="mb-4 rounded-lg border border-gold-50 bg-gold-10 px-4 py-3 text-sm">{ d.Info }</div>
@@ -167,10 +169,11 @@ templ UsersPage(d UsersData) {
 				</ul>
 			</section>
 		}
-		<form method="post" action="/admin/users" class="card p-4 mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end" novalidate>
+		<form method="post" action="/admin/users" class="card p-4 mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6 items-end" novalidate>
 			@TextField("name", t(ctx, "الاسم"), d.New.Name, true, d.Errors, templ.Attributes{"maxlength": "80"})
 			@TextField("email", t(ctx, "البريد الإلكتروني"), d.New.Email, true, d.Errors, templ.Attributes{"type": "email", "dir": "ltr"})
 			@SelectField("role", t(ctx, "الصلاحية"), tern(d.New.Role == "", "inspector", d.New.Role), roleOptions(), "", true, d.Errors)
+			@SelectField("contractor_id", t(ctx, "المقاول (لحساب مقاول)"), d.New.ContractorID, d.Contractors, "—", false, d.Errors)
 			@TextField("password", t(ctx, "كلمة مرور مؤقتة"), "", false, d.Errors, templ.Attributes{"type": "text", "dir": "ltr", "placeholder": t(ctx, "اتركها فارغة لتوليدها"), "autocomplete": "off"})
 			<button type="submit" class="btn btn-primary">{ t(ctx, "إضافة مستخدم") }</button>
 		</form>
@@ -189,6 +192,12 @@ templ UsersPage(d UsersData) {
 											<select class="input h-9 w-36" name="role" aria-label={ t(ctx, "الصلاحية") }>
 												for _, o := range roleOptions() {
 													<option value={ o.Value } selected?={ o.Value == string(usr.Role) }>{ t(ctx, o.Label) }</option>
+												}
+											</select>
+											<select class="input h-9 w-44" name="contractor_id" aria-label={ t(ctx, "المقاول (لحساب مقاول)") }>
+												<option value="">—</option>
+												for _, o := range d.Contractors {
+													<option value={ o.Value } selected?={ usr.ContractorID != nil && o.Value == idStr(*usr.ContractorID) }>{ o.Label }</option>
 												}
 											</select>
 											<label class="flex items-center gap-1.5 text-sm px-2">

@@ -1,0 +1,360 @@
+package views
+
+import (
+	"context"
+	"encoding/json"
+
+	"github.com/HZamzami/kidana-quality/internal/appctx"
+	"github.com/HZamzami/kidana-quality/internal/dates"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/domain"
+)
+
+// ---------------------------------------------------------------- notifications
+
+// NotificationText renders a notification in the reader's language.
+func NotificationText(ctx context.Context, n gen.Notification) string {
+	p := map[string]string{}
+	_ = json.Unmarshal(n.Params, &p)
+	stage := t(ctx, domain.Stage(p["stage"]).Label())
+	switch n.Kind {
+	case "finding_raised":
+		return tf(ctx, "ملاحظة جديدة على أمر العمل %s: %s", p["ref"], p["desc"])
+	case "finding_responded":
+		return tf(ctx, "ردّ المقاول على ملاحظة في %s — بانتظار تحققك", p["ref"])
+	case "finding_verified":
+		return tf(ctx, "تم التحقق من معالجة ملاحظة في %s وإغلاقها", p["ref"])
+	case "finding_rejected":
+		return tf(ctx, "لم يُقبل الرد على ملاحظة في %s: %s", p["ref"], p["reason"])
+	case "finding_due_soon":
+		return tf(ctx, "تقترب مهلة إغلاق ملاحظة في %s (%s): %s", p["ref"], p["due"], p["desc"])
+	case "finding_overdue":
+		return tf(ctx, "ملاحظة متأخرة عن الإغلاق في %s منذ %s: %s", p["ref"], p["due"], p["desc"])
+	case "assigned":
+		if p["due"] != "" {
+			return tf(ctx, "أُسند إليك %s لأمر العمل %s، الاستحقاق %s", stage, p["ref"], p["due"])
+		}
+		return tf(ctx, "أُسند إليك %s لأمر العمل %s", stage, p["ref"])
+	case "reinspection":
+		return tf(ctx, "مطلوب إعادة فحص بعد التنفيذ لأمر العمل %s قبل %s", p["ref"], p["due"])
+	case "reset_request":
+		return tf(ctx, "%s طلب إعادة تعيين كلمة المرور", p["name"])
+	case "report_ready":
+		return tf(ctx, "التقرير الشهري لـ %s جاهز", p["period"])
+	}
+	return n.Kind
+}
+
+// Bell is the header notification icon with the unread count. It refreshes
+// itself every minute.
+templ Bell(unread int32) {
+	<a
+		id="bell"
+		href="/notifications"
+		class="btn btn-ghost px-2 relative"
+		hx-get="/notifications/bell"
+		hx-trigger="every 60s"
+		hx-swap="outerHTML"
+		title={ t(ctx, "التنبيهات") }
+		aria-label={ tf(ctx, "التنبيهات: %d غير مقروء", unread) }
+	>
+		<svg viewBox="0 0 20 20" class="size-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M5 8.5a5 5 0 0 1 10 0c0 4 1.5 5.5 1.5 5.5h-13S5 12.5 5 8.5Z"></path><path d="M8.3 16.5a1.8 1.8 0 0 0 3.4 0"></path></svg>
+		if unread > 0 {
+			<span class="absolute -top-0.5 -end-0.5 min-w-4 h-4 px-1 rounded-full bg-fail text-white text-[10px] leading-4 text-center num">{ countBadge(unread) }</span>
+		}
+	</a>
+}
+
+func countBadge(n int32) string {
+	if n > 99 {
+		return "99+"
+	}
+	return itoa(int(n))
+}
+
+templ NotificationsPage(rows []gen.Notification) {
+	@App(t(ctx, "التنبيهات")) {
+		@PageHeader(t(ctx, "التنبيهات"), t(ctx, "ما يخصك من ملاحظات وتكليفات وطلبات")) {
+			<form method="post" action="/notifications/read-all">
+				<button type="submit" class="btn btn-outline">{ t(ctx, "تعليم الكل كمقروء") }</button>
+			</form>
+		}
+		<div class="card overflow-hidden">
+			if len(rows) == 0 {
+				@EmptyState(t(ctx, "لا توجد تنبيهات"), t(ctx, "ستظهر هنا الملاحظات الجديدة والتكليفات والتذكيرات."))
+			} else {
+				<ul class="divide-y divide-ink-10">
+					for _, n := range rows {
+						<li>
+							<form method="post" action={ u("/notifications/%d/open", n.ID) }>
+								<button type="submit" class={ "w-full text-start flex items-start gap-3 px-4 py-3 hover:bg-gold-10", templ.KV("bg-sky-15", n.ReadAt == nil) }>
+									<span class={ "mt-1.5 size-2 shrink-0 rounded-full", templ.KV("bg-gold", n.ReadAt == nil), templ.KV("bg-ink-10", n.ReadAt != nil) }></span>
+									<span class="min-w-0 flex-1">
+										<span class={ "block", templ.KV("font-medium", n.ReadAt == nil) }>{ NotificationText(ctx, n) }</span>
+										<span class="block text-xs text-ink-60 num">{ dateTime(n.CreatedAt) }</span>
+									</span>
+								</button>
+							</form>
+						</li>
+					}
+				</ul>
+			}
+		</div>
+	}
+}
+
+// ---------------------------------------------------------------- my tasks
+
+type TasksData struct {
+	Mine               []gen.ListOpenAssignmentsRow
+	Pool               []gen.ListOpenAssignmentsRow
+	ToVerify           []gen.ListFindingsToVerifyRow
+	ContractorFindings []gen.ListFindingsRow
+}
+
+templ TasksPage(d TasksData) {
+	@App(t(ctx, "مهامي")) {
+		@PageHeader(t(ctx, "مهامي"), t(ctx, "الفحوصات المسندة إليك والملاحظات التي تنتظر إجراءك"))
+		if appctx.IsContractor(ctx) {
+			@contractorTasks(d)
+		} else {
+			<div class="grid gap-4 lg:grid-cols-2">
+				<section class="card overflow-hidden">
+					<h2 class="px-4 pt-4 pb-2 font-semibold">{ t(ctx, "فحوصات مسندة إليّ") } <span class="text-ink-60 text-sm font-normal num">{ itoa(len(d.Mine)) }</span></h2>
+					if len(d.Mine) == 0 {
+						@EmptyState(t(ctx, "لا توجد فحوصات مسندة إليك"), t(ctx, "خذ تكليفاً من القائمة العامة أو انتظر الإسناد."))
+					} else {
+						@assignmentList(d.Mine, false)
+					}
+				</section>
+				<section class="card overflow-hidden">
+					<h2 class="px-4 pt-4 pb-2 font-semibold">{ t(ctx, "بانتظار تحققي") } <span class="text-ink-60 text-sm font-normal num">{ itoa(len(d.ToVerify)) }</span></h2>
+					if len(d.ToVerify) == 0 {
+						@EmptyState(t(ctx, "لا توجد ردود بانتظار التحقق"), t(ctx, "عندما يرد المقاول على ملاحظة سجّلتها تظهر هنا."))
+					} else {
+						<ul class="divide-y divide-ink-10">
+							for _, f := range d.ToVerify {
+								<li class="px-4 py-3">
+									<a class="font-medium underline decoration-gold-50 underline-offset-4" href={ u("/findings/%d/edit", f.ID) }>{ f.WoRef }</a>
+									<p class="text-sm mt-0.5">{ f.Description }</p>
+									<p class="text-xs text-ink-60 mt-0.5">{ t(ctx, "رد المقاول: ") + f.ResponseNote }</p>
+								</li>
+							}
+						</ul>
+					}
+				</section>
+				if appctx.CanEdit(ctx) {
+					<section class="card overflow-hidden lg:col-span-2">
+						<h2 class="px-4 pt-4 pb-2 font-semibold">{ t(ctx, "القائمة العامة") } <span class="text-ink-60 text-sm font-normal num">{ itoa(len(d.Pool)) }</span></h2>
+						<p class="px-4 pb-2 text-xs text-ink-60">{ t(ctx, "فحوصات اختارتها قواعد العينة أو أُسندت بلا اسم. خذ ما تستطيع تنفيذه.") }</p>
+						if len(d.Pool) == 0 {
+							@EmptyState(t(ctx, "القائمة العامة فارغة"), "")
+						} else {
+							@assignmentList(d.Pool, true)
+						}
+					</section>
+				}
+			</div>
+		}
+	}
+}
+
+templ assignmentList(rows []gen.ListOpenAssignmentsRow, claimable bool) {
+	<ul class="divide-y divide-ink-10">
+		for _, a := range rows {
+			<li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
+				<a class="font-medium num underline decoration-gold-50 underline-offset-4" href={ u("/work-orders/%d", a.WorkOrderID) }>{ a.Ref }</a>
+				@StagePill(string(a.Stage))
+				if a.Priority != gen.WoPriorityNormal {
+					@PriorityPill(string(a.Priority))
+				}
+				@ReasonPill(string(a.Reason))
+				<span class="text-xs text-ink-80">{ nm(ctx, a.SiteName, a.SiteNameEn) }</span>
+				if a.ContractorName != "" {
+					<span class="text-xs text-ink-60">{ nm(ctx, a.ContractorName, a.ContractorNameEn) }</span>
+				}
+				<span class="ms-auto flex items-center gap-2">
+					if a.DueDate != nil {
+						<span class={ "text-xs num", templ.KV("text-fail font-medium", isoDate(a.DueDate) < dates.Today().Format("2006-01-02")) }>{ dmy(*a.DueDate) }</span>
+					}
+					if claimable {
+						<form method="post" action={ u("/assignments/%d/claim", a.ID) }>
+							<button type="submit" class="btn btn-outline py-1 text-xs">{ t(ctx, "خذ التكليف") }</button>
+						</form>
+					} else {
+						<a href={ u("/work-orders/%d", a.WorkOrderID) } class="btn btn-primary py-1 text-xs">{ t(ctx, "افتح للفحص") }</a>
+					}
+				</span>
+			</li>
+		}
+	</ul>
+}
+
+templ ReasonPill(reason string) {
+	switch reason {
+		case "sampling":
+			<span class="pill bg-sky-15 text-ink-80">{ t(ctx, "عينة") }</span>
+		case "reinspection":
+			<span class="pill bg-fail-10 text-fail">{ t(ctx, "إعادة فحص") }</span>
+		default:
+			<span class="pill bg-ink-5 text-ink-80">{ t(ctx, "إسناد يدوي") }</span>
+	}
+}
+
+// ---------------------------------------------------------------- work order: assignments card
+templ assignmentsCard(d WOShowData) {
+	<section class="card p-4">
+		<div class="flex items-center gap-2 mb-2">
+			<h2 class="font-semibold text-sm">{ t(ctx, "التكليفات") }</h2>
+		</div>
+		if len(d.Assignments) == 0 {
+			<p class="text-sm text-ink-60">{ t(ctx, "لا توجد تكليفات على أمر العمل.") }</p>
+		} else {
+			<ul class="divide-y divide-ink-10">
+				for _, a := range d.Assignments {
+					<li class="py-2 flex flex-wrap items-center gap-2 text-sm">
+						@StagePill(string(a.Stage))
+						@ReasonPill(string(a.Reason))
+						<span class={ templ.KV("text-ink-60 line-through", a.Status != gen.AssignmentStatusOpen) }>
+							if a.AssigneeName != "" {
+								{ a.AssigneeName }
+							} else {
+								{ t(ctx, "القائمة العامة") }
+							}
+						</span>
+						if a.DueDate != nil {
+							<span class="text-xs text-ink-60 num">{ dmy(*a.DueDate) }</span>
+						}
+						if a.Status == gen.AssignmentStatusDone {
+							<span class="pill bg-green-10 text-green">{ t(ctx, "تم") }</span>
+						} else if a.Status == gen.AssignmentStatusCancelled {
+							<span class="pill bg-ink-5 text-ink-60">{ t(ctx, "ملغى") }</span>
+						} else if appctx.CanEdit(ctx) {
+							<span class="ms-auto flex items-center gap-1">
+								if a.AssigneeID == nil {
+									<form method="post" action={ u("/assignments/%d/claim", a.ID) }>
+										<button type="submit" class="btn btn-ghost py-1 text-xs">{ t(ctx, "خذ التكليف") }</button>
+									</form>
+								}
+								<form method="post" action={ u("/assignments/%d/cancel", a.ID) }>
+									<button type="submit" class="btn btn-ghost py-1 text-xs text-fail">{ t(ctx, "إلغاء") }</button>
+								</form>
+							</span>
+						}
+					</li>
+				}
+			</ul>
+		}
+		if appctx.CanEdit(ctx) && d.WO.Status != gen.WoStatusCancelled && d.WO.Status != gen.WoStatusAccepted {
+			<form method="post" action={ u("/work-orders/%d/assignments", d.WO.ID) } class="mt-3 grid grid-cols-2 gap-2 items-end">
+				<div>
+					<label class="label" for="as_stage">{ t(ctx, "المرحلة") }</label>
+					<select class="input h-9" id="as_stage" name="stage">
+						for _, o := range StageOptions {
+							<option value={ o.Value }>{ t(ctx, o.Label) }</option>
+						}
+					</select>
+				</div>
+				<div>
+					<label class="label" for="as_user">{ t(ctx, "المفتش") }</label>
+					<select class="input h-9" id="as_user" name="assignee_id">
+						<option value="">{ t(ctx, "القائمة العامة") }</option>
+						for _, o := range d.Assignees {
+							<option value={ o.Value }>{ o.Label }</option>
+						}
+					</select>
+				</div>
+				<div>
+					<label class="label" for="as_due">{ t(ctx, "الاستحقاق") }</label>
+					<input class="input h-9" type="date" id="as_due" name="due_date"/>
+				</div>
+				<button type="submit" class="btn btn-outline h-9">{ t(ctx, "إسناد الفحص") }</button>
+			</form>
+		}
+	</section>
+}
+
+// ---------------------------------------------------------------- sampling rules (admin)
+templ SamplingPage(rules []gen.SamplingRule) {
+	@App(t(ctx, "قواعد العينة")) {
+		@PageHeader(t(ctx, "قواعد العينة"), t(ctx, "تحدد أي أوامر العمل الجديدة تُسند لها فحوصات تلقائياً. القاعدة الأدق (النوع والأولوية) تتقدم على العامة."))
+		@adminNav("/admin/sampling")
+		<form method="post" action="/admin/sampling" class="card p-4 mb-4 grid gap-3 grid-cols-2 md:grid-cols-5 items-end">
+			<div>
+				<label class="label" for="sr_stage">{ t(ctx, "المرحلة") }</label>
+				<select class="input h-9" id="sr_stage" name="stage">
+					for _, o := range StageOptions {
+						<option value={ o.Value }>{ t(ctx, o.Label) }</option>
+					}
+				</select>
+			</div>
+			<div>
+				<label class="label" for="sr_type">{ t(ctx, "النوع") }</label>
+				<select class="input h-9" id="sr_type" name="wo_type">
+					<option value="">{ t(ctx, "الكل") }</option>
+					for _, o := range TypeOptions {
+						<option value={ o.Value }>{ t(ctx, o.Label) }</option>
+					}
+				</select>
+			</div>
+			<div>
+				<label class="label" for="sr_pri">{ t(ctx, "الأولوية") }</label>
+				<select class="input h-9" id="sr_pri" name="priority">
+					<option value="">{ t(ctx, "الكل") }</option>
+					for _, p := range domain.PriorityOrder {
+						<option value={ p }>{ t(ctx, domain.PriorityLabels[p]) }</option>
+					}
+				</select>
+			</div>
+			<div>
+				<label class="label" for="sr_pct">{ t(ctx, "النسبة %") }</label>
+				<input class="input h-9" type="number" min="0" max="100" id="sr_pct" name="percent" value="100"/>
+			</div>
+			<button type="submit" class="btn btn-primary h-9">{ t(ctx, "إضافة قاعدة") }</button>
+		</form>
+		<div class="card overflow-hidden">
+			<div class="overflow-x-auto">
+				<table class="table">
+					<thead>
+						<tr><th>{ t(ctx, "المرحلة") }</th><th>{ t(ctx, "النوع") }</th><th>{ t(ctx, "الأولوية") }</th><th>{ t(ctx, "النسبة %") }</th><th></th></tr>
+					</thead>
+					<tbody>
+						for _, r := range rules {
+							<tr>
+								<td>
+									@StagePill(string(r.Stage))
+								</td>
+								<td>
+									if r.WoType != nil {
+										{ t(ctx, domain.Label(domain.WOTypeLabels, string(*r.WoType))) }
+									} else {
+										<span class="text-ink-60">{ t(ctx, "الكل") }</span>
+									}
+								</td>
+								<td>
+									if r.Priority != nil {
+										@PriorityPill(string(*r.Priority))
+									} else {
+										<span class="text-ink-60">{ t(ctx, "الكل") }</span>
+									}
+								</td>
+								<td colspan="2" class="p-0">
+									<form method="post" action={ u("/admin/sampling/%d", r.ID) } class="flex flex-wrap items-center gap-2 px-3 py-2">
+										<input class="input h-9 w-24" type="number" min="0" max="100" name="percent" value={ itoa(int(r.Percent)) } aria-label={ t(ctx, "النسبة %") }/>
+										<label class="flex items-center gap-1.5 text-sm px-2">
+											<input type="checkbox" name="active" value="on" checked?={ r.Active } class="size-4"/>
+											{ t(ctx, "مفعّل") }
+										</label>
+										<button type="submit" class="btn btn-outline py-1.5">{ t(ctx, "حفظ") }</button>
+										<button type="submit" name="delete" value="1" class="btn btn-ghost py-1.5 text-fail">{ t(ctx, "حذف") }</button>
+									</form>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+		<p class="mt-3 text-xs text-ink-60">{ t(ctx, "الاختيار ثابت لكل أمر عمل (لا يتغير بالتعديل أو إعادة الاستيراد). التكليفات المختارة تذهب إلى القائمة العامة ليأخذها أي مفتش.") }</p>
+	}
+}

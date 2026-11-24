@@ -95,6 +95,8 @@ func (s *Server) dbError(w http.ResponseWriter, r *http.Request, err error) {
 	s.serverError(w, r, err)
 }
 
+func isNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
+
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"

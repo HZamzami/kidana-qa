@@ -11,12 +11,12 @@ SELECT * FROM users WHERE email = $1;
 SELECT * FROM users ORDER BY active DESC, name;
 
 -- name: CreateUser :one
-INSERT INTO users (email, name, role, password_hash)
-VALUES ($1, $2, $3, $4)
+INSERT INTO users (email, name, role, password_hash, contractor_id)
+VALUES ($1, $2, $3, $4, sqlc.narg(contractor_id))
 RETURNING *;
 
 -- name: UpdateUser :one
-UPDATE users SET email = $2, name = $3, role = $4, active = $5, updated_at = now()
+UPDATE users SET email = $2, name = $3, role = $4, active = $5, contractor_id = sqlc.narg(contractor_id), updated_at = now()
 WHERE id = $1
 RETURNING *;
 
@@ -67,3 +67,7 @@ WHERE r.token_hash = $1;
 
 -- name: UsePasswordReset :execrows
 UPDATE password_resets SET used_at = now() WHERE id = $1 AND used_at IS NULL AND expires_at > now();
+
+-- Active users of a contractor (the contractor portal).
+-- name: ListContractorUsers :many
+SELECT * FROM users WHERE contractor_id = $1 AND active ORDER BY name;
