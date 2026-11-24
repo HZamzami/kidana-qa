@@ -18,7 +18,8 @@ var woColumns = []struct {
 	{"النوع", true, 14},
 	{"الموقع", true, 16},
 	{"الموقع التفصيلي", false, 22},
-	{"النظام", true, 18},
+	{"المنظومة", true, 18},
+	{"مجموعة الأصل", true, 20},
 	{"الأصل / المعدة", false, 20},
 	{"المقاول", false, 20},
 	{"الفني", false, 16},
@@ -30,7 +31,7 @@ var woColumns = []struct {
 
 // WorkOrderTemplate builds the bulk work order import template with
 // drop-down lists for the reference values.
-func WorkOrderTemplate(sites, systems, contractors []string) (*excelize.File, error) {
+func WorkOrderTemplate(sites, systems, assetGroups, contractors []string) (*excelize.File, error) {
 	f := excelize.NewFile()
 	st, err := newStyles(f)
 	if err != nil {
@@ -63,8 +64,8 @@ func WorkOrderTemplate(sites, systems, contractors []string) (*excelize.File, er
 	}
 	columns := map[string][]string{
 		"A": {domain.WOTypeLabels["PM"], domain.WOTypeLabels["WO"]},
-		"B": sites, "C": systems, "D": contractors,
-		"E": {domain.PriorityLabels["normal"], domain.PriorityLabels["high"], domain.PriorityLabels["emergency"]},
+		"B": sites, "C": systems, "D": assetGroups, "E": contractors,
+		"F": {domain.PriorityLabels["normal"], domain.PriorityLabels["high"], domain.PriorityLabels["emergency"]},
 	}
 	for col, vals := range columns {
 		for i, v := range vals {
@@ -84,24 +85,26 @@ func WorkOrderTemplate(sites, systems, contractors []string) (*excelize.File, er
 		if strict {
 			dv.SetError(excelize.DataValidationErrorStyleStop, "قيمة غير صحيحة", "اختر من القائمة")
 		} else {
-			// sites/systems/contractors accept new names (they are created on import)
+			// sites/systems/asset groups/contractors accept new names (they are created on import)
 			dv.SetError(excelize.DataValidationErrorStyleInformation, "قيمة جديدة", "سيُضاف الاسم الجديد عند الاستيراد")
 		}
 		_ = f.AddDataValidation(sh, dv)
 	}
+	// template column ← list column: type, site, system, asset group, contractor, priority
 	addList("B", "A", 2, true)
 	addList("C", "B", len(sites), false)
 	addList("E", "C", len(systems), false)
-	addList("G", "D", len(contractors), false)
-	addList("I", "E", 4, true)
+	addList("F", "D", len(assetGroups), false)
+	addList("H", "E", len(contractors), false)
+	addList("J", "F", len(domain.PriorityOrder), true)
 
 	// Date columns hold real Excel dates shown as dd/mm/yyyy and validated like
 	// the drop-down columns: anything that is not a date between 2000 and 2099
 	// is rejected. The import reads the stored date value, whatever the locale.
 	dateStyle, _ := f.NewStyle(&excelize.Style{CustomNumFmt: strPtr("dd/mm/yyyy")})
-	_ = f.SetColStyle(sh, "J:K", dateStyle)
+	_ = f.SetColStyle(sh, "K:L", dateStyle)
 	dv := excelize.NewDataValidation(true)
-	dv.Sqref = fmt.Sprintf("J2:K%d", last)
+	dv.Sqref = fmt.Sprintf("K2:L%d", last)
 	if err := dv.SetRange(36526, 73050, excelize.DataValidationTypeDate, excelize.DataValidationOperatorBetween); err == nil { // 2000-01-01 … 2099-12-31
 		dv.SetError(excelize.DataValidationErrorStyleStop, "تاريخ غير صالح", "أدخل تاريخاً صحيحاً بصيغة dd/mm/yyyy، مثال 18/11/2026")
 		dv.SetInput("التاريخ", "dd/mm/yyyy — تأكد أن التاريخ المعروض يطابق ما تقصده")
@@ -121,7 +124,8 @@ func WorkOrderTemplate(sites, systems, contractors []string) (*excelize.File, er
 		"2) لا تغيّر عناوين الأعمدة — الاستيراد يعتمد عليها.",
 		"3) أعمدة التاريخ خلايا تاريخ حقيقية بصيغة dd/mm/yyyy (مثال 18/11/2026)، ويرفض Excel أي قيمة ليست تاريخاً. تأكد أن التاريخ المعروض يطابق ما تقصده. التاريخ الهجري يُعرض في النظام تلقائياً ولا يُدخل هنا.",
 		"4) أوامر العمل الموجودة مسبقاً (بنفس الرقم) تُتجاهل ولا تُعدَّل.",
-		"5) المواقع والأنظمة والمقاولون غير المسجلين يُضافون تلقائياً — راجعهم بعد الاستيراد من الإعدادات.",
+		"5) المواقع والمنظومات ومجموعات الأصول والمقاولون غير المسجلين يُضافون تلقائياً — راجعهم بعد الاستيراد من الإعدادات.",
+		"6) الأولوية: عادي أو عالي أو طارئ. إن تُركت فارغة تُعتبر «عادي».",
 	}
 	for i, l := range lines {
 		_ = f.SetCellValue(help, fmt.Sprintf("A%d", i+1), l)

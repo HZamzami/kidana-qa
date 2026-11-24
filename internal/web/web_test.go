@@ -168,8 +168,9 @@ func TestInspectionFlow(t *testing.T) {
 
 	sites, _ := e.q.ListActiveSites(ctx)
 	systems, _ := e.q.ListActiveSystems(ctx)
+	assetGroups, _ := e.q.ListActiveAssetGroups(ctx)
 	res := e.post(c, "/work-orders", url.Values{
-		"type": {"WO"}, "ref": {"WO-1001"}, "site_id": {idStr(sites[0].ID)}, "system_id": {idStr(systems[0].ID)},
+		"type": {"WO"}, "ref": {"WO-1001"}, "site_id": {idStr(sites[0].ID)}, "system_id": {idStr(systems[0].ID)}, "asset_group_id": {idStr(assetGroups[0].ID)},
 		"planned_date": {"2026-11-01"}, "actual_date": {"2026-11-02"},
 	})
 	if res.StatusCode != http.StatusSeeOther {
@@ -180,7 +181,7 @@ func TestInspectionFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	// "save and add another" keeps the context, copy prefills the rest
-	res = e.post(c, "/work-orders", url.Values{"type": {"PM"}, "ref": {"WO-1002"}, "site_id": {idStr(sites[0].ID)}, "system_id": {idStr(systems[0].ID)}, "asset": {"GEN-1"}, "next": {"new"}})
+	res = e.post(c, "/work-orders", url.Values{"type": {"PM"}, "ref": {"WO-1002"}, "site_id": {idStr(sites[0].ID)}, "system_id": {idStr(systems[0].ID)}, "asset_group_id": {idStr(assetGroups[0].ID)}, "asset": {"GEN-1"}, "next": {"new"}})
 	if loc := res.Header.Get("Location"); res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(loc, "/work-orders/new?keep=ctx&from=") {
 		t.Fatalf("save and add another: %d %s", res.StatusCode, loc)
 	}
@@ -204,7 +205,7 @@ func TestInspectionFlow(t *testing.T) {
 	}
 
 	// duplicate ref is rejected
-	if res := e.post(c, "/work-orders", url.Values{"type": {"WO"}, "ref": {"wo-1001"}, "site_id": {idStr(sites[0].ID)}, "system_id": {idStr(systems[0].ID)}}); res.StatusCode != http.StatusUnprocessableEntity {
+	if res := e.post(c, "/work-orders", url.Values{"type": {"WO"}, "ref": {"wo-1001"}, "site_id": {idStr(sites[0].ID)}, "system_id": {idStr(systems[0].ID)}, "asset_group_id": {idStr(assetGroups[0].ID)}}); res.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("duplicate ref: %d", res.StatusCode)
 	}
 

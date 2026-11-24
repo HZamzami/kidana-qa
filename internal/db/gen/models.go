@@ -556,6 +556,13 @@ func AllWoTypeValues() []WoType {
 	}
 }
 
+type AssetGroup struct {
+	ID     int64
+	Name   string
+	Active bool
+	Sort   int32
+}
+
 type Attachment struct {
 	ID           int64
 	InspectionID *int64
@@ -690,6 +697,7 @@ type WorkOrder struct {
 	SiteID       int64
 	Location     string
 	SystemID     int64
+	AssetGroupID int64
 	Asset        string
 	ContractorID *int64
 	Technician   string

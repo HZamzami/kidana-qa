@@ -30,6 +30,22 @@ INSERT INTO systems (name, sort) VALUES ($1, $2) RETURNING *;
 -- name: UpdateSystem :one
 UPDATE systems SET name = $2, sort = $3, active = $4 WHERE id = $1 RETURNING *;
 
+-- ---------------------------------------------------------------- asset_groups
+-- name: ListAssetGroups :many
+SELECT * FROM asset_groups ORDER BY active DESC, sort, name;
+
+-- name: ListActiveAssetGroups :many
+SELECT * FROM asset_groups WHERE active ORDER BY sort, name;
+
+-- name: GetAssetGroupByName :one
+SELECT * FROM asset_groups WHERE name = $1;
+
+-- name: CreateAssetGroup :one
+INSERT INTO asset_groups (name, sort) VALUES ($1, $2) RETURNING *;
+
+-- name: UpdateAssetGroup :one
+UPDATE asset_groups SET name = $2, sort = $3, active = $4 WHERE id = $1 RETURNING *;
+
 -- ---------------------------------------------------------------- contractors
 -- name: ListContractors :many
 SELECT * FROM contractors ORDER BY active DESC, name;

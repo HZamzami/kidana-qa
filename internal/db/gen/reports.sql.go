@@ -19,13 +19,15 @@ FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id
 WHERE ($1::bigint IS NULL OR w.site_id = $1)
   AND ($2::bigint IS NULL OR w.system_id = $2)
-  AND ($3::bigint IS NULL OR w.contractor_id = $3)
-  AND ($4::wo_type IS NULL OR w.type = $4)
+  AND ($3::bigint IS NULL OR w.asset_group_id = $3)
+  AND ($4::bigint IS NULL OR w.contractor_id = $4)
+  AND ($5::wo_type IS NULL OR w.type = $5)
 `
 
 type FindingStatsParams struct {
 	SiteID       *int64
 	SystemID     *int64
+	AssetGroupID *int64
 	ContractorID *int64
 	Type         *WoType
 }
@@ -41,6 +43,7 @@ func (q *Queries) FindingStats(ctx context.Context, arg FindingStatsParams) (Fin
 	row := q.db.QueryRow(ctx, findingStats,
 		arg.SiteID,
 		arg.SystemID,
+		arg.AssetGroupID,
 		arg.ContractorID,
 		arg.Type,
 	)
@@ -189,14 +192,16 @@ LEFT JOIN inspections i ON i.id = f.inspection_id
 WHERE f.status <> 'closed'
   AND ($1::bigint IS NULL OR w.site_id = $1)
   AND ($2::bigint IS NULL OR w.system_id = $2)
-  AND ($3::bigint IS NULL OR w.contractor_id = $3)
-  AND ($4::wo_type IS NULL OR w.type = $4)
+  AND ($3::bigint IS NULL OR w.asset_group_id = $3)
+  AND ($4::bigint IS NULL OR w.contractor_id = $4)
+  AND ($5::wo_type IS NULL OR w.type = $5)
 ORDER BY (f.severity = 'critical') DESC, f.due_date NULLS LAST, f.created_at
 `
 
 type ListOpenFindingsScopedParams struct {
 	SiteID       *int64
 	SystemID     *int64
+	AssetGroupID *int64
 	ContractorID *int64
 	Type         *WoType
 }
@@ -222,6 +227,7 @@ func (q *Queries) ListOpenFindingsScoped(ctx context.Context, arg ListOpenFindin
 	rows, err := q.db.Query(ctx, listOpenFindingsScoped,
 		arg.SiteID,
 		arg.SystemID,
+		arg.AssetGroupID,
 		arg.ContractorID,
 		arg.Type,
 	)
@@ -262,23 +268,25 @@ SELECT i.id, i.stage, i.attempt, i.inspected_on, i.score, i.passed, i.critical_f
        u.name AS inspector_name, t.name AS template_name,
        w.id AS work_order_id, w.ref, w.type, w.asset, w.location, w.technician, w.priority,
        w.planned_date, w.actual_date, w.status AS wo_status,
-       s.name AS site_name, sy.name AS system_name, COALESCE(c.name, '')::text AS contractor_name
+       s.name AS site_name, sy.name AS system_name, ag.name AS asset_group_name, COALESCE(c.name, '')::text AS contractor_name
 FROM inspections i
 JOIN work_orders w ON w.id = i.work_order_id
 JOIN users u ON u.id = i.inspector_id
 JOIN checklist_templates t ON t.id = i.template_id
 JOIN sites s ON s.id = w.site_id
 JOIN systems sy ON sy.id = w.system_id
+JOIN asset_groups ag ON ag.id = w.asset_group_id
 LEFT JOIN contractors c ON c.id = w.contractor_id
 WHERE i.status = 'submitted'
   AND ($1::inspection_stage IS NULL OR i.stage = $1)
   AND ($2::bigint IS NULL OR w.site_id = $2)
   AND ($3::bigint IS NULL OR w.system_id = $3)
-  AND ($4::bigint IS NULL OR w.contractor_id = $4)
-  AND ($5::wo_type IS NULL OR w.type = $5)
-  AND ($6::date IS NULL OR i.inspected_on >= $6)
-  AND ($7::date IS NULL OR i.inspected_on <= $7)
-  AND ($8::boolean IS NULL OR i.passed = $8)
+  AND ($4::bigint IS NULL OR w.asset_group_id = $4)
+  AND ($5::bigint IS NULL OR w.contractor_id = $5)
+  AND ($6::wo_type IS NULL OR w.type = $6)
+  AND ($7::date IS NULL OR i.inspected_on >= $7)
+  AND ($8::date IS NULL OR i.inspected_on <= $8)
+  AND ($9::boolean IS NULL OR i.passed = $9)
 ORDER BY i.inspected_on DESC, i.id DESC
 `
 
@@ -286,6 +294,7 @@ type ListSubmittedInspectionsParams struct {
 	Stage        *InspectionStage
 	SiteID       *int64
 	SystemID     *int64
+	AssetGroupID *int64
 	ContractorID *int64
 	Type         *WoType
 	DateFrom     *time.Time
@@ -316,6 +325,7 @@ type ListSubmittedInspectionsRow struct {
 	WoStatus       WoStatus
 	SiteName       string
 	SystemName     string
+	AssetGroupName string
 	ContractorName string
 }
 
@@ -326,6 +336,7 @@ func (q *Queries) ListSubmittedInspections(ctx context.Context, arg ListSubmitte
 		arg.Stage,
 		arg.SiteID,
 		arg.SystemID,
+		arg.AssetGroupID,
 		arg.ContractorID,
 		arg.Type,
 		arg.DateFrom,
@@ -362,6 +373,7 @@ func (q *Queries) ListSubmittedInspections(ctx context.Context, arg ListSubmitte
 			&i.WoStatus,
 			&i.SiteName,
 			&i.SystemName,
+			&i.AssetGroupName,
 			&i.ContractorName,
 		); err != nil {
 			return nil, err

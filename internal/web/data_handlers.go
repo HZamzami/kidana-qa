@@ -29,7 +29,7 @@ func (s *Server) describeScope(ctx context.Context, sc reportScope) string {
 	if sc.F.Type != "" {
 		parts = append(parts, "النوع: "+domain.Label(domain.WOTypeLabels, sc.F.Type))
 	}
-	sites, systems, contractors, err := s.lookupOptions(ctx, false)
+	lk, err := s.lookupOptions(ctx, false)
 	if err == nil {
 		find := func(opts []views.Option, v string) string {
 			for _, o := range opts {
@@ -40,13 +40,16 @@ func (s *Server) describeScope(ctx context.Context, sc reportScope) string {
 			return v
 		}
 		if sc.F.Site != "" {
-			parts = append(parts, "الموقع: "+find(sites, sc.F.Site))
+			parts = append(parts, "الموقع: "+find(lk.Sites, sc.F.Site))
 		}
 		if sc.F.System != "" {
-			parts = append(parts, "النظام: "+find(systems, sc.F.System))
+			parts = append(parts, "المنظومة: "+find(lk.Systems, sc.F.System))
+		}
+		if sc.F.AssetGroup != "" {
+			parts = append(parts, "مجموعة الأصل: "+find(lk.AssetGroups, sc.F.AssetGroup))
 		}
 		if sc.F.Contractor != "" {
-			parts = append(parts, "المقاول: "+find(contractors, sc.F.Contractor))
+			parts = append(parts, "المقاول: "+find(lk.Contractors, sc.F.Contractor))
 		}
 	}
 	switch sc.F.Result {
@@ -80,7 +83,7 @@ func (s *Server) reportPrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	findings, err := s.q.ListOpenFindingsScoped(ctx, gen.ListOpenFindingsScopedParams{
-		SiteID: sc.Params.SiteID, SystemID: sc.Params.SystemID, ContractorID: sc.Params.ContractorID, Type: sc.Params.Type,
+		SiteID: sc.Params.SiteID, AssetGroupID: sc.Params.AssetGroupID, ContractorID: sc.Params.ContractorID, Type: sc.Params.Type,
 	})
 	if err != nil {
 		s.serverError(w, r, err)
@@ -94,7 +97,7 @@ func (s *Server) reportPrint(w http.ResponseWriter, r *http.Request) {
 	for _, row := range rep.Rows {
 		rr := views.ReportRow{
 			Ref: row.Ref, Stage: string(row.Stage), Attempt: int(row.Attempt), Date: dates.DMY(row.InspectedOn), Hijri: dates.Hijri(row.InspectedOn),
-			Site: row.SiteName, System: row.SystemName, Contractor: row.ContractorName, Inspector: row.InspectorName,
+			Site: row.SiteName, System: row.SystemName, AssetGroup: row.AssetGroupName, Contractor: row.ContractorName, Inspector: row.InspectorName,
 		}
 		if row.Score != nil {
 			rr.Score = *row.Score
@@ -137,7 +140,7 @@ func (s *Server) exportExcel(w http.ResponseWriter, r *http.Request) {
 	rows := make([]excel.InspectionExport, 0, len(rep.Rows))
 	for _, row := range rep.Rows {
 		e := excel.InspectionExport{
-			Ref: row.Ref, Type: string(row.Type), Site: row.SiteName, System: row.SystemName, Asset: row.Asset,
+			Ref: row.Ref, Type: string(row.Type), Site: row.SiteName, System: row.SystemName, AssetGroup: row.AssetGroupName, Asset: row.Asset,
 			Location: row.Location, Contractor: row.ContractorName, Technician: row.Technician,
 			Stage: string(row.Stage), Template: row.TemplateName, Inspector: row.InspectorName,
 			Attempt: int(row.Attempt), Date: row.InspectedOn, CriticalFailed: row.CriticalFailed,
@@ -239,12 +242,12 @@ func (s *Server) workOrderTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 		return out
 	}
-	sites, systems, contractors, err := s.lookupOptions(ctx, true)
+	lk, err := s.lookupOptions(ctx, true)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	book, err := excel.WorkOrderTemplate(names(sites), names(systems), names(contractors))
+	book, err := excel.WorkOrderTemplate(names(lk.Sites), names(lk.Systems), names(lk.AssetGroups), names(lk.Contractors))
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -293,7 +296,7 @@ func (s *Server) importExcel(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, views.DataPage(out))
 }
 
-// lookupResolver finds or creates sites/systems/contractors by name during an import.
+// lookupResolver finds or creates sites/systems/asset groups/contractors by name during an import.
 type lookupResolver struct {
 	q       *gen.Queries
 	ctx     context.Context
@@ -320,7 +323,14 @@ func (lr *lookupResolver) id(kind, name string) (int64, error) {
 		var x gen.System
 		if x, err = lr.q.GetSystemByName(lr.ctx, name); errors.Is(err, pgx.ErrNoRows) {
 			x, err = lr.q.CreateSystem(lr.ctx, gen.CreateSystemParams{Name: name, Sort: 100})
-			lr.created = append(lr.created, "نظام: "+name)
+			lr.created = append(lr.created, "منظومة: "+name)
+		}
+		id = x.ID
+	case "asset_group":
+		var x gen.AssetGroup
+		if x, err = lr.q.GetAssetGroupByName(lr.ctx, name); errors.Is(err, pgx.ErrNoRows) {
+			x, err = lr.q.CreateAssetGroup(lr.ctx, gen.CreateAssetGroupParams{Name: name, Sort: 100})
+			lr.created = append(lr.created, "مجموعة أصل: "+name)
 		}
 		id = x.ID
 	case "contractor":
@@ -369,12 +379,16 @@ func (s *Server) importWorkOrders(ctx context.Context, res *excel.Result, out *v
 			if err != nil {
 				return err
 			}
+			assetGroupID, err := lr.id("asset_group", row.AssetGroup)
+			if err != nil {
+				return err
+			}
 			contractorID, err := lr.optional("contractor", row.Contractor)
 			if err != nil {
 				return err
 			}
 			if _, err := q.CreateWorkOrder(ctx, gen.CreateWorkOrderParams{
-				Ref: row.Ref, Type: gen.WoType(row.Type), SiteID: siteID, Location: row.Location, SystemID: systemID,
+				Ref: row.Ref, Type: gen.WoType(row.Type), SiteID: siteID, Location: row.Location, SystemID: systemID, AssetGroupID: assetGroupID,
 				Asset: row.Asset, ContractorID: contractorID, Technician: row.Technician, Priority: gen.WoPriority(row.Priority),
 				Description: row.Description, PlannedDate: row.PlannedDate, ActualDate: row.ActualDate, CreatedBy: currentUserID(ctx),
 			}); err != nil {

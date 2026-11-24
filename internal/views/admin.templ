@@ -9,7 +9,7 @@ import (
 
 templ adminNav(active string) {
 	<nav class="flex flex-wrap gap-2 mb-5">
-		for _, it := range []Option{{"/admin/checklists", "قوائم الفحص"}, {"/admin/lookups/sites", "المواقع"}, {"/admin/lookups/systems", "الأنظمة"}, {"/admin/lookups/contractors", "المقاولون"}, {"/admin/users", "المستخدمون"}} {
+		for _, it := range []Option{{"/admin/checklists", "قوائم الفحص"}, {"/admin/lookups/sites", "المواقع"}, {"/admin/lookups/systems", "المنظومات"}, {"/admin/lookups/asset-groups", "مجموعات الأصول"}, {"/admin/lookups/contractors", "المقاولون"}, {"/admin/users", "المستخدمون"}} {
 			<a href={ templ.URL(it.Value) } class={ "btn", templ.KV("btn-primary", active == it.Value), templ.KV("btn-outline", active != it.Value) }>{ it.Label }</a>
 		}
 	</nav>
@@ -21,7 +21,8 @@ templ AdminHome() {
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 			@adminCard("/admin/checklists", "قوائم الفحص", "بنود الفحص أثناء التنفيذ والفحص بعد التنفيذ وأوزانها. أي تعديل يُنشئ إصداراً جديداً ولا يغيّر نتائج سابقة.")
 			@adminCard("/admin/lookups/sites", "المواقع", "منى، عرفات، مزدلفة…")
-			@adminCard("/admin/lookups/systems", "الأنظمة", "التكييف، الكهرباء، المولدات…")
+			@adminCard("/admin/lookups/systems", "المنظومات", "التكييف والتبريد، الكهرباء، مكافحة الحريق…")
+			@adminCard("/admin/lookups/asset-groups", "مجموعات الأصول", "المبردات، المضخات، لوحات التوزيع…")
 			@adminCard("/admin/lookups/contractors", "المقاولون", "الجهات المنفذة وبيانات التواصل.")
 			@adminCard("/admin/users", "المستخدمون", "الحسابات والصلاحيات: مدير، مدقق، مشاهد.")
 		</div>
@@ -38,19 +39,19 @@ templ adminCard(href, title, desc string) {
 // ---------------------------------------------------------------- lookups
 
 type LookupRow struct {
-	ID           int64
-	Name         string
-	Sort         int32
-	Active       bool
-	ContactName  string
-	Phone        string
+	ID          int64
+	Name        string
+	Sort        int32
+	Active      bool
+	ContactName string
+	Phone       string
 }
 
 type LookupData struct {
-	Kind   string // sites | systems | contractors
-	Title  string
-	Rows   []LookupRow
-	Errors map[string]string
+	Kind    string // sites | systems | asset-groups | contractors
+	Title   string
+	Rows    []LookupRow
+	Errors  map[string]string
 	NewName string
 }
 
@@ -180,7 +181,6 @@ templ UsersPage(d UsersData) {
 }
 
 // ---------------------------------------------------------------- checklists
-
 templ ChecklistsPage(rows []gen.ListTemplatesRow) {
 	@App("قوائم الفحص") {
 		@PageHeader("قوائم الفحص", "قائمة واحدة مفعّلة لكل مرحلة. الفحوصات تحتفظ بالإصدار الذي استخدمته.")

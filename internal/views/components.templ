@@ -41,7 +41,6 @@ templ DateInline(t time.Time) {
 }
 
 // ---------------------------------------------------------------- status pills
-
 templ StagePill(stage string) {
 	if stage == "during" {
 		<span class="pill bg-sky-30 text-ink" title="فحص أثناء التنفيذ">أثناء التنفيذ</span>
@@ -132,7 +131,6 @@ templ ScoreBar(v float64, passed bool) {
 }
 
 // ---------------------------------------------------------------- form fields
-
 templ FieldError(errs map[string]string, name string) {
 	if msg, ok := errs[name]; ok {
 		<p class="field-error" id={ name + "-error" }>{ msg }</p>
@@ -246,7 +244,8 @@ templ EmptyState(title, hint string) {
 templ Fact(label string) {
 	<div class="min-w-0">
 		<dt class="text-xs text-ink-60">{ label }</dt>
-		<dd class="mt-0.5 font-medium break-words">{ children... }</dd>
+		<dd class="mt-0.5 font-medium break-words">{ children... }
+</dd>
 	</div>
 }
 

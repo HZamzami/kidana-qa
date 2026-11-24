@@ -13,10 +13,10 @@ func TestSummarize(t *testing.T) {
 		{ID: 3, WorkOrderID: 11, Stage: StageAfter, Score: 70, Passed: false, CriticalFailed: true, Site: "عرفات", Contractor: "ب", Asset: "AC-1", DelayDays: &early},
 	}
 	items := []ItemRow{
-		{InspectionID: 2, Stage: StageAfter, Code: "C1", Label: "جودة", Rating: RatingNonCompliant},
-		{InspectionID: 3, Stage: StageAfter, Code: "C1", Label: "جودة", Rating: RatingPartial},
-		{InspectionID: 3, Stage: StageAfter, Code: "C2", Label: "قائمة", Rating: RatingNA},
-		{InspectionID: 1, Stage: StageDuring, Code: "Q1", Label: "سلامة", Rating: RatingCompliant},
+		{InspectionID: 2, Stage: StageAfter, Code: "A1", Label: "جودة", Rating: RatingNonCompliant},
+		{InspectionID: 3, Stage: StageAfter, Code: "A1", Label: "جودة", Rating: RatingPartial},
+		{InspectionID: 3, Stage: StageAfter, Code: "A2", Label: "قائمة", Rating: RatingNA},
+		{InspectionID: 1, Stage: StageDuring, Code: "D1", Label: "سلامة", Rating: RatingCompliant},
 	}
 	S := Summarize(rows, items, FindingStats{Open: 2, Overdue: 1})
 

@@ -8,7 +8,7 @@ import (
 )
 
 type DashFilters struct {
-	Stage, Type, Site, System, Contractor, From, To, Result string
+	Stage, Type, Site, System, AssetGroup, Contractor, From, To, Result string
 }
 
 type DashboardData struct {
@@ -18,6 +18,7 @@ type DashboardData struct {
 	Query       string // encoded filters, reused by print/export links
 	Sites       []Option
 	Systems     []Option
+	AssetGroups []Option
 	Contractors []Option
 }
 
@@ -35,7 +36,7 @@ templ Dashboard(d DashboardData) {
 			<a class="btn btn-gold" href={ templ.URL("/reports/export.xlsx?" + d.Query) }>تصدير Excel</a>
 		}
 		<form
-			class="card p-3 mb-5 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 items-end gap-3 no-print"
+			class="card p-3 mb-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 items-end gap-3 no-print"
 			method="get"
 			action="/"
 			hx-get="/"
@@ -45,12 +46,16 @@ templ Dashboard(d DashboardData) {
 			hx-swap="outerHTML"
 			hx-push-url="true"
 		>
+			<!-- 9 cells: pairs on phone (contractor spans), 3×3 on tablet, one row wide; dates stay together -->
 			@FilterSelect("stage", "المرحلة", d.F.Stage, StageOptions)
 			@FilterSelect("type", "النوع", d.F.Type, TypeOptions)
 			@FilterSelect("site", "الموقع", d.F.Site, d.Sites)
-			@FilterSelect("system", "النظام", d.F.System, d.Systems)
-			@FilterSelect("contractor", "المقاول", d.F.Contractor, d.Contractors)
 			@FilterSelect("result", "النتيجة", d.F.Result, ResultOptions)
+			@FilterSelect("system", "المنظومة", d.F.System, d.Systems)
+			@FilterSelect("group", "مجموعة الأصل", d.F.AssetGroup, d.AssetGroups)
+			<div class="col-span-2 md:col-span-1 min-w-0">
+				@FilterSelect("contractor", "المقاول", d.F.Contractor, d.Contractors)
+			</div>
 			<div class="min-w-0">
 				<label class="label" for="flt_from">من تاريخ</label>
 				<input class="input h-9 w-full" type="date" id="flt_from" name="from" value={ d.F.From }/>
@@ -174,7 +179,7 @@ templ criteriaCard(stage domain.Stage, items []domain.CriterionStat, wide bool) 
 		<div class="flex flex-wrap items-baseline gap-x-2 mb-3">
 			<h2 class="font-semibold">نسبة المطابقة لكل معيار</h2>
 			@StagePill(string(stage))
-			<p class="w-full text-xs text-ink-60 mt-0.5">المطابق 100%، الجزئي 50%، و«لا ينطبق» مستبعد.<span class="hidden sm:inline"> مرّر المؤشر على البند للتفاصيل.</span></p>
+			<p class="w-full text-xs text-ink-60 mt-0.5">المطابق 100%، الجزئي 50%، و«لا ينطبق» مستبعد.<span class="hidden sm:inline">مرّر المؤشر على البند للتفاصيل.</span></p>
 		</div>
 		if len(items) == 0 {
 			@EmptyState("لا توجد فحوصات مرسلة لهذه المرحلة ضمن النطاق", "")

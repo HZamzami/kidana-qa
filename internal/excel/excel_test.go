@@ -58,14 +58,14 @@ func TestParseRatingAndType(t *testing.T) {
 }
 
 func TestTemplateRoundTrip(t *testing.T) {
-	f, err := WorkOrderTemplate([]string{"منى"}, []string{"الكهرباء"}, nil)
+	f, err := WorkOrderTemplate([]string{"منى"}, []string{"الكهرباء"}, []string{"لوحات التوزيع"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sh := SheetWorkOrders
-	_ = f.SetSheetRow(sh, "A2", &[]any{"WO-1", "أمر عمل", "منى", "مخيم 12", "الكهرباء", "لوحة 3", "مؤسسة الريان", "", "عالي", "2026-11-01", "2026-11-03", "استبدال قاطع"})
-	_ = f.SetSheetRow(sh, "A3", &[]any{"", "أمر عمل", "منى"})                                                                                        // missing ref + system → skipped
-	_ = f.SetSheetRow(sh, "A4", &[]any{"WO-2", "صيانة وقائية", "منى", "", "الكهرباء", "", "", "", "", time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC)}) // real date cell
+	_ = f.SetSheetRow(sh, "A2", &[]any{"WO-1", "أمر عمل", "منى", "مخيم 12", "الكهرباء", "لوحات التوزيع", "لوحة 3", "مؤسسة الريان", "", "عالي", "2026-11-01", "2026-11-03", "استبدال قاطع"})
+	_ = f.SetSheetRow(sh, "A3", &[]any{"", "أمر عمل", "منى"})                                                                                                         // missing ref, system and asset group → skipped
+	_ = f.SetSheetRow(sh, "A4", &[]any{"WO-2", "صيانة وقائية", "منى", "", "الكهرباء", "لوحات التوزيع", "", "", "", "", time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC)}) // real date cell
 	var buf bytes.Buffer
 	if err := f.Write(&buf); err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func TestTemplateRoundTrip(t *testing.T) {
 		t.Fatalf("got kind=%v rows=%d skipped=%d warnings=%v", res.Kind, len(res.WorkOrders), res.Skipped, res.Warnings)
 	}
 	w := res.WorkOrders[0]
-	if w.Ref != "WO-1" || w.Type != "WO" || w.Site != "منى" || w.Location != "مخيم 12" || w.System != "الكهرباء" ||
+	if w.Ref != "WO-1" || w.Type != "WO" || w.Site != "منى" || w.Location != "مخيم 12" || w.System != "الكهرباء" || w.AssetGroup != "لوحات التوزيع" ||
 		w.Priority != "high" || w.PlannedDate == nil || w.PlannedDate.Format("2006-01-02") != "2026-11-01" {
 		t.Fatalf("bad row: %+v", w)
 	}
@@ -92,10 +92,10 @@ func TestReportBuilds(t *testing.T) {
 	due := time.Date(2026, 11, 30, 0, 0, 0, 0, time.UTC)
 	f, err := Report(ReportInput{
 		Scope: "الكل", Summary: S, Insights: domain.Insights(S),
-		Rows:       []InspectionExport{{Ref: "WO-1", Stage: "after", Score: 90, Passed: true, Ratings: map[string]domain.Rating{"C1": "C"}}},
-		Criteria:   []CriterionColumn{{"C1", "جودة"}},
+		Rows:       []InspectionExport{{Ref: "WO-1", Stage: "after", Score: 90, Passed: true, Ratings: map[string]domain.Rating{"A1": "C"}}},
+		Criteria:   []CriterionColumn{{"A1", "جودة"}},
 		Findings:   []FindingExport{{ID: 1, Ref: "WO-1", DueDate: &due, CreatedAt: due}},
-		Checklists: []ChecklistExport{{Stage: "after", Name: "فحص", Version: 1, Criteria: []CriterionExport{{Code: "C1", Label: "جودة", Weight: 100}}}},
+		Checklists: []ChecklistExport{{Stage: "after", Name: "فحص", Version: 1, Criteria: []CriterionExport{{Code: "A1", Label: "جودة", Weight: 100}}}},
 		Logo:       png1x1,
 	})
 	if err != nil {

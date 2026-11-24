@@ -19,8 +19,10 @@ type WOListData struct {
 	Query       url.Values
 	Sites       []Option
 	Systems     []Option
+	AssetGroups []Option
 	Contractors []Option
 	Statuses    []Option
+	Priorities  []Option
 }
 
 func (d WOListData) val(k string) string { return d.Query.Get(k) }
@@ -41,7 +43,7 @@ templ WorkOrdersPage(d WOListData) {
 			}
 		}
 		<form
-			class="card p-3 mb-4 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 items-end gap-3"
+			class="card p-3 mb-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 items-end gap-3"
 			method="get"
 			action="/work-orders"
 			hx-get="/work-orders"
@@ -55,11 +57,16 @@ templ WorkOrdersPage(d WOListData) {
 				<label class="label" for="flt_q">بحث</label>
 				<input class="input h-9" type="search" id="flt_q" name="q" value={ d.val("q") } placeholder="رقم أمر العمل، الأصل، الموقع التفصيلي، الفني…"/>
 			</div>
+			<!-- 9 cells: search spans two; contractor spans on phone so no straggler -->
 			@FilterSelect("type", "النوع", d.val("type"), TypeOptions)
 			@FilterSelect("status", "الحالة", d.val("status"), d.Statuses)
+			@FilterSelect("priority", "الأولوية", d.val("priority"), d.Priorities)
 			@FilterSelect("site", "الموقع", d.val("site"), d.Sites)
-			@FilterSelect("system", "النظام", d.val("system"), d.Systems)
-			@FilterSelect("contractor", "المقاول", d.val("contractor"), d.Contractors)
+			@FilterSelect("system", "المنظومة", d.val("system"), d.Systems)
+			@FilterSelect("group", "مجموعة الأصل", d.val("group"), d.AssetGroups)
+			<div class="col-span-2 md:col-span-1 min-w-0">
+				@FilterSelect("contractor", "المقاول", d.val("contractor"), d.Contractors)
+			</div>
 			<noscript><button class="btn btn-primary">تطبيق</button></noscript>
 		</form>
 		@WorkOrdersResults(d)
@@ -78,7 +85,7 @@ templ WorkOrdersResults(d WOListData) {
 							<th>رقم أمر العمل</th>
 							<th>النوع</th>
 							<th>الموقع</th>
-							<th>النظام</th>
+							<th>المنظومة / مجموعة الأصل</th>
 							<th>الأصل</th>
 							<th>المقاول</th>
 							<th>أثناء التنفيذ</th>
@@ -92,6 +99,11 @@ templ WorkOrdersResults(d WOListData) {
 							<tr>
 								<td class="whitespace-nowrap">
 									<a class="font-medium text-ink underline decoration-gold-50 underline-offset-4 hover:decoration-gold" href={ u("/work-orders/%d", w.ID) }>{ w.Ref }</a>
+									if w.Priority != gen.WoPriorityNormal {
+										<span class="ms-1">
+											@PriorityPill(string(w.Priority))
+										</span>
+									}
 									if w.DraftInspections > 0 {
 										<span class="pill bg-sky-15 text-ink-80 ms-1">مسودة</span>
 									}
@@ -100,7 +112,10 @@ templ WorkOrdersResults(d WOListData) {
 									@TypePill(string(w.Type))
 								</td>
 								<td class="whitespace-nowrap">{ w.SiteName }</td>
-								<td class="whitespace-nowrap">{ w.SystemName }</td>
+								<td class="whitespace-nowrap">
+									{ w.SystemName }
+									<span class="block text-xs text-ink-60">{ w.AssetGroupName }</span>
+								</td>
 								<td class="max-w-40 truncate" title={ w.Asset }>{ orDash(w.Asset) }</td>
 								<td class="max-w-40 truncate" title={ w.ContractorName }>{ orDash(w.ContractorName) }</td>
 								<td>
@@ -145,8 +160,8 @@ templ WorkOrdersResults(d WOListData) {
 // ---------------------------------------------------------------- form
 
 type WOFormValues struct {
-	Ref, Type, SiteID, Location, SystemID, Asset, ContractorID, Technician string
-	Priority, Description, PlannedDate, ActualDate, Status                  string
+	Ref, Type, SiteID, Location, SystemID, AssetGroupID, Asset, ContractorID, Technician string
+	Priority, Description, PlannedDate, ActualDate, Status                               string
 }
 
 type WOFormData struct {
@@ -155,6 +170,7 @@ type WOFormData struct {
 	Errors      map[string]string
 	Sites       []Option
 	Systems     []Option
+	AssetGroups []Option
 	Contractors []Option
 	Priorities  []Option
 	Statuses    []Option
@@ -180,7 +196,8 @@ templ WorkOrderForm(d WOFormData) {
 				@SelectField("priority", "الأولوية", d.V.Priority, d.Priorities, "", true, d.Errors)
 				@SelectField("site_id", "الموقع", d.V.SiteID, d.Sites, "اختر الموقع", true, d.Errors)
 				@TextField("location", "الموقع التفصيلي", d.V.Location, false, d.Errors, templ.Attributes{"maxlength": "120", "placeholder": "المبنى / الدور / الغرفة"})
-				@SelectField("system_id", "النظام", d.V.SystemID, d.Systems, "اختر النظام", true, d.Errors)
+				@SelectField("system_id", "المنظومة", d.V.SystemID, d.Systems, "اختر المنظومة", true, d.Errors)
+				@SelectField("asset_group_id", "مجموعة الأصل", d.V.AssetGroupID, d.AssetGroups, "اختر مجموعة الأصل", true, d.Errors)
 				@TextField("asset", "الأصل / المعدة", d.V.Asset, false, d.Errors, templ.Attributes{"maxlength": "120", "placeholder": "رمز أو اسم الأصل"})
 				@SelectField("contractor_id", "المقاول / الجهة المنفذة", d.V.ContractorID, d.Contractors, "—", false, d.Errors)
 				@TextField("technician", "الفني", d.V.Technician, false, d.Errors, templ.Attributes{"maxlength": "80"})
@@ -269,8 +286,9 @@ templ WorkOrderShow(d WOShowData) {
 						<span class="block text-xs text-ink-80 font-normal">{ d.WO.Location }</span>
 					}
 				}
-				@Fact("النظام") {
+				@Fact("المنظومة") {
 					{ d.WO.SystemName }
+					<span class="block text-xs text-ink-80 font-normal">{ "مجموعة الأصل: " + d.WO.AssetGroupName }</span>
 				}
 				@Fact("الأصل / المعدة") {
 					{ orDash(d.WO.Asset) }

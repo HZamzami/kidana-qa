@@ -17,6 +17,7 @@ type InspectionRow struct {
 	Type           string // PM | WO
 	Site           string
 	System         string
+	AssetGroup     string
 	Contractor     string
 	Asset          string
 	DelayDays      *int // work order actual − planned
@@ -37,7 +38,7 @@ type FindingStats struct {
 	Open, Overdue, OpenCritical int
 }
 
-// Group is a per-site / per-contractor / per-system aggregate.
+// Group is a per-site / per-contractor / per-system / per-asset-group aggregate.
 type Group struct {
 	Name     string
 	Count    int
@@ -67,18 +68,18 @@ type GradeCount struct {
 type Summary struct {
 	Total, DuringCount, AfterCount int
 	AvgScore, AvgDuring, AvgAfter  *float64
-	PassCount, FailCount    int
-	PassRate                *float64
-	CriticalFails           int
-	WorkOrders              int
-	OnTimeRate, AvgDelay    *float64
-	LateCount               int
-	Findings                FindingStats
-	BySite, ByContractor    []Group
-	BySystem                []Group
-	Criteria                []CriterionStat
-	Grades                  []GradeCount
-	RepeatFailAssets        []AssetFails
+	PassCount, FailCount           int
+	PassRate                       *float64
+	CriticalFails                  int
+	WorkOrders                     int
+	OnTimeRate, AvgDelay           *float64
+	LateCount                      int
+	Findings                       FindingStats
+	BySite, ByContractor           []Group
+	BySystem, ByAssetGroup         []Group
+	Criteria                       []CriterionStat
+	Grades                         []GradeCount
+	RepeatFailAssets               []AssetFails
 }
 
 // AssetFails counts failed inspections on one asset.
@@ -149,6 +150,7 @@ func Summarize(rows []InspectionRow, items []ItemRow, fs FindingStats) Summary {
 	S.BySite = groupBy(rows, func(r InspectionRow) string { return r.Site })
 	S.ByContractor = groupBy(rows, func(r InspectionRow) string { return r.Contractor })
 	S.BySystem = groupBy(rows, func(r InspectionRow) string { return r.System })
+	S.ByAssetGroup = groupBy(rows, func(r InspectionRow) string { return r.AssetGroup })
 	S.Criteria = criteriaStats(items)
 
 	for _, g := range Grades {

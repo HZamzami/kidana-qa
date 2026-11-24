@@ -8,56 +8,49 @@ import (
 	"github.com/HZamzami/kidana-quality/internal/views"
 )
 
-// lookupOptions loads the select options for sites, systems and contractors.
-// activeOnly is used by forms; filters also show inactive values.
-func (s *Server) lookupOptions(ctx context.Context, activeOnly bool) (sites, systems, contractors []views.Option, err error) {
-	if activeOnly {
-		ss, err := s.q.ListActiveSites(ctx)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		for _, x := range ss {
-			sites = append(sites, views.Option{Value: idStr(x.ID), Label: x.Name})
-		}
-		sy, err := s.q.ListActiveSystems(ctx)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		for _, x := range sy {
-			systems = append(systems, views.Option{Value: idStr(x.ID), Label: x.Name})
-		}
-		cs, err := s.q.ListActiveContractors(ctx)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		for _, x := range cs {
-			contractors = append(contractors, views.Option{Value: idStr(x.ID), Label: x.Name})
-		}
-		return sites, systems, contractors, nil
-	}
+// lookupSet holds the select options for the admin-managed lists.
+type lookupSet struct {
+	Sites, Systems, AssetGroups, Contractors []views.Option
+}
 
-	ss, err := s.q.ListSites(ctx)
+// lookupOptions loads the select options for sites, systems, asset groups and
+// contractors. activeOnly is used by forms; filters also show inactive values.
+func (s *Server) lookupOptions(ctx context.Context, activeOnly bool) (lookupSet, error) {
+	var l lookupSet
+	opt := func(id int64, name string) views.Option { return views.Option{Value: idStr(id), Label: name} }
+	sites, systems, groups, contractors := s.q.ListSites, s.q.ListSystems, s.q.ListAssetGroups, s.q.ListContractors
+	if activeOnly {
+		sites, systems, groups, contractors = s.q.ListActiveSites, s.q.ListActiveSystems, s.q.ListActiveAssetGroups, s.q.ListActiveContractors
+	}
+	ss, err := sites(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return l, err
 	}
 	for _, x := range ss {
-		sites = append(sites, views.Option{Value: idStr(x.ID), Label: x.Name})
+		l.Sites = append(l.Sites, opt(x.ID, x.Name))
 	}
-	sy, err := s.q.ListSystems(ctx)
+	sy, err := systems(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return l, err
 	}
 	for _, x := range sy {
-		systems = append(systems, views.Option{Value: idStr(x.ID), Label: x.Name})
+		l.Systems = append(l.Systems, opt(x.ID, x.Name))
 	}
-	cs, err := s.q.ListContractors(ctx)
+	ag, err := groups(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return l, err
+	}
+	for _, x := range ag {
+		l.AssetGroups = append(l.AssetGroups, opt(x.ID, x.Name))
+	}
+	cs, err := contractors(ctx)
+	if err != nil {
+		return l, err
 	}
 	for _, x := range cs {
-		contractors = append(contractors, views.Option{Value: idStr(x.ID), Label: x.Name})
+		l.Contractors = append(l.Contractors, opt(x.ID, x.Name))
 	}
-	return sites, systems, contractors, nil
+	return l, nil
 }
 
 func priorityOptions() []views.Option {

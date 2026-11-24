@@ -29,9 +29,13 @@ func (s *Server) workOrdersList(w http.ResponseWriter, r *http.Request) {
 	if st := gen.WoStatus(q.Get("status")); st.Valid() {
 		status = &st
 	}
+	var priority *gen.WoPriority
+	if p := gen.WoPriority(q.Get("priority")); p.Valid() {
+		priority = &p
+	}
 	filter := gen.CountWorkOrdersParams{
-		SiteID: queryID(r, "site"), SystemID: queryID(r, "system"), ContractorID: queryID(r, "contractor"),
-		Type: typ, Status: status, Q: queryStr(r, "q"),
+		SiteID: queryID(r, "site"), SystemID: queryID(r, "system"), AssetGroupID: queryID(r, "group"), ContractorID: queryID(r, "contractor"),
+		Type: typ, Status: status, Priority: priority, Q: queryStr(r, "q"),
 	}
 	total, err := s.q.CountWorkOrders(ctx, filter)
 	if err != nil {
@@ -39,15 +43,15 @@ func (s *Server) workOrdersList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.q.ListWorkOrders(ctx, gen.ListWorkOrdersParams{
-		SiteID: filter.SiteID, SystemID: filter.SystemID, ContractorID: filter.ContractorID,
-		Type: filter.Type, Status: filter.Status, Q: filter.Q,
+		SiteID: filter.SiteID, SystemID: filter.SystemID, AssetGroupID: filter.AssetGroupID, ContractorID: filter.ContractorID,
+		Type: filter.Type, Status: filter.Status, Priority: filter.Priority, Q: filter.Q,
 		Lim: woPageSize, Off: int32((page - 1) * woPageSize), //nolint:gosec // bounded by page count
 	})
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	sites, systems, contractors, err := s.lookupOptions(ctx, false)
+	lk, err := s.lookupOptions(ctx, false)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -55,19 +59,19 @@ func (s *Server) workOrdersList(w http.ResponseWriter, r *http.Request) {
 	q.Del("page")
 	d := views.WOListData{
 		Rows: rows, Total: total, Page: page, PageSize: woPageSize, Query: q,
-		Sites: sites, Systems: systems, Contractors: contractors, Statuses: woStatusOptions(true),
+		Sites: lk.Sites, Systems: lk.Systems, AssetGroups: lk.AssetGroups, Contractors: lk.Contractors, Statuses: woStatusOptions(true), Priorities: priorityOptions(),
 	}
 	s.render(w, r, http.StatusOK, views.WorkOrdersPage(d))
 }
 
 func (s *Server) woFormData(r *http.Request, id int64, v views.WOFormValues, errs map[string]string) (views.WOFormData, error) {
-	sites, systems, contractors, err := s.lookupOptions(r.Context(), true)
+	lk, err := s.lookupOptions(r.Context(), true)
 	if err != nil {
 		return views.WOFormData{}, err
 	}
 	return views.WOFormData{
 		ID: id, V: v, Errors: errs,
-		Sites: sites, Systems: systems, Contractors: contractors,
+		Sites: lk.Sites, Systems: lk.Systems, AssetGroups: lk.AssetGroups, Contractors: lk.Contractors,
 		Priorities: priorityOptions(), Statuses: woStatusOptions(false),
 	}, nil
 }
@@ -84,7 +88,7 @@ func (s *Server) workOrderNew(w http.ResponseWriter, r *http.Request) {
 			s.dbError(w, r, err)
 			return
 		}
-		v = views.WOFormValues{Type: string(wo.Type), SiteID: idStr(wo.SiteID), SystemID: idStr(wo.SystemID)}
+		v = views.WOFormValues{Type: string(wo.Type), SiteID: idStr(wo.SiteID), SystemID: idStr(wo.SystemID), AssetGroupID: idStr(wo.AssetGroupID)}
 		if wo.ContractorID != nil {
 			v.ContractorID = idStr(*wo.ContractorID)
 		}
@@ -105,7 +109,7 @@ func (s *Server) workOrderNew(w http.ResponseWriter, r *http.Request) {
 type woInput struct {
 	Ref, Location, Asset, Technician, Description string
 	Type                                          gen.WoType
-	SiteID, SystemID                              int64
+	SiteID, SystemID, AssetGroupID                int64
 	ContractorID                                  *int64
 	Priority                                      gen.WoPriority
 	PlannedDate, ActualDate                       *time.Time
@@ -117,7 +121,7 @@ func (s *Server) parseWO(r *http.Request, id int64) (woInput, views.WOFormValues
 	f := newForm(r)
 	v := views.WOFormValues{
 		Ref: f.Str("ref"), Type: f.Str("type"), SiteID: f.Str("site_id"), Location: f.Str("location"),
-		SystemID: f.Str("system_id"), Asset: f.Str("asset"), ContractorID: f.Str("contractor_id"),
+		SystemID: f.Str("system_id"), AssetGroupID: f.Str("asset_group_id"), Asset: f.Str("asset"), ContractorID: f.Str("contractor_id"),
 		Technician: f.Str("technician"), Priority: f.Str("priority"), Description: f.Str("description"),
 		PlannedDate: f.Str("planned_date"), ActualDate: f.Str("actual_date"), Status: f.Str("status"),
 	}
@@ -128,7 +132,8 @@ func (s *Server) parseWO(r *http.Request, id int64) (woInput, views.WOFormValues
 		Technician:   v.Technician,
 		Description:  v.Description,
 		SiteID:       f.ReqID("site_id", "الموقع"),
-		SystemID:     f.ReqID("system_id", "النظام"),
+		SystemID:     f.ReqID("system_id", "المنظومة"),
+		AssetGroupID: f.ReqID("asset_group_id", "مجموعة الأصل"),
 		ContractorID: f.OptID("contractor_id"),
 		PlannedDate:  f.OptDate("planned_date"),
 		ActualDate:   f.OptDate("actual_date"),
@@ -180,7 +185,7 @@ func (s *Server) workOrderCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	wo, err := s.q.CreateWorkOrder(ctx, gen.CreateWorkOrderParams{
-		Ref: in.Ref, Type: in.Type, SiteID: in.SiteID, Location: in.Location, SystemID: in.SystemID,
+		Ref: in.Ref, Type: in.Type, SiteID: in.SiteID, Location: in.Location, SystemID: in.SystemID, AssetGroupID: in.AssetGroupID,
 		Asset: in.Asset, ContractorID: in.ContractorID, Technician: in.Technician, Priority: in.Priority,
 		Description: in.Description, PlannedDate: in.PlannedDate, ActualDate: in.ActualDate, CreatedBy: currentUserID(ctx),
 	})
@@ -191,7 +196,7 @@ func (s *Server) workOrderCreate(w http.ResponseWriter, r *http.Request) {
 	s.audit(ctx, s.q, "work_order", wo.ID, "created", map[string]any{"ref": wo.Ref})
 	s.flash(ctx, "تم إنشاء أمر العمل "+wo.Ref, "ok")
 	if r.PostFormValue("next") == "new" {
-		// "save and add another": keep type, site, system and contractor
+		// "save and add another": keep type, site, system, asset group and contractor
 		http.Redirect(w, r, "/work-orders/new?keep=ctx&from="+idStr(wo.ID), http.StatusSeeOther)
 		return
 	}
@@ -238,7 +243,7 @@ func (s *Server) workOrderEdit(w http.ResponseWriter, r *http.Request) {
 	}
 	v := views.WOFormValues{
 		Ref: wo.Ref, Type: string(wo.Type), SiteID: idStr(wo.SiteID), Location: wo.Location,
-		SystemID: idStr(wo.SystemID), Asset: wo.Asset, Technician: wo.Technician,
+		SystemID: idStr(wo.SystemID), AssetGroupID: idStr(wo.AssetGroupID), Asset: wo.Asset, Technician: wo.Technician,
 		Priority: string(wo.Priority), Description: wo.Description, Status: string(wo.Status),
 		PlannedDate: fmtDate(wo.PlannedDate), ActualDate: fmtDate(wo.ActualDate),
 	}
@@ -281,7 +286,7 @@ func (s *Server) workOrderUpdate(w http.ResponseWriter, r *http.Request) {
 	err = db.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		wo, err := q.UpdateWorkOrder(ctx, gen.UpdateWorkOrderParams{
-			ID: id, Ref: in.Ref, Type: in.Type, SiteID: in.SiteID, Location: in.Location, SystemID: in.SystemID,
+			ID: id, Ref: in.Ref, Type: in.Type, SiteID: in.SiteID, Location: in.Location, SystemID: in.SystemID, AssetGroupID: in.AssetGroupID,
 			Asset: in.Asset, ContractorID: in.ContractorID, Technician: in.Technician, Priority: in.Priority,
 			Description: in.Description, PlannedDate: in.PlannedDate, ActualDate: in.ActualDate, Status: in.Status,
 		})

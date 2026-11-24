@@ -9,6 +9,27 @@ import (
 	"context"
 )
 
+const createAssetGroup = `-- name: CreateAssetGroup :one
+INSERT INTO asset_groups (name, sort) VALUES ($1, $2) RETURNING id, name, active, sort
+`
+
+type CreateAssetGroupParams struct {
+	Name string
+	Sort int32
+}
+
+func (q *Queries) CreateAssetGroup(ctx context.Context, arg CreateAssetGroupParams) (AssetGroup, error) {
+	row := q.db.QueryRow(ctx, createAssetGroup, arg.Name, arg.Sort)
+	var i AssetGroup
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Active,
+		&i.Sort,
+	)
+	return i, err
+}
+
 const createContractor = `-- name: CreateContractor :one
 INSERT INTO contractors (name, contact_name, phone) VALUES ($1, $2, $3) RETURNING id, name, contact_name, phone, active
 `
@@ -74,6 +95,22 @@ func (q *Queries) CreateSystem(ctx context.Context, arg CreateSystemParams) (Sys
 	return i, err
 }
 
+const getAssetGroupByName = `-- name: GetAssetGroupByName :one
+SELECT id, name, active, sort FROM asset_groups WHERE name = $1
+`
+
+func (q *Queries) GetAssetGroupByName(ctx context.Context, name string) (AssetGroup, error) {
+	row := q.db.QueryRow(ctx, getAssetGroupByName, name)
+	var i AssetGroup
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Active,
+		&i.Sort,
+	)
+	return i, err
+}
+
 const getContractorByName = `-- name: GetContractorByName :one
 SELECT id, name, contact_name, phone, active FROM contractors WHERE name = $1
 `
@@ -121,6 +158,35 @@ func (q *Queries) GetSystemByName(ctx context.Context, name string) (System, err
 		&i.Sort,
 	)
 	return i, err
+}
+
+const listActiveAssetGroups = `-- name: ListActiveAssetGroups :many
+SELECT id, name, active, sort FROM asset_groups WHERE active ORDER BY sort, name
+`
+
+func (q *Queries) ListActiveAssetGroups(ctx context.Context) ([]AssetGroup, error) {
+	rows, err := q.db.Query(ctx, listActiveAssetGroups)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AssetGroup{}
+	for rows.Next() {
+		var i AssetGroup
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Active,
+			&i.Sort,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listActiveContractors = `-- name: ListActiveContractors :many
@@ -195,6 +261,36 @@ func (q *Queries) ListActiveSystems(ctx context.Context) ([]System, error) {
 	items := []System{}
 	for rows.Next() {
 		var i System
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Active,
+			&i.Sort,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAssetGroups = `-- name: ListAssetGroups :many
+SELECT id, name, active, sort FROM asset_groups ORDER BY active DESC, sort, name
+`
+
+// ---------------------------------------------------------------- asset_groups
+func (q *Queries) ListAssetGroups(ctx context.Context) ([]AssetGroup, error) {
+	rows, err := q.db.Query(ctx, listAssetGroups)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AssetGroup{}
+	for rows.Next() {
+		var i AssetGroup
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -300,6 +396,34 @@ func (q *Queries) ListSystems(ctx context.Context) ([]System, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateAssetGroup = `-- name: UpdateAssetGroup :one
+UPDATE asset_groups SET name = $2, sort = $3, active = $4 WHERE id = $1 RETURNING id, name, active, sort
+`
+
+type UpdateAssetGroupParams struct {
+	ID     int64
+	Name   string
+	Sort   int32
+	Active bool
+}
+
+func (q *Queries) UpdateAssetGroup(ctx context.Context, arg UpdateAssetGroupParams) (AssetGroup, error) {
+	row := q.db.QueryRow(ctx, updateAssetGroup,
+		arg.ID,
+		arg.Name,
+		arg.Sort,
+		arg.Active,
+	)
+	var i AssetGroup
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Active,
+		&i.Sort,
+	)
+	return i, err
 }
 
 const updateContractor = `-- name: UpdateContractor :one

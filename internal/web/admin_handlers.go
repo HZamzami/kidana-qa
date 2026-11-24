@@ -24,7 +24,7 @@ func (s *Server) adminHome(w http.ResponseWriter, r *http.Request) {
 
 // ---------------------------------------------------------------- lookups
 
-var lookupTitles = map[string]string{"sites": "المواقع", "systems": "الأنظمة", "contractors": "المقاولون"}
+var lookupTitles = map[string]string{"sites": "المواقع", "systems": "المنظومات", "asset-groups": "مجموعات الأصول", "contractors": "المقاولون"}
 
 func (s *Server) lookupData(r *http.Request, kind string) (views.LookupData, error) {
 	ctx := r.Context()
@@ -40,6 +40,14 @@ func (s *Server) lookupData(r *http.Request, kind string) (views.LookupData, err
 		}
 	case "systems":
 		rows, err := s.q.ListSystems(ctx)
+		if err != nil {
+			return d, err
+		}
+		for _, x := range rows {
+			d.Rows = append(d.Rows, views.LookupRow{ID: x.ID, Name: x.Name, Sort: x.Sort, Active: x.Active})
+		}
+	case "asset-groups":
+		rows, err := s.q.ListAssetGroups(ctx)
 		if err != nil {
 			return d, err
 		}
@@ -95,6 +103,10 @@ func (s *Server) lookupCreate(w http.ResponseWriter, r *http.Request) {
 			var x gen.System
 			x, err = s.q.CreateSystem(ctx, gen.CreateSystemParams{Name: name, Sort: sort})
 			id = x.ID
+		case "asset-groups":
+			var x gen.AssetGroup
+			x, err = s.q.CreateAssetGroup(ctx, gen.CreateAssetGroupParams{Name: name, Sort: sort})
+			id = x.ID
 		case "contractors":
 			var x gen.Contractor
 			x, err = s.q.CreateContractor(ctx, gen.CreateContractorParams{Name: name, ContactName: f.Str("contact_name"), Phone: f.Str("phone")})
@@ -147,6 +159,8 @@ func (s *Server) lookupUpdate(w http.ResponseWriter, r *http.Request) {
 		_, err = s.q.UpdateSite(ctx, gen.UpdateSiteParams{ID: id, Name: name, Sort: sort, Active: active})
 	case "systems":
 		_, err = s.q.UpdateSystem(ctx, gen.UpdateSystemParams{ID: id, Name: name, Sort: sort, Active: active})
+	case "asset-groups":
+		_, err = s.q.UpdateAssetGroup(ctx, gen.UpdateAssetGroupParams{ID: id, Name: name, Sort: sort, Active: active})
 	case "contractors":
 		_, err = s.q.UpdateContractor(ctx, gen.UpdateContractorParams{ID: id, Name: name, ContactName: f.Str("contact_name"), Phone: f.Str("phone"), Active: active})
 	}

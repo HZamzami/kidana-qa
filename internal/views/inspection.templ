@@ -71,7 +71,6 @@ templ InspectionPage(d InspectionData) {
 }
 
 // ---------------------------------------------------------------- editable flow (phone first)
-
 templ inspectionFlow(d InspectionData) {
 	<div class="mx-auto max-w-2xl" x-data="inspection" data-criteria={ d.CriteriaJSON }>
 		<div class="sticky top-0 z-20 -mx-4 sm:mx-0 px-4 sm:px-0 pt-2 pb-3 bg-ink-5/95 backdrop-blur">
@@ -84,7 +83,7 @@ templ inspectionFlow(d InspectionData) {
 							@StagePill(string(d.I.Stage))
 						</div>
 						<div class="text-xs text-ink-80 truncate">
-							{ d.WO.SiteName } · { d.WO.SystemName }
+							{ d.WO.SiteName } · { d.WO.SystemName } · { d.WO.AssetGroupName }
 							if d.WO.Asset != "" {
 								{ " · " + d.WO.Asset }
 							}
@@ -430,7 +429,6 @@ templ RatingPill(r string) {
 }
 
 // ---------------------------------------------------------------- read-only summary
-
 templ inspectionSummary(d InspectionData) {
 	<div class="mb-4 text-sm">
 		<a href="/work-orders" class="text-ink-80 hover:text-ink">أوامر العمل</a>

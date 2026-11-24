@@ -36,7 +36,7 @@ templ DataPage(out *ImportOutcome) {
 				<section class="card p-5 lg:col-span-2">
 					<h2 class="font-semibold">استيراد من Excel</h2>
 					<p class="text-sm text-ink-80 mt-1 mb-4">أدخل أوامر العمل دفعة واحدة من نظام إدارة الصيانة: نزّل القالب، عبّئه، ثم استورده. أوامر العمل الموجودة مسبقاً تُتجاهل.</p>
-				<form method="post" action="/data/import" enctype="multipart/form-data" class="flex flex-wrap items-end gap-3">
+					<form method="post" action="/data/import" enctype="multipart/form-data" class="flex flex-wrap items-end gap-3">
 						<div class="flex-1 min-w-56">
 							<label class="label" for="import_file">ملف ‎.xlsx</label>
 							<input class="input py-1.5" type="file" id="import_file" name="file" accept=".xlsx" required/>
@@ -81,10 +81,10 @@ templ DataPage(out *ImportOutcome) {
 // ---------------------------------------------------------------- printable report
 
 type ReportRow struct {
-	Ref, Stage, Date, Hijri, Site, System, Contractor, Inspector string
-	Attempt                                                      int
-	Score                                                        float64
-	Passed                                                       bool
+	Ref, Stage, Date, Hijri, Site, System, AssetGroup, Contractor, Inspector string
+	Attempt                                                                  int
+	Score                                                                    float64
+	Passed                                                                   bool
 }
 
 type ReportData struct {
@@ -148,6 +148,8 @@ templ ReportPrint(d ReportData) {
 			<div class="mt-5 grid grid-cols-2 gap-4">
 				@reportGroup("الأداء حسب الموقع", d.S.BySite)
 				@reportGroup("الأداء حسب المقاول", d.S.ByContractor)
+				@reportGroup("الأداء حسب المنظومة", d.S.BySystem)
+				@reportGroup("الأداء حسب مجموعة الأصل", d.S.ByAssetGroup)
 			</div>
 			<h2 class="mt-5 mb-2 font-semibold text-sm">نسبة المطابقة لكل معيار</h2>
 			<table class="w-full border-collapse">
@@ -170,9 +172,14 @@ templ ReportPrint(d ReportData) {
 				<table class="w-full border-collapse">
 					<thead>
 						<tr class="bg-ink text-white">
-							<th class="p-1.5 text-start">أمر العمل</th><th class="p-1.5 text-start">الموقع</th><th class="p-1.5 text-start">المعيار</th>
-							<th class="p-1.5 text-start">الملاحظة</th><th class="p-1.5 text-start">الإجراء التصحيحي</th><th class="p-1.5 text-start">المسؤول</th>
-							<th class="p-1.5">الإغلاق المستهدف</th><th class="p-1.5">الحالة</th>
+							<th class="p-1.5 text-start">أمر العمل</th>
+							<th class="p-1.5 text-start">الموقع</th>
+							<th class="p-1.5 text-start">المعيار</th>
+							<th class="p-1.5 text-start">الملاحظة</th>
+							<th class="p-1.5 text-start">الإجراء التصحيحي</th>
+							<th class="p-1.5 text-start">المسؤول</th>
+							<th class="p-1.5">الإغلاق المستهدف</th>
+							<th class="p-1.5">الحالة</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -218,7 +225,7 @@ templ ReportPrint(d ReportData) {
 						<th class="p-1.5">المرحلة</th>
 						<th class="p-1.5">التاريخ</th>
 						<th class="p-1.5">الموقع</th>
-						<th class="p-1.5">النظام</th>
+						<th class="p-1.5">المنظومة / مجموعة الأصل</th>
 						<th class="p-1.5">المقاول</th>
 						<th class="p-1.5">المدقق</th>
 						<th class="p-1.5">النتيجة</th>
@@ -239,7 +246,10 @@ templ ReportPrint(d ReportData) {
 								<span class="block text-[10px] text-ink-60">{ r.Hijri }</span>
 							</td>
 							<td class="p-1.5">{ r.Site }</td>
-							<td class="p-1.5">{ r.System }</td>
+							<td class="p-1.5">
+								{ r.System }
+								<span class="block text-[10px] text-ink-60">{ r.AssetGroup }</span>
+							</td>
 							<td class="p-1.5">{ orDash(r.Contractor) }</td>
 							<td class="p-1.5">{ r.Inspector }</td>
 							<td class={ "p-1.5 text-center num", templ.KV("bg-green-20", r.Passed), templ.KV("bg-fail-20", !r.Passed) }>{ scoreVal(r.Score) }</td>

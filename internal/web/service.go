@@ -15,11 +15,11 @@ func (s *Server) refreshWorkOrderStatus(ctx context.Context, q *gen.Queries, woI
 		return err
 	}
 	next := domain.NextWOStatus(domain.AcceptanceInput{
-		Current:          domain.WOStatus(f.Status),
-		HasSubmittedAfter:   f.HasSubmittedAfter,
-		LatestAfterPassed:   f.LatestAfterPassed,
-		OpenFindings:     int(f.OpenFindings),
-		HasSubmittedWork: f.HasSubmitted,
+		Current:           domain.WOStatus(f.Status),
+		HasSubmittedAfter: f.HasSubmittedAfter,
+		LatestAfterPassed: f.LatestAfterPassed,
+		OpenFindings:      int(f.OpenFindings),
+		HasSubmittedWork:  f.HasSubmitted,
 	})
 	if string(next) == string(f.Status) {
 		return nil

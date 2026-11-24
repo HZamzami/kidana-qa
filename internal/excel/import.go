@@ -25,10 +25,10 @@ const (
 
 // WorkOrderRow is one row of the work order template.
 type WorkOrderRow struct {
-	Row                                                  int
-	Ref, Type, Site, Location, System, Asset, Contractor string
-	Technician, Priority, Description                    string
-	PlannedDate, ActualDate                              *time.Time
+	Row                                                              int
+	Ref, Type, Site, Location, System, AssetGroup, Asset, Contractor string
+	Technician, Priority, Description                                string
+	PlannedDate, ActualDate                                          *time.Time
 }
 
 // Result of parsing a workbook.
@@ -66,7 +66,7 @@ func Parse(r io.Reader) (*Result, error) {
 		// Look for the header row in the first 10 rows.
 		for hr := 0; hr < len(rows) && hr < 10; hr++ {
 			h := newHeader(rows[hr])
-			if h.find("رقم أمر العمل") >= 0 && h.find("الموقع") >= 0 && h.find("النظام") >= 0 {
+			if h.find("رقم أمر العمل") >= 0 && h.find("الموقع") >= 0 && h.find("مجموعة الأصل") >= 0 {
 				res := &Result{Kind: KindWorkOrders, Sheet: name}
 				parseWorkOrders(res, h, rows[hr+1:], hr+2)
 				return res, nil
@@ -88,7 +88,7 @@ func emptyRow(row []string) bool {
 func parseWorkOrders(res *Result, h header, rows [][]string, firstRow int) {
 	col := map[string]int{
 		"ref": h.find("رقم أمر العمل"), "type": h.find("النوع"), "site": h.find("الموقع"),
-		"location": h.find("الموقع التفصيلي"), "system": h.find("النظام"), "asset": h.find("الأصل / المعدة", "الأصل"),
+		"location": h.find("الموقع التفصيلي"), "system": h.find("المنظومة"), "group": h.find("مجموعة الأصل"), "asset": h.find("الأصل / المعدة", "الأصل"),
 		"contractor": h.find("المقاول"), "technician": h.find("الفني"), "priority": h.find("الأولوية"),
 		"planned": h.find("التاريخ المجدول"), "actual": h.find("تاريخ التنفيذ الفعلي"), "desc": h.find("وصف العمل"),
 	}
@@ -103,7 +103,7 @@ func parseWorkOrders(res *Result, h header, rows [][]string, firstRow int) {
 		}
 		w := WorkOrderRow{
 			Row: n, Ref: cell(row, col["ref"]), Site: cell(row, col["site"]), Location: cell(row, col["location"]),
-			System: cell(row, col["system"]), Asset: cell(row, col["asset"]), Contractor: cell(row, col["contractor"]),
+			System: cell(row, col["system"]), AssetGroup: cell(row, col["group"]), Asset: cell(row, col["asset"]), Contractor: cell(row, col["contractor"]),
 			Technician: cell(row, col["technician"]), Description: cell(row, col["desc"]),
 		}
 		var missing []string
@@ -114,7 +114,10 @@ func parseWorkOrders(res *Result, h header, rows [][]string, firstRow int) {
 			missing = append(missing, "الموقع")
 		}
 		if w.System == "" {
-			missing = append(missing, "النظام")
+			missing = append(missing, "المنظومة")
+		}
+		if w.AssetGroup == "" {
+			missing = append(missing, "مجموعة الأصل")
 		}
 		t, ok := ParseType(cell(row, col["type"]))
 		if !ok || t == "" {

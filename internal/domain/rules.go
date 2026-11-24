@@ -7,7 +7,7 @@ type Stage string
 
 const (
 	StageDuring Stage = "during" // during the work: how the contractor works
-	StageAfter Stage = "after" // after the work: is the result correct
+	StageAfter  Stage = "after"  // after the work: is the result correct
 )
 
 func (s Stage) Valid() bool { return s == StageDuring || s == StageAfter }
@@ -60,11 +60,11 @@ var ManualWOStatuses = []WOStatus{WOOpen, WOInProgress, WOCompleted, WOCancelled
 
 // AcceptanceInput summarises what NextWOStatus needs to know about a work order.
 type AcceptanceInput struct {
-	Current          WOStatus
-	HasSubmittedAfter   bool
-	LatestAfterPassed   bool // result of the most recent submitted after-work attempt
-	OpenFindings     int
-	HasSubmittedWork bool // any submitted inspection (during or after)
+	Current           WOStatus
+	HasSubmittedAfter bool
+	LatestAfterPassed bool // result of the most recent submitted after-work attempt
+	OpenFindings      int
+	HasSubmittedWork  bool // any submitted inspection (during or after)
 }
 
 // NextWOStatus applies the acceptance rule: a work order is accepted when its

@@ -31,7 +31,17 @@ CREATE TABLE sites (
     sort   integer NOT NULL DEFAULT 0
 );
 
+-- المنظومة: the building service a work order belongs to (HVAC, electrical…)
 CREATE TABLE systems (
+    id     bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name   text    NOT NULL UNIQUE,
+    active boolean NOT NULL DEFAULT true,
+    sort   integer NOT NULL DEFAULT 0
+);
+
+-- مجموعة الأصل: the kind of equipment (chillers, pumps, panels…). Kept
+-- independent of systems so admins can organise both lists freely.
+CREATE TABLE asset_groups (
     id     bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name   text    NOT NULL UNIQUE,
     active boolean NOT NULL DEFAULT true,
@@ -58,7 +68,8 @@ CREATE TABLE work_orders (
     type          wo_type     NOT NULL,
     site_id       bigint      NOT NULL REFERENCES sites (id),
     location      text        NOT NULL DEFAULT '',   -- building / floor / room
-    system_id     bigint      NOT NULL REFERENCES systems (id),
+    system_id      bigint      NOT NULL REFERENCES systems (id),
+    asset_group_id bigint      NOT NULL REFERENCES asset_groups (id),
     asset         text        NOT NULL DEFAULT '',
     contractor_id bigint      REFERENCES contractors (id),
     technician    text        NOT NULL DEFAULT '',
@@ -73,6 +84,8 @@ CREATE TABLE work_orders (
 );
 CREATE UNIQUE INDEX work_orders_ref_uq ON work_orders (lower(ref));
 CREATE INDEX work_orders_site_idx       ON work_orders (site_id);
+CREATE INDEX work_orders_system_idx     ON work_orders (system_id);
+CREATE INDEX work_orders_asset_group_idx ON work_orders (asset_group_id);
 CREATE INDEX work_orders_contractor_idx ON work_orders (contractor_id);
 CREATE INDEX work_orders_status_idx     ON work_orders (status);
 
@@ -194,6 +207,6 @@ CREATE INDEX audit_log_entity_idx ON audit_log (entity, entity_id);
 -- +goose Down
 DROP TABLE audit_log, attachments, findings, inspection_items, inspections,
            template_criteria, checklist_templates, work_orders, contractors,
-           systems, sites, sessions, users;
+           asset_groups, systems, sites, sessions, users;
 DROP TYPE finding_severity, finding_status, rating, inspection_status, inspection_stage,
           wo_status, wo_priority, wo_type, user_role;

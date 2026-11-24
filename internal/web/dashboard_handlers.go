@@ -19,11 +19,11 @@ type reportScope struct {
 func parseScope(r *http.Request) reportScope {
 	q := r.URL.Query()
 	sc := reportScope{F: views.DashFilters{
-		Stage: q.Get("stage"), Type: q.Get("type"), Site: q.Get("site"), System: q.Get("system"),
+		Stage: q.Get("stage"), Type: q.Get("type"), Site: q.Get("site"), System: q.Get("system"), AssetGroup: q.Get("group"),
 		Contractor: q.Get("contractor"), From: q.Get("from"), To: q.Get("to"), Result: q.Get("result"),
 	}}
 	p := gen.ListSubmittedInspectionsParams{
-		SiteID: queryID(r, "site"), SystemID: queryID(r, "system"), ContractorID: queryID(r, "contractor"),
+		SiteID: queryID(r, "site"), SystemID: queryID(r, "system"), AssetGroupID: queryID(r, "group"), ContractorID: queryID(r, "contractor"),
 		DateFrom: queryDate(r, "from"), DateTo: queryDate(r, "to"),
 	}
 	if st := gen.InspectionStage(sc.F.Stage); st.Valid() {
@@ -50,7 +50,7 @@ func parseScope(r *http.Request) reportScope {
 func (sc reportScope) query() string {
 	v := url.Values{}
 	for k, val := range map[string]string{
-		"stage": sc.F.Stage, "type": sc.F.Type, "site": sc.F.Site, "system": sc.F.System,
+		"stage": sc.F.Stage, "type": sc.F.Type, "site": sc.F.Site, "system": sc.F.System, "group": sc.F.AssetGroup,
 		"contractor": sc.F.Contractor, "from": sc.F.From, "to": sc.F.To, "result": sc.F.Result,
 	} {
 		if val != "" {
@@ -79,7 +79,7 @@ func (s *Server) loadReport(ctx context.Context, sc reportScope) (reportData, er
 		ids[i] = r.ID
 		ir := domain.InspectionRow{
 			ID: r.ID, WorkOrderID: r.WorkOrderID, Stage: domain.Stage(r.Stage), CriticalFailed: r.CriticalFailed,
-			Type: string(r.Type), Site: r.SiteName, System: r.SystemName, Contractor: r.ContractorName, Asset: r.Asset,
+			Type: string(r.Type), Site: r.SiteName, System: r.SystemName, AssetGroup: r.AssetGroupName, Contractor: r.ContractorName, Asset: r.Asset,
 		}
 		if r.Score != nil {
 			ir.Score = *r.Score
@@ -107,7 +107,7 @@ func (s *Server) loadReport(ctx context.Context, sc reportScope) (reportData, er
 		})
 	}
 	fs, err := s.q.FindingStats(ctx, gen.FindingStatsParams{
-		SiteID: sc.Params.SiteID, SystemID: sc.Params.SystemID, ContractorID: sc.Params.ContractorID, Type: sc.Params.Type,
+		SiteID: sc.Params.SiteID, SystemID: sc.Params.SystemID, AssetGroupID: sc.Params.AssetGroupID, ContractorID: sc.Params.ContractorID, Type: sc.Params.Type,
 	})
 	if err != nil {
 		return d, err
@@ -127,13 +127,13 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	sites, systems, contractors, err := s.lookupOptions(ctx, false)
+	lk, err := s.lookupOptions(ctx, false)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
 	s.render(w, r, http.StatusOK, views.Dashboard(views.DashboardData{
 		S: rep.Summary, Insights: domain.Insights(rep.Summary), F: sc.F, Query: sc.query(),
-		Sites: sites, Systems: systems, Contractors: contractors,
+		Sites: lk.Sites, Systems: lk.Systems, AssetGroups: lk.AssetGroups, Contractors: lk.Contractors,
 	}))
 }

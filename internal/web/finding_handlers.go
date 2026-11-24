@@ -28,13 +28,13 @@ func (s *Server) findingsList(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	sites, _, contractors, err := s.lookupOptions(ctx, false)
+	lk, err := s.lookupOptions(ctx, false)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
 	s.render(w, r, http.StatusOK, views.FindingsPage(views.FindingsListData{
-		Rows: rows, Query: r.URL.Query(), Sites: sites, Contractors: contractors, Today: time.Now().Format(time.DateOnly),
+		Rows: rows, Query: r.URL.Query(), Sites: lk.Sites, Contractors: lk.Contractors, Today: time.Now().Format(time.DateOnly),
 	}))
 }
 

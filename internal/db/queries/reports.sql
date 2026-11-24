@@ -5,18 +5,20 @@ SELECT i.id, i.stage, i.attempt, i.inspected_on, i.score, i.passed, i.critical_f
        u.name AS inspector_name, t.name AS template_name,
        w.id AS work_order_id, w.ref, w.type, w.asset, w.location, w.technician, w.priority,
        w.planned_date, w.actual_date, w.status AS wo_status,
-       s.name AS site_name, sy.name AS system_name, COALESCE(c.name, '')::text AS contractor_name
+       s.name AS site_name, sy.name AS system_name, ag.name AS asset_group_name, COALESCE(c.name, '')::text AS contractor_name
 FROM inspections i
 JOIN work_orders w ON w.id = i.work_order_id
 JOIN users u ON u.id = i.inspector_id
 JOIN checklist_templates t ON t.id = i.template_id
 JOIN sites s ON s.id = w.site_id
 JOIN systems sy ON sy.id = w.system_id
+JOIN asset_groups ag ON ag.id = w.asset_group_id
 LEFT JOIN contractors c ON c.id = w.contractor_id
 WHERE i.status = 'submitted'
   AND (sqlc.narg(stage)::inspection_stage IS NULL OR i.stage = sqlc.narg(stage))
   AND (sqlc.narg(site_id)::bigint IS NULL OR w.site_id = sqlc.narg(site_id))
   AND (sqlc.narg(system_id)::bigint IS NULL OR w.system_id = sqlc.narg(system_id))
+  AND (sqlc.narg(asset_group_id)::bigint IS NULL OR w.asset_group_id = sqlc.narg(asset_group_id))
   AND (sqlc.narg(contractor_id)::bigint IS NULL OR w.contractor_id = sqlc.narg(contractor_id))
   AND (sqlc.narg(type)::wo_type IS NULL OR w.type = sqlc.narg(type))
   AND (sqlc.narg(date_from)::date IS NULL OR i.inspected_on >= sqlc.narg(date_from))
@@ -42,6 +44,7 @@ FROM findings f
 JOIN work_orders w ON w.id = f.work_order_id
 WHERE (sqlc.narg(site_id)::bigint IS NULL OR w.site_id = sqlc.narg(site_id))
   AND (sqlc.narg(system_id)::bigint IS NULL OR w.system_id = sqlc.narg(system_id))
+  AND (sqlc.narg(asset_group_id)::bigint IS NULL OR w.asset_group_id = sqlc.narg(asset_group_id))
   AND (sqlc.narg(contractor_id)::bigint IS NULL OR w.contractor_id = sqlc.narg(contractor_id))
   AND (sqlc.narg(type)::wo_type IS NULL OR w.type = sqlc.narg(type));
 
@@ -70,6 +73,7 @@ LEFT JOIN inspections i ON i.id = f.inspection_id
 WHERE f.status <> 'closed'
   AND (sqlc.narg(site_id)::bigint IS NULL OR w.site_id = sqlc.narg(site_id))
   AND (sqlc.narg(system_id)::bigint IS NULL OR w.system_id = sqlc.narg(system_id))
+  AND (sqlc.narg(asset_group_id)::bigint IS NULL OR w.asset_group_id = sqlc.narg(asset_group_id))
   AND (sqlc.narg(contractor_id)::bigint IS NULL OR w.contractor_id = sqlc.narg(contractor_id))
   AND (sqlc.narg(type)::wo_type IS NULL OR w.type = sqlc.narg(type))
 ORDER BY (f.severity = 'critical') DESC, f.due_date NULLS LAST, f.created_at;

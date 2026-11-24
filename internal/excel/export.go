@@ -26,15 +26,15 @@ const (
 
 // InspectionExport is one submitted inspection in the export.
 type InspectionExport struct {
-	Ref, Type, Site, System, Asset, Location, Contractor, Technician string
-	Stage, Template, Inspector                                       string
-	Attempt                                                          int
-	Date                                                             time.Time
-	Score                                                            float64
-	Passed, CriticalFailed                                           bool
-	DelayDays                                                        *int
-	Ratings                                                          map[string]domain.Rating // by criterion code
-	Notes                                                            string
+	Ref, Type, Site, System, AssetGroup, Asset, Location, Contractor, Technician string
+	Stage, Template, Inspector                                                   string
+	Attempt                                                                      int
+	Date                                                                         time.Time
+	Score                                                                        float64
+	Passed, CriticalFailed                                                       bool
+	DelayDays                                                                    *int
+	Ratings                                                                      map[string]domain.Rating // by criterion code
+	Notes                                                                        string
 }
 
 // CriterionColumn is one criterion column in the inspections sheet.
@@ -226,7 +226,8 @@ func summarySheet(f *excelize.File, st styles, scope string, S domain.Summary, i
 	}
 	group("الأداء حسب الموقع", S.BySite)
 	group("الأداء حسب المقاول", S.ByContractor)
-	group("الأداء حسب النظام", S.BySystem)
+	group("الأداء حسب المنظومة", S.BySystem)
+	group("الأداء حسب مجموعة الأصل", S.ByAssetGroup)
 
 	title("نسبة المطابقة لكل معيار")
 	setRow(f, sh, r, []any{"المعيار", "عدد التقييمات", "نسبة المطابقة %", "غير مطابق", "حرج"}, st.head)
@@ -273,7 +274,7 @@ func inspectionsSheet(f *excelize.File, st styles, rows []InspectionExport, crit
 	}
 	rtl := true
 	_ = f.SetSheetView(sh, 0, &excelize.ViewOptions{RightToLeft: &rtl})
-	headers := []string{"رقم أمر العمل", "النوع", "الموقع", "الموقع التفصيلي", "النظام", "الأصل / المعدة", "المقاول", "الفني",
+	headers := []string{"رقم أمر العمل", "النوع", "الموقع", "الموقع التفصيلي", "المنظومة", "مجموعة الأصل", "الأصل / المعدة", "المقاول", "الفني",
 		"المرحلة", "المحاولة", "تاريخ الفحص", "التاريخ الهجري", "المدقق", "قائمة الفحص", "النتيجة %", "التقدير", "الحالة", "بند حرج", "التأخير (يوم)", "ملاحظات"}
 	base := len(headers)
 	for _, c := range crits {
@@ -290,7 +291,7 @@ func inspectionsSheet(f *excelize.File, st styles, rows []InspectionExport, crit
 	}
 	_ = f.SetRowHeight(sh, 1, 34)
 	_ = f.SetColWidth(sh, "A", axisCol(len(headers)), 15)
-	_ = f.SetColWidth(sh, "T", "T", 40)
+	_ = f.SetColWidth(sh, "U", "U", 40) // notes
 
 	for i, r := range rows {
 		row := i + 2
@@ -306,7 +307,7 @@ func inspectionsSheet(f *excelize.File, st styles, rows []InspectionExport, crit
 		if r.DelayDays != nil {
 			delay = *r.DelayDays
 		}
-		vals := []any{r.Ref, domain.Label(domain.WOTypeLabels, r.Type), r.Site, r.Location, r.System, r.Asset, r.Contractor, r.Technician,
+		vals := []any{r.Ref, domain.Label(domain.WOTypeLabels, r.Type), r.Site, r.Location, r.System, r.AssetGroup, r.Asset, r.Contractor, r.Technician,
 			domain.Stage(r.Stage).Label(), r.Attempt, r.Date, dates.Hijri(r.Date), r.Inspector, r.Template, r.Score, domain.GradeFor(r.Score), result, critical, delay, r.Notes}
 		for _, c := range crits {
 			vals = append(vals, r.Ratings[c.Code].Label())
@@ -316,13 +317,13 @@ func inspectionsSheet(f *excelize.File, st styles, rows []InspectionExport, crit
 			_ = f.SetCellValue(sh, a, v)
 			style := st.text
 			switch {
-			case ci == 10:
+			case ci == 11:
 				style = st.date
-			case ci == 16 && r.Passed:
+			case ci == 17 && r.Passed:
 				style = st.pass
-			case ci == 16:
+			case ci == 17:
 				style = st.fail
-			case ci == 9 || ci == 14 || ci == 18:
+			case ci == 10 || ci == 15 || ci == 19:
 				style = st.num
 			}
 			_ = f.SetCellStyle(sh, a, a, style)
@@ -410,9 +411,9 @@ func boolPtr(b bool) *bool { return &b }
 func SortCriteria(cs []CriterionColumn) {
 	rank := func(code string) int {
 		switch {
-		case len(code) > 0 && code[0] == 'Q':
+		case len(code) > 0 && code[0] == 'D':
 			return 0
-		case len(code) > 0 && code[0] == 'C':
+		case len(code) > 0 && code[0] == 'A':
 			return 1
 		}
 		return 2
