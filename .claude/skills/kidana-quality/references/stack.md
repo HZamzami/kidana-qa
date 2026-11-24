@@ -64,3 +64,13 @@ See `docs/ARCHITECTURE.md`. Key entry points:
 - `docker compose -f compose.prod.yaml --env-file .env.prod up -d --build` runs a distroless nonroot image with embedded assets and migrations applied on start.
 - A nightly `pg_dump` goes to `./backups` with 14 days kept. Back up the `uploads` volume too.
 - Put a TLS reverse proxy in front and set `SESSION_SECURE=true`. If you add one, extend `clientIP` to trust X-Forwarded-For from that proxy only.
+
+## Added infrastructure
+
+- **Language**: `internal/i18n` (catalog), `appctx.Lang`; middleware `requestLang` (cookie `lang`, then `users.lang`).
+- **Scheduler**: `web.RunScheduler` started from `cmd/server` (hourly reminders, monthly report run).
+- **PWA / offline**: `/sw.js` and `/manifest.webmanifest` are served from the root by `pwa_handlers.go`; bump `VERSION` in `web/static/sw.js` when the shell changes. `Permissions-Policy` allows geolocation and camera for self.
+- **Auth**: TOTP (`github.com/pquerna/otp`), OIDC (`github.com/coreos/go-oidc/v3`, `golang.org/x/oauth2`) configured by `OIDC_*` env vars; `users.session_version` signs out other sessions on password change.
+- **QR**: `github.com/boombuler/barcode`.
+- **API**: `/api/v1` on the root mux (outside sessions), `requireAPIToken` (hashed tokens in `api_tokens`).
+- **Seeder gotcha**: never `TRUNCATE … CASCADE` core tables — `users` references `contractors`, and a cascade empties users and checklists. `just seed -reset` deletes selectively.

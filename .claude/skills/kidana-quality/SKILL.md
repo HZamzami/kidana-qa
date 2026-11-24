@@ -1,6 +1,6 @@
 ---
 name: kidana-quality
-description: How to build in the Kidana Quality maintenance-quality app (Go + templ + HTMX + Alpine CSP + Tailwind v4 + Postgres, Arabic RTL, Kidana brand). Use for ANY work in this repo — new pages or screens, UI components, styling/theming, dashboard KPIs or charts, inspection/checklist/criteria changes, work-order or finding features, Excel import/export, migrations and queries, tests — and whenever someone asks what the app is, how its during/after inspection model works, how work order printing works, or how to make something "look like the rest of the app".
+description: How to build in the Kidana Quality maintenance-quality app (Go + templ + HTMX + Alpine CSP + Tailwind v4 + Postgres, Arabic RTL, Kidana brand). Use for ANY work in this repo — new pages or screens, UI components, styling/theming, dashboard KPIs or charts, inspection/checklist/criteria changes, work-order or finding features, Excel import/export, migrations and queries, tests — and whenever someone asks what the app is, how its during/after inspection model works, how printing, translation, the contractor portal, offline mode or the API work, or how to make something "look like the rest of the app".
 ---
 
 # Kidana Quality
@@ -18,15 +18,22 @@ Each failed check becomes a **finding** (ملاحظة) with a corrective action,
 
 | Area | Route(s) | Highlights |
 |---|---|---|
-| Dashboard | `/` | KPIs (during and after averages, pass rate, open/overdue findings, on-time rate), bento charts, insights. Filters: stage, type, site, المنظومة (`system`), مجموعة الأصل (`group`), contractor, **result (pass/fail)**, date range |
-| Work orders | `/work-orders`, `/work-orders/{id}` | HTMX search and filters (type, status, priority, site, system, group, contractor); detail page with facts, a during → after timeline and findings. **Save and add another**, **copy as new** (`/work-orders/new?from=ID`), **admin delete** (only before any inspection is submitted) |
-| Work order print | `/work-orders/{id}/print`, `/work-orders/print?<list filters>` | A4 quality record per work order (verdict, scores, details, both checklists, findings, sign-off, page numbers). Row print action, detail «طباعة», list «طباعة النتائج PDF» (all matching, capped at 300, one per page). Browser print-to-PDF; the page opens the dialog itself |
-| Inspections | `/inspections/{id}` | Phone-first stepper: one criterion per card, autosave, live score, photos per item, inline findings, server-rendered review and submit; read-only summary after submit; admins can re-open |
-| Findings | `/findings` | Open/overdue/closed views; edit, close with a note, re-open |
-| Data & reports | `/data`, `/reports/print`, `/reports/export.xlsx` | **Print report** (A4: KPIs, the four charts, insights, tables, open findings, inspection log, signatures); **Excel export** (summary with logo, inspections, findings, criteria sheet); work order **import template** with real date cells. All follow the dashboard filters |
-| Settings (admin) | `/admin/...` | Versioned checklists, sites, المنظومات (`/admin/lookups/systems`), مجموعات الأصول (`/admin/lookups/asset-groups`), contractors, users (temporary passwords) |
+| Dashboard | `/` | KPIs, criteria per stage, by site/grade/contractor, **monthly trend**, insights, saved views. Filters: stage, type, site, `system`, `group`, contractor, result, dates. Contractors are redirected to their tasks |
+| My tasks | `/my/tasks` | Assigned inspections, responses awaiting my verification, the claimable pool; contractors see findings awaiting their response |
+| Work orders | `/work-orders`, `/work-orders/{id}` | Filters incl. priority and `sla` (breached/at risk), saved views; detail with facts, SLA pill, report date, timeline, **assignments card**, findings, **history**. Save-and-add, copy, admin delete |
+| Work order print | `/work-orders/{id}/print`, `/work-orders/print?…` | A4 record: verdict, scores, details, checklists, findings, signatures; «تضمين الصور» adds photos |
+| Inspections | `/inspections/{id}` | Phone stepper with autosave, photos (location/time; draw on a copy at `/attachments/{id}/annotate`), findings, signatures on review, location stamp; **works offline** (queue + service worker) |
+| Findings | `/findings`, `/findings/{id}/edit` | Filters (scope incl. «بانتظار التحقق», severity, stage, system, group, contractor, repeats), bulk changes, Excel/PDF; respond (contractor) → verify/reject (inspector); root cause, owner user, evidence photos, repeat tag |
+| Assets | `/assets`, `/assets/{id}`, `/a/{code}` | Register linked from work orders; history, repeat failures, QR image and A4 label sheets |
+| Contractors | `/contractors`, `/contractors/{id}`, `/reports/contractor/{id}` | Ranking by composite score, scorecard with trend and weakest criteria, A4 report |
+| Search | `/search` | Work orders, assets, findings; exact ref redirects. Header search box |
+| Notifications | `/notifications` (+ bell) | In-app only; rendered in the reader's language |
+| Data & reports | `/data`, `/reports/print`, `/reports/export.xlsx` | Print report, Excel export, import template, **monthly report runs** |
+| Settings (admin) | `/admin/...` | Checklists (optionally scoped to a system/asset group), sites, systems, asset groups, contractors, users (incl. contractor accounts, reset links, 2FA reset), sampling rules, SLA targets and scorecard weights, audit log, API tokens |
+| Account | `/account/security`, `/forgot`, `/reset/{token}`, `/login/2fa`, `/auth/oidc` | Optional TOTP 2FA, admin-issued reset links, OIDC sign-in |
+| API | `/api/v1/work-orders[/{ref}]` | Bearer-token JSON for CMMS sync (list changes, get, PUT upsert) |
 
-Dev data: `just seed` (or `just seed -reset`) loads ~150 realistic work orders with inspections and findings; never in production.
+Dev data: `just seed` (or `just seed -reset`) loads ~150 realistic work orders with inspections, findings, assignments, contractor users (`contractor1@demo.kidana.local`) and notifications; never in production.
 
 Everything shows dates as dd/mm/yyyy with the Umm al-Qura Hijri date alongside.
 
@@ -46,9 +53,12 @@ Clean, quiet, data-first ("Style 1": shadcn/Linear-like minimalism) with Kidana'
 - **SQL lives in `internal/db/queries/*.sql`** and goes through sqlc. Schema changes always get a new goose migration; never edit one that has been applied.
 - **Alpine is the CSP build.** Register components with `Alpine.data()` in `web/static/js/app.js`. Templates reference properties or methods only, with no inline JS. Don't use `hx-on`, because htmx eval is disabled.
 - **Arabic UI copy**, written in the user's language: short, direct, active ("حفظ", "إرسال الفحص", "تم إغلاق الملاحظة"). Enum labels go in `internal/domain/labels.go` and nowhere else.
+- **Every UI string is translatable.** Wrap it: `t(ctx, "…")` / `tf(ctx, "…%s", x)` in templates, `appctx.T`/`Tf` in handlers, `i18n.T(l, …)` in Excel/domain. Add the English to `internal/i18n/catalog_en.go` (`TestCatalogComplete` fails otherwise). Names with an English column render with `nm(ctx, ar, en)`. Use logical CSS (`ms/me/ps/pe/start/end`) and `backArrow(ctx)` so English (LTR) works.
+- **Contractor scoping.** Contractor users see only their own contractor's records: apply `appctx.ContractorScope` to list queries and `canSeeContractor` to detail/print/file routes (answer 404). Staff-only pages use the `staff` route guard.
+- **Notify, don't email.** Use `s.notify(ctx, q, users, note{kind, link, dedupe, params})`; add the message template for a new kind in `views.NotificationText`.
 - **Use Kidana tokens only** (`ink`, `gold`, `green`, `sky`, plus `fail` for semantics). No raw hex values in templates except where SVG needs a literal colour.
 - **Dates**: display Gregorian as **dd/mm/yyyy** with the **Umm al-Qura Hijri** date alongside (read-only). Use `@DateText`, `@DateInline` and `@HijriText` in views and `internal/dates` in Go. Store and submit ISO only.
-- **Numbers inside Arabic text**: put percentages through `domain.Pct` / `domain.PctVal` (bidi-isolated, so you never get "%50"), and counted nouns through `domain.Count(n, domain.NounX)` for correct agreement (فحصان، 5 فحوصات، 12 فحصاً).
+- **Numbers inside Arabic text**: put percentages through `domain.Pct` / `domain.PctVal` (bidi-isolated, so you never get "%50"), and counted nouns through `count(ctx, n, domain.NounX)` (views) or `domain.CountIn(lang, …)` for correct agreement in both languages (فحصان، 5 فحوصات، 12 فحصاً / 5 inspections).
 - **Forms validate on the server.** On error, re-render with status `422` and `Errors map[string]string`.
 - **Every mutation** runs in `db.InTx` when it touches more than one row, calls `s.audit(...)`, and calls `s.refreshWorkOrderStatus(...)` if it can change acceptance.
 - After editing `.templ` or `.sql`, run `just gen`. Generated files are committed.
@@ -67,6 +77,7 @@ Clean, quiet, data-first ("Style 1": shadcn/Linear-like minimalism) with Kidana'
 
 - `just gen` leaves no diff, and `just test` and `just lint` pass.
 - `just ui-check` (Playwright walkthrough, both widths, all roles) reports no failed steps and no console errors. Look at the screenshots in `tmp/ui-check/` for anything you touched.
+- The screen works in **Arabic and English** (`lang` cookie `en`), and the catalog test passes.
 - The screen works at **390px phone** and **desktop** widths, with no horizontal page scroll (only tables scroll, inside `overflow-x-auto`; the A4 print preview scrolls inside `.sheets`).
 - Empty states, validation errors and the viewer role (read-only) are all handled.
 - Text is Arabic and RTL-correct, and numbers use `.num`.

@@ -2,22 +2,24 @@
 
 A server-rendered Go application. HTML comes from templ components; HTMX swaps
 fragments for interactions (filters, autosave, uploads); Alpine handles purely
-local UI state (inspection stepper, live score preview, menus). There is no SPA
-and no JSON API.
+local UI state (inspection stepper, live score preview, menus, signature pad,
+photo drawing, offline queue). There is no SPA. The only JSON is the small
+token-protected work order API under `/api/v1` for CMMS sync.
 
 ```
-cmd/server/            main: config → db pool → migrations → first admin → HTTP server
+cmd/server/            main: config → db pool → migrations → first admin → scheduler + HTTP server
 cmd/seed/              dummy data for development (`just seed`), never in production
 internal/
-  config/              environment variables (12-factor)
-  domain/              business rules, no I/O: scoring, acceptance rule, submit validation,
-                       dashboard aggregation and insights, Arabic labels
+  config/              environment variables (12-factor), incl. optional OIDC
+  i18n/                UI language: Arabic source strings → English catalog (gettext style)
+  domain/              business rules, no I/O: scoring, acceptance, verdict, finding workflow,
+                       sampling, SLA, trends, scorecards, diffs, insights, labels
   db/
     migrations/        goose SQL migrations (embedded, run at startup)
     queries/           SQL for sqlc
     gen/               sqlc output (generated, committed)
   dates/               dd/mm/yyyy + Umm al-Qura Hijri formatting (display only)
-  auth/                argon2id passwords, login rate limiter
+  auth/                argon2id passwords, login rate limiter, TOTP, recovery codes, tokens
   storage/             photo storage interface + local disk implementation
   excel/               export workbook, work order import template and parsing
   appctx/              request context values shared by web and views (user, flash, path)
@@ -25,17 +27,22 @@ internal/
   web/                 routes, middleware, handlers
 web/
   styles/input.css     Tailwind v4 source with Kidana brand tokens (@theme)
-  static/              fonts, logos, vendored htmx + Alpine (CSP build), app.js, built app.css
+  static/              fonts, logos, icons, vendored htmx + Alpine (CSP build), app.js,
+                       sw.js (service worker), manifest.webmanifest, built app.css
 ```
 
 ## Domain model
 
 ```
-work_orders (site, system = المنظومة, asset_group = مجموعة الأصل, contractor, priority normal|high|emergency)
-            1──* inspections (stage during|after, attempt n, template version) 1──* inspection_items (rating, note)
-            1──* findings (description, corrective action, owner, due date, status)
-inspections 1──* attachments (photos, optionally tied to a criterion)
-checklist_templates (stage, version, active) 1──* template_criteria (code, weight, is_critical)
+work_orders (site, system = المنظومة, asset_group = مجموعة الأصل, asset_id → assets, contractor,
+             priority normal|high|emergency, reported_on, planned_date = due date)
+            1──* inspections (stage during|after, attempt n, template version, lat/lng) 1──* inspection_items
+            1──* findings (status open|in_progress|responded|closed, root cause, owner_user, repeat_of)
+            1──* inspection_assignments (stage, assignee or pool, reason manual|sampling|reinspection)
+inspections / findings 1──* attachments (kind photo|signature, lat/lng, annotated_of)
+checklist_templates (stage, version, active, optional system/asset group scope) 1──* template_criteria
+users (role admin|inspector|viewer|contractor, contractor_id, lang, totp, session_version)
+notifications · sampling_rules · sla_targets · saved_views · report_runs · settings · api_tokens · audit_log
 ```
 
 * **The during-work inspection is optional and can repeat** (sampling; several
@@ -49,7 +56,18 @@ checklist_templates (stage, version, active) 1──* template_criteria (code, w
   created/closed/re-opened/deleted, work order edited.
 * Scores are computed by `domain.Evaluate` and stored on submit. The client's
   live score in `app.js` mirrors the formula for preview only.
-* Every change is written to `audit_log`.
+* Every change is written to `audit_log`; edits record the fields that
+  changed (`domain.Diff`) for the history screens.
+* **Language**: middleware puts the language in the request context (cookie,
+  then the user's choice, then Arabic). Templates wrap every string in
+  `t(ctx, "…")`; `TestCatalogComplete` fails when an Arabic string in the code
+  has no English entry in `internal/i18n/catalog_en.go`.
+* **Contractor scoping**: `appctx.ContractorScope` limits every list, detail,
+  print and photo to the contractor user's own contractor (others → 404).
+* **Scheduler** (`web.RunScheduler`, hourly): due-soon and overdue reminders
+  and the monthly report run; dedupe keys make reruns safe.
+* **Offline**: `sw.js` keeps visited inspection/work order/task pages; `app.js`
+  queues failed inspection saves in IndexedDB and replays them in order.
 * **Printing**: `/work-orders/{id}/print` and `/work-orders/print?<list filters>`
   render A4 records (`views/print.templ`, `web/print_handlers.go`). The list and
   the filtered print share `woFilter`, so a print always matches the screen. Data
@@ -72,12 +90,11 @@ checklist_templates (stage, version, active) 1──* template_criteria (code, w
 
 * `internal/domain`, `internal/dates`, `internal/excel`, `internal/auth`, `internal/storage`: pure unit tests.
 * `just ui-check`: a Playwright walkthrough of every screen and role (`scripts/ui_check.py`).
-* `internal/web/web_test.go`: integration tests over real HTTP and Postgres (`TEST_DATABASE_URL`). They cover auth, role guards, CSRF and the full during → after → acceptance flow.
+* `internal/web/*_test.go`: integration tests over real HTTP and Postgres (`TEST_DATABASE_URL`): auth, role guards, CSRF, the during → after → acceptance flow, language switch, 2FA and reset links, the contractor portal, field work (signatures, location, drawing), insights, the API and scoped checklists.
 
 ## Future extensions (designed for, not built)
 
-* Per-system or per-asset-group checklists: add `system_id` / `asset_group_id` to `checklist_templates` and pick the template by it + stage.
-* SSO (Microsoft Entra ID) via OIDC alongside local accounts.
+* Email or WhatsApp notifications: add a sender next to `s.notify` (notifications already store a kind and parameters per reader).
 * S3/MinIO photo storage: implement `storage.Store`.
 * Server-side PDF via a Gotenberg container that renders `/reports/print` or `/work-orders/print` (for emailing records without a browser).
 * A combined work-order score (during + after weighting) once the business defines it.

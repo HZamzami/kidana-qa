@@ -159,3 +159,11 @@ Never let one card's height be driven by an unbounded list next to fixed-height 
 - **Don't** hard-code Arabic enum labels in templates. Use `domain.*Labels` or the stage/status methods.
 - **Don't** reuse a word with two meanings next to each other. Grade "مقبول" (60–69) vs. status "معتمد" is why grades are shown as "التقدير: مقبول".
 - **Don't** let native number spinners show: they overlap digits in RTL. `input[type=number]` hides them globally.
+
+## Language and direction
+
+Arabic is the default (RTL); English switches `<html lang dir>` to LTR. Write layouts with logical properties only (`ms/me`, `ps/pe`, `start/end`, `text-start`), never `ml/mr/left/right`. Arrows that mean "back" use `backArrow(ctx)`. Charts built with flex rows follow the reading direction automatically. Admin-entered names show their English version when set (`nm`).
+
+## Phone navigation
+
+Below `md`, a fixed bottom tab bar (لوحة المؤشرات، مهامي، أوامر العمل، الملاحظات، المزيد) replaces the top tabs; `main` has `pb-24` so content clears it. Keep primary phone actions inside the page, not under the bar.

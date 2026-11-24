@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Kidana Quality: maintenance quality system (Arabic, RTL). Work orders get a **during-work** (فحص أثناء التنفيذ) and an **after-work** (فحص بعد التنفيذ) inspection, plus findings. Never call them QA/QC. Work orders carry المنظومة and مجموعة الأصل (admin-managed lists) and a priority of عادي/عالي/طارئ, and print to PDF one A4 record per work order. See README.md and docs/ARCHITECTURE.md.
+Kidana Quality: maintenance quality system (Arabic, RTL). Work orders get a **during-work** (فحص أثناء التنفيذ) and an **after-work** (فحص بعد التنفيذ) inspection, plus findings. Never call them QA/QC. Work orders carry المنظومة and مجموعة الأصل (admin-managed lists) and a priority of عادي/عالي/طارئ, and print to PDF one A4 record per work order. Also: contractor portal, assignments and sampling, in-app notifications, offline inspections (PWA), assets with QR, scorecards, SLA targets, audit history, optional 2FA, OIDC, a work order API. See README.md and docs/ARCHITECTURE.md.
 
 ## Environment
 
@@ -14,7 +14,8 @@ Kidana Quality: maintenance quality system (Arabic, RTL). Work orders get a **du
 * Schema changes always go in a new goose migration. Never edit an applied one. (Exception: before the first production deploy, with the user's say-so, 00001/00002 may be rewritten; then `just nuke && just up && just seed`.)
 * Business logic goes in `internal/domain` (pure, tested). Handlers in `internal/web` stay thin.
 * Alpine uses its **CSP build**: register components in `web/static/js/app.js` and never use inline JS. Don't use htmx `hx-on` attributes either, because eval is disabled.
-* UI text is Arabic. Put enum labels in `internal/domain/labels.go`. Counts go through `domain.Count`, percentages in text through `domain.Pct`/`PctVal`.
+* UI text is Arabic, with English as a second language: wrap every UI string in `t(ctx, "…")` (Go: `appctx.T`/`Tf`) and add its English to `internal/i18n/catalog_en.go`; `TestCatalogComplete` fails otherwise. Use logical CSS (`ms/me/start/end`) so English (LTR) works. Put enum labels in `internal/domain/labels.go`. Counts go through `count(ctx, …)`/`domain.CountIn`, percentages in text through `domain.Pct`/`PctVal`.
+* Contractor users must only ever see their own contractor's data: use `appctx.ContractorScope` / `canSeeContractor` in any new list, detail, print or file route.
 * Dates: show dd/mm/yyyy plus read-only Umm al-Qura Hijri (`@DateText`/`@DateInline`, `internal/dates`). Store ISO.
 * The project skill `.claude/skills/kidana-quality` has the full design system and recipes. Verify UI work with `just ui-check`.
 * Colours: use only the Kidana tokens in `web/styles/input.css` (lighter tints only).

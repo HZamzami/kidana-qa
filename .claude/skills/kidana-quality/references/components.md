@@ -155,3 +155,26 @@ Global htmx glue in `app.js`: the `toast` event (from HX-Trigger) shows `#toast`
 ## Go view helpers (`views/helpers.go`, `dashboard.templ`)
 
 `u(format, args…) templ.SafeURL` · `path(format, args…) string` · `asset(path)` (cache-busted) · `idStr`, `itoa` · `isoDate(*time.Time)` (comparisons and values only) · `dmy(t)`, `dateTime(t)` · `scoreVal(float64)` · `orDash(s)` · `pctWidth(v)` (inline width style) · `delayText(planned, actual)` · `withQuery(base, q, key, val)` (pagination) · `tern(cond, a, b)` · `initial(name)`.
+
+## Added components
+
+| Component | File | Use |
+|---|---|---|
+| `@LangToggle()` | layout | عربي/English switch (POST `/lang`, returns to the page) |
+| `@Bell(n)` / `bellSlot` | tasks / layout | header bell, refreshed by htmx every 60 s |
+| `phoneNav` | layout | fixed bottom tab bar on phones, «المزيد» sheet; top tabs are `hidden md:flex` |
+| `@SLAPill(state)`, `slaState(...)` | components | met / breached / at_risk pill |
+| `@PriorityPill(p)`, `@ReasonPill(r)` | components / tasks | priority and assignment reason |
+| `@assignmentsCard(d)`, `@assignmentList(rows, claimable)` | tasks | assignments on a work order / in «مهامي» |
+| `@HistoryList(entries, showEntity)` | history | change history (actions, field diffs) |
+| `@TrendChart(points)` | dashboard | monthly average bars with the pass-mark line (CSS, direction-aware) |
+| `@SavedViewsBar(v)` | search | saved filter chips + save form; pass `ViewsBar` from `s.savedViews(r, page, q)` |
+| `@signaturePad(name, label, value)` | inspection | canvas signature into a hidden input |
+| `@offlineBanner()` | inspection | queued-saves banner |
+| `@mapLink(lat, lng)` | inspection | OpenStreetMap link |
+| `@printPhotos(photos, max)`, `signBox(role, name, sig)` | print | photos and signatures in A4 records |
+| `@periodForm(action, from, to)`, `@kpi(...)` | scorecards / dashboard | period filter, KPI tile |
+
+Alpine (`app.js`): `printPage`, `bulkSelect` (`recount`, `toggleAll`, `selectedText`), `geoStamp`, `signaturePad`, `photoAnnotate`, `offlineStatus`, `offlineGuard`. The offline queue is `window.kqQueue` (IndexedDB; replays on `online`, every 20 s and on load).
+
+View helpers: `t`, `tf`, `count`, `nm` (English name when set), `checklistName`, `backArrow`, `today`, `delayText(ctx, …)`.

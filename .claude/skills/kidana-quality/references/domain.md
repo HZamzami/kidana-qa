@@ -72,10 +72,11 @@ Grades (`domain.Grades`): ممتاز ≥ 90, جيد جداً ≥ 80, جيد ≥ 
 | admin | مدير النظام | everything + settings + re-open submitted inspections |
 | inspector | مدقق | create/edit work orders, run inspections, record and close findings, import/export |
 | viewer | مشاهد | read only |
+| contractor | مقاول | only their own contractor's work orders, inspections, findings, photos and scorecard; respond to findings. Requires `users.contractor_id` (DB check) |
 
 **Deleting**: only admins can delete a work order, and only before any inspection is submitted (a mistaken entry). After that it is a quality record: set it to `cancelled` instead. Draft inspections and findings can be deleted by editors; findings on submitted inspections must be closed, not deleted. There is no "clear all".
 
-Check roles in the UI with `appctx.CanEdit(ctx)` / `appctx.IsAdmin(ctx)`, and enforce them on routes with `s.requireRole(...)` (see `web/server.go`).
+Check roles in the UI with `appctx.CanEdit(ctx)` / `appctx.IsAdmin(ctx)` / `appctx.IsContractor(ctx)`, and enforce them on routes with `s.requireRole(...)` and the `edit` / `staff` / `admin` / `contractor` guards (see `web/server.go`). Contractor data scoping: `appctx.ContractorScope` and `canSeeContractor`.
 
 ## Glossary (use these exact Arabic terms)
 
@@ -109,4 +110,22 @@ Check roles in the UI with `appctx.CanEdit(ctx)` / `appctx.IsAdmin(ctx)`, and en
 
 - Whether the during and after scores should be combined into one work-order score, and with what weighting. Today they are shown separately on purpose.
 - Whether the during-work inspection becomes mandatory for certain priorities (e.g. طارئ) or systems.
-- Per-system or per-asset-group checklists (e.g. an AC-specific after-work list). The schema allows adding this later.
+- The seeded defaults for sampling percentages, resolution targets, scorecard weights and root-cause categories (all admin-editable except the categories).
+
+## Workflows added on top of inspections
+
+**Finding workflow** (`domain.FindingAllowed`): open / in_progress → contractor **responds** (note + root cause + ≥1 photo) → `responded` («بانتظار التحقق») → inspector **verifies** (closes) or **rejects** (back to open with `rejection_note`). Staff can also close directly; closed → reopen. A finding on the same asset and criterion within `domain.RepeatWindowDays` (90) gets `repeat_of` («متكررة»). The target close date defaults from `sla_targets` (`finding_<severity>`).
+
+**Assignments** (`inspection_assignments`): one open assignment per work order and stage, assigned to a person or left in the pool. Reasons: manual, sampling (rules), reinspection (booked automatically for the same inspector when an after-work inspection fails). Submitting that stage marks it done.
+
+**Sampling** (`domain.SampleStages`): on work order create/import/API, the most specific active rule per stage (type and priority, then one, then none) decides; `domain.Sampled` hashes the ref, so the draw is stable.
+
+**Resolution targets** (`sla_targets`, `domain.SLAState`): a WO's due date (`planned_date`) defaults to `reported_on` + days for its priority. States: met, breached, at_risk (due today/tomorrow), on_track.
+
+**Scorecards** (`domain.Composite`, `domain.Rank`): composite of after-work average, during-work average, SLA met rate and findings closed on time, with admin weights (`settings.scorecard_weights`); unknown parts are left out and the rest reweighted.
+
+**Checklist scope**: a version may be scoped to a system and/or asset group; `PickActiveTemplate` picks the most specific active one for a new inspection.
+
+**Notifications** (in-app only): kinds `finding_raised`, `finding_responded`, `finding_verified`, `finding_rejected`, `finding_due_soon`, `finding_overdue`, `assigned`, `reinspection`, `reset_request`, `report_ready`. Stored with parameters and rendered per reader's language (`views.NotificationText`).
+
+**Glossary additions**: المنظومة (system), مجموعة الأصل (asset group), مقاول (contractor role), بانتظار التحقق (responded), متكررة (repeat), مهامي (my tasks), القائمة العامة (assignment pool), عينة (sampled), إعادة فحص (re-inspection), زمن الحل (resolution time), التقييم المركب (composite score), السبب الجذري (root cause).

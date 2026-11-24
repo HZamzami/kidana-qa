@@ -148,3 +148,17 @@ The admin work order delete is the pattern:
 ## 12. Print another record type
 
 Copy the work order print: a `WithX…ForPrint` query sharing the list's filter function, batch-load children with `= ANY($1)`, assemble cards in the handler, render with `.sheet` pages and the `printPage` Alpine component. Add the row action, the detail button and a «طباعة النتائج» link inside the htmx results region, and a `ui_check` step. Verify by rendering a PDF with Playwright and reading it.
+
+## 13. Add or change UI text (both languages)
+
+1. Write the Arabic in the template wrapped: `{ t(ctx, "نص") }`, attributes `placeholder={ t(ctx, "…") }`, formats `tf(ctx, "عدد %d", n)`. In handlers use `appctx.T(ctx, …)` / `appctx.Tf`; in Excel/domain code take an `i18n.Lang` and use `i18n.T(l, …)`.
+2. Run `just test ./internal/i18n/` — `TestCatalogComplete` lists strings without English. Add them to `internal/i18n/catalog_en.go` (keys are the exact Arabic, including leading/trailing spaces).
+3. Check the page with the `lang=en` cookie (LTR) as well as Arabic.
+
+## 14. Notify someone
+
+Call `s.notify(ctx, q, userIDs, note{kind, link, dedupe, params})` inside the change's transaction. Add the kind's constant in `web/notify.go` and its sentence (with `tf`) in `views.NotificationText`; add both languages to the catalog. Use a dedupe key only for reminders that must not repeat.
+
+## 15. A page contractors may see
+
+Read `appctx.ContractorScope(ctx)` and pass it as the contractor filter of every list query; for one record, check `canSeeContractor(ctx, record.ContractorID)` and answer `s.notFound` otherwise. Pages they must not see use the `staff` guard.
