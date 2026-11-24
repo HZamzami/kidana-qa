@@ -65,6 +65,10 @@ func (s *Server) Handler() http.Handler {
 	root.Handle("GET /static/", cacheStatic(static, s.cfg.IsDev()))
 	root.HandleFunc("GET /sw.js", s.serviceWorker)
 	root.HandleFunc("GET /manifest.webmanifest", s.manifest)
+	// Work order API (bearer tokens, no session).
+	root.HandleFunc("GET /api/v1/work-orders", s.requireAPIToken(s.apiListWorkOrders))
+	root.HandleFunc("GET /api/v1/work-orders/{ref}", s.requireAPIToken(s.apiGetWorkOrder))
+	root.HandleFunc("PUT /api/v1/work-orders/{ref}", s.requireAPIToken(s.apiPutWorkOrder))
 
 	// Everything below uses sessions.
 	app := http.NewServeMux()
@@ -208,6 +212,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/users/{id}/reset-link", admin(s.adminResetLink))
 	mux.HandleFunc("POST /admin/users/{id}/2fa-reset", admin(s.adminReset2FA))
 	mux.HandleFunc("GET /admin/audit", admin(s.auditPage))
+	mux.HandleFunc("GET /admin/api", admin(s.apiTokensPage))
+	mux.HandleFunc("POST /admin/api", admin(s.apiTokenCreate))
+	mux.HandleFunc("POST /admin/api/{id}/revoke", admin(s.apiTokenRevoke))
 	mux.HandleFunc("GET /admin/sla", admin(s.slaPage))
 	mux.HandleFunc("POST /admin/sla", admin(s.slaSave))
 	mux.HandleFunc("GET /admin/sampling", admin(s.samplingPage))

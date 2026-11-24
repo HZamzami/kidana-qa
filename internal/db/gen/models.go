@@ -760,6 +760,16 @@ func AllWoTypeValues() []WoType {
 	}
 }
 
+type ApiToken struct {
+	ID         int64
+	Name       string
+	TokenHash  string
+	CreatedBy  *int64
+	CreatedAt  time.Time
+	LastUsedAt *time.Time
+	RevokedAt  *time.Time
+}
+
 type Asset struct {
 	ID           int64
 	Code         string
@@ -814,13 +824,15 @@ type AuditLog struct {
 }
 
 type ChecklistTemplate struct {
-	ID        int64
-	Stage     InspectionStage
-	Version   int32
-	Name      string
-	Active    bool
-	CreatedBy *int64
-	CreatedAt time.Time
+	ID           int64
+	Stage        InspectionStage
+	Version      int32
+	Name         string
+	Active       bool
+	CreatedBy    *int64
+	CreatedAt    time.Time
+	SystemID     *int64
+	AssetGroupID *int64
 }
 
 type Contractor struct {

@@ -57,7 +57,7 @@ func (s *Server) inspectionStart(w http.ResponseWriter, r *http.Request) {
 	var inspID int64
 	err = db.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
-		tpl, err := q.GetActiveTemplate(ctx, stage)
+		tpl, err := q.PickActiveTemplate(ctx, gen.PickActiveTemplateParams{Stage: stage, SystemID: wo.SystemID, AssetGroupID: wo.AssetGroupID})
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return errNoTemplate

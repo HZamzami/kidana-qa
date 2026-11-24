@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base32"
 	"fmt"
@@ -399,7 +400,12 @@ func (s *Server) checklistNewVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(strings.Split(t.Name, " — ")[0])
-	d := views.ChecklistFormData{Stage: string(t.Stage), Name: appctx.Tf(ctx, "%s — الإصدار %d", name, next), Activate: true}
+	d := views.ChecklistFormData{Stage: string(t.Stage), Name: appctx.Tf(ctx, "%s — الإصدار %d", name, next), Activate: true,
+		SystemID: idPtr(t.SystemID), AssetGroupID: idPtr(t.AssetGroupID)}
+	if err := s.checklistScopes(ctx, &d); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	for _, c := range crits {
 		d.Rows = append(d.Rows, views.CriterionInput{Code: c.Code, Label: c.Label, Description: c.Description, LabelEn: c.LabelEn, DescriptionEn: c.DescriptionEn, Weight: strconv.Itoa(int(c.Weight)), Critical: c.IsCritical})
 	}
@@ -412,7 +418,13 @@ func (s *Server) checklistNewVersion(w http.ResponseWriter, r *http.Request) {
 func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	f := newForm(r)
-	d := views.ChecklistFormData{Stage: f.Str("stage"), Name: f.Str("name"), Activate: f.Bool("activate")}
+	d := views.ChecklistFormData{Stage: f.Str("stage"), Name: f.Str("name"), Activate: f.Bool("activate"),
+		SystemID: f.Str("system_id"), AssetGroupID: f.Str("asset_group_id")}
+	systemID, groupID := f.OptID("system_id"), f.OptID("asset_group_id")
+	if err := s.checklistScopes(ctx, &d); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	stage := gen.InspectionStage(d.Stage)
 	if !stage.Valid() {
 		s.badRequest(w, r, appctx.T(ctx, "مرحلة غير صالحة"))
@@ -480,7 +492,7 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		t, err := q.CreateTemplate(ctx, gen.CreateTemplateParams{Stage: stage, Version: ver, Name: d.Name, CreatedBy: currentUserID(ctx)})
+		t, err := q.CreateTemplate(ctx, gen.CreateTemplateParams{Stage: stage, Version: ver, Name: d.Name, CreatedBy: currentUserID(ctx), SystemID: systemID, AssetGroupID: groupID})
 		if err != nil {
 			return err
 		}
@@ -493,7 +505,7 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if d.Activate {
-			if err := q.DeactivateStageTemplates(ctx, stage); err != nil {
+			if err := q.DeactivateStageTemplates(ctx, gen.DeactivateStageTemplatesParams{Stage: stage, SystemID: systemID, AssetGroupID: groupID}); err != nil {
 				return err
 			}
 			if err := q.ActivateTemplate(ctx, t.ID); err != nil {
@@ -510,4 +522,21 @@ func (s *Server) checklistCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	s.flash(ctx, appctx.T(ctx, "تم حفظ الإصدار الجديد"), "ok")
 	http.Redirect(w, r, "/admin/checklists/"+idStr(newID), http.StatusSeeOther)
+}
+
+// checklistScopes fills the system and asset group choices of the checklist form.
+func (s *Server) checklistScopes(ctx context.Context, d *views.ChecklistFormData) error {
+	lk, err := s.lookupOptions(ctx, true)
+	if err != nil {
+		return err
+	}
+	d.Systems, d.AssetGroups = lk.Systems, lk.AssetGroups
+	return nil
+}
+
+func idPtr(p *int64) string {
+	if p == nil {
+		return ""
+	}
+	return idStr(*p)
 }

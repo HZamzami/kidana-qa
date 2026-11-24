@@ -9,7 +9,7 @@ import (
 
 templ adminNav(active string) {
 	<nav class="flex flex-wrap gap-2 mb-5">
-		for _, it := range []Option{{"/admin/checklists", t(ctx, "قوائم الفحص")}, {"/admin/lookups/sites", t(ctx, "المواقع")}, {"/admin/lookups/systems", t(ctx, "المنظومات")}, {"/admin/lookups/asset-groups", t(ctx, "مجموعات الأصول")}, {"/admin/lookups/contractors", t(ctx, "المقاولون")}, {"/admin/users", t(ctx, "المستخدمون")}, {"/admin/sampling", t(ctx, "قواعد العينة")}, {"/admin/sla", t(ctx, "زمن الحل والتقييم")}, {"/admin/audit", t(ctx, "سجل التغييرات")}} {
+		for _, it := range []Option{{"/admin/checklists", t(ctx, "قوائم الفحص")}, {"/admin/lookups/sites", t(ctx, "المواقع")}, {"/admin/lookups/systems", t(ctx, "المنظومات")}, {"/admin/lookups/asset-groups", t(ctx, "مجموعات الأصول")}, {"/admin/lookups/contractors", t(ctx, "المقاولون")}, {"/admin/users", t(ctx, "المستخدمون")}, {"/admin/sampling", t(ctx, "قواعد العينة")}, {"/admin/sla", t(ctx, "زمن الحل والتقييم")}, {"/admin/audit", t(ctx, "سجل التغييرات")}, {"/admin/api", t(ctx, "الربط مع الأنظمة")}} {
 			<a href={ templ.URL(it.Value) } class={ "btn", templ.KV("btn-primary", active == it.Value), templ.KV("btn-outline", active != it.Value) }>{ t(ctx, it.Label) }</a>
 		}
 	</nav>
@@ -28,6 +28,7 @@ templ AdminHome() {
 			@adminCard("/admin/sampling", t(ctx, "قواعد العينة"), t(ctx, "أي أوامر العمل الجديدة يُسند لها فحص تلقائياً، حسب النوع والأولوية."))
 			@adminCard("/admin/sla", t(ctx, "زمن الحل والتقييم"), t(ctx, "الأيام المستهدفة لحل أوامر العمل وإغلاق الملاحظات، وأوزان تقييم المقاولين."))
 			@adminCard("/admin/audit", t(ctx, "سجل التغييرات"), t(ctx, "من غيّر ماذا ومتى في كل أوامر العمل والفحوصات والإعدادات."))
+			@adminCard("/admin/api", t(ctx, "الربط مع الأنظمة"), t(ctx, "مفاتيح API لمزامنة أوامر العمل مع نظام إدارة الصيانة دون Excel."))
 		</div>
 	}
 }
@@ -245,7 +246,16 @@ templ ChecklistsPage(rows []gen.ListTemplatesRow) {
 					<tbody>
 						for _, tpl := range rows {
 							<tr>
-								<td><a class="underline decoration-gold-50 underline-offset-4" href={ u("/admin/checklists/%d", tpl.ID) }>{ checklistName(ctx, tpl.Name) }</a></td>
+								<td>
+									<a class="underline decoration-gold-50 underline-offset-4" href={ u("/admin/checklists/%d", tpl.ID) }>{ checklistName(ctx, tpl.Name) }</a>
+									<span class="block text-xs text-ink-60">
+										if tpl.SystemName == "" && tpl.AssetGroupName == "" {
+											{ t(ctx, "عامة") }
+										} else {
+											{ joinNonEmpty(" · ", nm(ctx, tpl.SystemName, tpl.SystemNameEn), nm(ctx, tpl.AssetGroupName, tpl.AssetGroupNameEn)) }
+										}
+									</span>
+								</td>
 								<td>
 									@StagePill(string(tpl.Stage))
 								</td>
@@ -319,8 +329,11 @@ type ChecklistFormData struct {
 	Stage    string
 	Name     string
 	Activate bool
-	Rows     []CriterionInput
-	Errors   []string
+	// Scope: empty = general; a system and/or asset group makes it specific.
+	SystemID, AssetGroupID string
+	Systems, AssetGroups   []Option
+	Rows                   []CriterionInput
+	Errors                 []string
 }
 
 templ ChecklistForm(d ChecklistFormData) {
@@ -342,6 +355,12 @@ templ ChecklistForm(d ChecklistFormData) {
 				<label class="label" for="cl_name">{ t(ctx, "اسم القائمة") }</label>
 				<input class="input" id="cl_name" name="name" value={ d.Name } required maxlength="120"/>
 			</div>
+			<fieldset class="grid gap-3 sm:grid-cols-2 max-w-2xl">
+				<legend class="label">{ t(ctx, "نطاق القائمة (اختياري)") }</legend>
+				@SelectField("system_id", t(ctx, "المنظومة"), d.SystemID, d.Systems, t(ctx, "كل المنظومات"), false, nil)
+				@SelectField("asset_group_id", t(ctx, "مجموعة الأصل"), d.AssetGroupID, d.AssetGroups, t(ctx, "كل مجموعات الأصول"), false, nil)
+				<p class="sm:col-span-2 text-xs text-ink-60">{ t(ctx, "الفحص الجديد يستخدم أدق قائمة مفعّلة تطابق أمر العمل: مجموعة الأصل، ثم المنظومة، ثم القائمة العامة.") }</p>
+			</fieldset>
 			<div class="overflow-x-auto">
 				<table class="table">
 					<thead><tr><th class="w-20">{ t(ctx, "الرمز") }</th><th>{ t(ctx, "البند") }</th><th>{ t(ctx, "الوصف / طريقة التحقق") }</th><th class="w-20">{ t(ctx, "الوزن") }</th><th class="w-16">{ t(ctx, "حرج") }</th></tr></thead>
@@ -428,4 +447,84 @@ templ weightInput(key, label string, v int) {
 		<span class="flex-1 text-sm">{ label }</span>
 		<input class="input h-9 w-24" type="number" min="0" max="100" name={ "w_" + key } value={ itoa(v) }/>
 	</label>
+}
+
+func joinNonEmpty(sep string, parts ...string) string {
+	out := ""
+	for _, p := range parts {
+		if p == "" {
+			continue
+		}
+		if out != "" {
+			out += sep
+		}
+		out += p
+	}
+	return out
+}
+
+// ---------------------------------------------------------------- API tokens
+templ APITokensPage(rows []gen.ListAPITokensRow, newToken, base string) {
+	@App(t(ctx, "الربط مع الأنظمة")) {
+		@PageHeader(t(ctx, "الربط مع الأنظمة"), t(ctx, "واجهة JSON لإنشاء أوامر العمل وتحديثها وقراءة نتائجها من نظام إدارة الصيانة."))
+		@adminNav("/admin/api")
+		if newToken != "" {
+			<div role="status" class="mb-4 rounded-lg border border-gold-50 bg-gold-10 px-4 py-3 text-sm space-y-2">
+				<p>{ t(ctx, "المفتاح الجديد — انسخه الآن وخزّنه في النظام المرتبط؛ لن يظهر مرة أخرى.") }</p>
+				<input class="input h-9 font-mono text-xs" dir="ltr" readonly value={ newToken } aria-label={ t(ctx, "المفتاح") }/>
+			</div>
+		}
+		<div class="grid gap-5 lg:grid-cols-5">
+			<section class="lg:col-span-2 space-y-4">
+				<form method="post" action="/admin/api" class="card p-4 flex flex-wrap items-end gap-2">
+					<div class="flex-1 min-w-40">
+						<label class="label" for="tok_name">{ t(ctx, "اسم المفتاح") }</label>
+						<input class="input h-10" id="tok_name" name="name" maxlength="80" required placeholder={ t(ctx, "مثال: مزامنة Maximo") }/>
+					</div>
+					<button type="submit" class="btn btn-primary">{ t(ctx, "إنشاء مفتاح") }</button>
+				</form>
+				<div class="card overflow-hidden">
+					if len(rows) == 0 {
+						@EmptyState(t(ctx, "لا توجد مفاتيح"), "")
+					} else {
+						<ul class="divide-y divide-ink-10">
+							for _, tk := range rows {
+								<li class="flex flex-wrap items-center gap-2 px-4 py-3 text-sm">
+									<span class={ "font-medium", templ.KV("line-through text-ink-60", tk.RevokedAt != nil) }>{ tk.Name }</span>
+									<span class="text-xs text-ink-60">{ tk.CreatedByName }</span>
+									if tk.LastUsedAt != nil {
+										<span class="text-xs text-ink-60 num">{ t(ctx, "آخر استخدام ") + dateTime(*tk.LastUsedAt) }</span>
+									}
+									if tk.RevokedAt == nil {
+										<form method="post" action={ u("/admin/api/%d/revoke", tk.ID) } class="ms-auto">
+											<button type="submit" class="btn btn-ghost py-1 text-xs text-fail">{ t(ctx, "إلغاء") }</button>
+										</form>
+									}
+								</li>
+							}
+						</ul>
+					}
+				</div>
+			</section>
+			<section class="lg:col-span-3 card p-5 text-sm space-y-3">
+				<h2 class="font-semibold">{ t(ctx, "طريقة الاستخدام") }</h2>
+				<p class="text-ink-80">{ t(ctx, "أرسل المفتاح في ترويسة Authorization. الأسماء (الموقع، المنظومة، مجموعة الأصل، المقاول) تُطابق كما في استيراد Excel، والأسماء الجديدة تُضاف.") }</p>
+				<pre class="rounded-lg bg-ink text-white p-3 text-xs overflow-x-auto" dir="ltr">{ apiExample(base) }</pre>
+			</section>
+		</div>
+	}
+}
+
+func apiExample(base string) string {
+	return "# list work orders changed since a time (oldest first, up to 500)\n" +
+		"curl -H 'Authorization: Bearer $TOKEN' '" + base + "/api/v1/work-orders?updated_since=2026-11-01T00:00:00Z'\n\n" +
+		"# one work order with its status, scores and open findings\n" +
+		"curl -H 'Authorization: Bearer $TOKEN' " + base + "/api/v1/work-orders/WO-2026-1001\n\n" +
+		"# create or update by number\n" +
+		"curl -X PUT -H 'Authorization: Bearer $TOKEN' -H 'Content-Type: application/json' \\\n" +
+		"  " + base + "/api/v1/work-orders/WO-2026-1001 -d '{\n" +
+		"  \"type\": \"WO\", \"priority\": \"high\",\n" +
+		"  \"site\": \"<site>\", \"system\": \"<system>\", \"asset_group\": \"<asset group>\",\n" +
+		"  \"asset\": \"PMP-MN-012\", \"contractor\": \"<contractor>\",\n" +
+		"  \"description\": \"...\", \"reported_on\": \"2026-11-24\"\n}'"
 }
