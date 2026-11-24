@@ -241,6 +241,16 @@ templ EmptyState(title, hint string) {
 }
 
 // Fact is a label/value pair in detail headers.
+// PrintIcon is a small printer glyph for print actions.
+templ PrintIcon() {
+	<svg viewBox="0 0 20 20" class="size-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
+		<path d="M5.5 7V2.75h9V7"></path>
+		<rect x="2.5" y="7" width="15" height="7.5" rx="1.5"></rect>
+		<path d="M5.5 12h9v5.25h-9z" fill="white"></path>
+		<circle cx="14.5" cy="9.6" r=".6" fill="currentColor" stroke="none"></circle>
+	</svg>
+}
+
 templ Fact(label string) {
 	<div class="min-w-0">
 		<dt class="text-xs text-ink-60">{ label }</dt>

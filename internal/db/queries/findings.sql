@@ -66,3 +66,15 @@ WHERE id = $1;
 
 -- name: DeleteFinding :exec
 DELETE FROM findings WHERE id = $1;
+
+-- Findings of several work orders, for printing: open first, then by date.
+-- name: ListFindingsForWorkOrders :many
+SELECT f.id, f.work_order_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date,
+       f.status, f.closed_at, f.created_at,
+       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label,
+       COALESCE(i.stage::text, '')::text AS inspection_stage
+FROM findings f
+LEFT JOIN template_criteria c ON c.id = f.criterion_id
+LEFT JOIN inspections i ON i.id = f.inspection_id
+WHERE f.work_order_id = ANY(sqlc.arg(ids)::bigint[])
+ORDER BY f.work_order_id, f.status = 'closed', f.created_at;

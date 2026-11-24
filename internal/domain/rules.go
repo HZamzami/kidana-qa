@@ -109,3 +109,35 @@ func ValidateSubmit(c SubmitCheck) []string {
 	}
 	return errs
 }
+
+// Verdict is the overall result of a work order, as shown on its printed
+// record. Tone is one of good, bad, warn or neutral.
+type Verdict struct {
+	Label string
+	Tone  string
+}
+
+// VerdictInput summarises what WOVerdict needs to know about a work order.
+type VerdictInput struct {
+	Status            WOStatus
+	HasSubmittedAfter bool
+	LatestAfterPassed bool
+	OpenFindings      int
+}
+
+// WOVerdict explains where a work order stands against the acceptance rule:
+// accepted, failed and awaiting re-inspection, passed with findings still
+// open, or not yet inspected after the work.
+func WOVerdict(in VerdictInput) Verdict {
+	switch {
+	case in.Status == WOCancelled:
+		return Verdict{"ملغى", "neutral"}
+	case in.Status == WOAccepted:
+		return Verdict{"معتمد", "good"}
+	case in.HasSubmittedAfter && !in.LatestAfterPassed:
+		return Verdict{"غير مطابق — بانتظار إعادة الفحص", "bad"}
+	case in.HasSubmittedAfter && in.OpenFindings > 0:
+		return Verdict{"مطابق — بانتظار إغلاق الملاحظات", "warn"}
+	}
+	return Verdict{"بانتظار الفحص بعد التنفيذ", "neutral"}
+}

@@ -75,3 +75,20 @@ SELECT
 FROM work_orders w
 WHERE w.id = $1;
 
+
+-- Submitted inspections of several work orders, for printing.
+-- name: ListSubmittedInspectionsForWorkOrders :many
+SELECT i.id, i.work_order_id, i.stage, i.attempt, i.inspected_on, i.score, i.passed, i.critical_failed, i.notes,
+       u.name AS inspector_name
+FROM inspections i
+JOIN users u ON u.id = i.inspector_id
+WHERE i.work_order_id = ANY(sqlc.arg(ids)::bigint[]) AND i.status = 'submitted'
+ORDER BY i.work_order_id, i.stage, i.attempt;
+
+-- Rated items of several inspections with their criteria, for printing.
+-- name: ListItemsForPrint :many
+SELECT it.inspection_id, it.rating, it.note, c.code, c.label, c.weight, c.is_critical, c.sort
+FROM inspection_items it
+JOIN template_criteria c ON c.id = it.criterion_id
+WHERE it.inspection_id = ANY(sqlc.arg(ids)::bigint[])
+ORDER BY it.inspection_id, c.sort, c.code;

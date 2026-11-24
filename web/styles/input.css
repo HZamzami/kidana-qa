@@ -197,11 +197,82 @@
   @apply border-ink-60 bg-ink-5 text-ink;
 }
 
-/* Print report */
+/* Work order print record: on screen each work order is an A4 sheet; in print
+   each one starts a new page. Type is set in pt so the PDF matches paper. */
+.print-root {
+  @apply min-h-dvh bg-ink-10 pb-8;
+}
+.sheets {
+  @apply pt-6;
+}
+.sheet {
+  @apply bg-white text-ink flex flex-col shadow-md;
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto 8mm;
+  padding: 12mm 12mm 10mm;
+  font-size: 8.5pt;
+  line-height: 1.5;
+}
+.sheet .pill {
+  font-size: 7.5pt;
+  padding: 0.05rem 0.5rem;
+}
+.pr-label {
+  @apply text-ink-60 font-medium;
+  font-size: 7.5pt;
+}
+.pr-h2 {
+  @apply mb-1 font-bold text-ink;
+  font-size: 9.5pt;
+}
+.pr-facts {
+  @apply grid grid-cols-4 border-t border-s border-ink-10 rounded-md overflow-hidden;
+}
+.pr-fact {
+  @apply border-b border-e border-ink-10 px-2 py-1 min-w-0;
+}
+.pr-fact dt {
+  @apply text-ink-60;
+  font-size: 7pt;
+}
+.pr-fact dd {
+  @apply font-medium break-words;
+}
+.pr-table {
+  @apply w-full border-collapse;
+}
+.pr-table th {
+  @apply bg-ink-5 text-ink-80 font-medium text-start px-1.5 py-1 border-y border-ink-10;
+  font-size: 7.5pt;
+}
+.pr-table td {
+  @apply px-1.5 py-1 border-b border-ink-10 align-top;
+}
+.pr-table tfoot td {
+  @apply bg-ink-5 border-b-0;
+}
+.pr-tag {
+  @apply inline-block rounded px-1 font-medium align-middle;
+  font-size: 6.5pt;
+  line-height: 1.5;
+}
+.pr-rating {
+  @apply inline-flex items-center gap-1 rounded px-1.5 font-medium whitespace-nowrap;
+  font-size: 7.5pt;
+}
+
+/* Print: A4 with page numbers in the bottom margin. */
 @media print {
   @page {
     size: A4;
-    margin: 12mm;
+    margin: 12mm 12mm 14mm;
+    @bottom-center {
+      content: "صفحة " counter(page) " من " counter(pages);
+      font-family: "Avenir Next Arabic", "Segoe UI", Tahoma, Arial, sans-serif;
+      font-size: 7.5pt;
+      color: #94959a;
+    }
   }
   body {
     background: white;
@@ -213,5 +284,22 @@
   }
   .print-avoid-break {
     break-inside: avoid;
+  }
+  .print-root,
+  .sheets {
+    @apply bg-white p-0 min-h-0;
+  }
+  /* The page margins replace the sheet padding; the footer sits at the foot
+     of the page because the sheet fills it (a touch under, to never spill). */
+  .sheet {
+    width: auto;
+    min-height: 270mm;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    break-after: page;
+  }
+  .sheet:last-child {
+    break-after: auto;
   }
 }

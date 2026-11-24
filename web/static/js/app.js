@@ -115,6 +115,18 @@ document.addEventListener("alpine:init", () => {
     close() { this.open = false; },
   }));
 
+  // Work order print page: opens the print dialog once fonts and images are
+  // ready (data-auto="1"), and backs the toolbar's print button.
+  Alpine.data("printPage", () => ({
+    init() {
+      if (this.$el.dataset.auto !== "1") return;
+      const images = [...document.images].filter((i) => !i.complete)
+        .map((i) => new Promise((ok) => { i.onload = i.onerror = ok; }));
+      Promise.all([document.fonts.ready, ...images]).then(() => setTimeout(() => window.print(), 250));
+    },
+    print() { window.print(); },
+  }));
+
   // Confirmation step built into the page (no window.confirm in the flow).
   Alpine.data("confirmAction", () => ({
     asking: false,

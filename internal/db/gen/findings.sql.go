@@ -401,6 +401,69 @@ func (q *Queries) ListFindingsByWorkOrder(ctx context.Context, workOrderID int64
 	return items, nil
 }
 
+const listFindingsForWorkOrders = `-- name: ListFindingsForWorkOrders :many
+SELECT f.id, f.work_order_id, f.severity, f.description, f.corrective_action, f.owner, f.due_date,
+       f.status, f.closed_at, f.created_at,
+       COALESCE(c.code, '')::text AS criterion_code, COALESCE(c.label, '')::text AS criterion_label,
+       COALESCE(i.stage::text, '')::text AS inspection_stage
+FROM findings f
+LEFT JOIN template_criteria c ON c.id = f.criterion_id
+LEFT JOIN inspections i ON i.id = f.inspection_id
+WHERE f.work_order_id = ANY($1::bigint[])
+ORDER BY f.work_order_id, f.status = 'closed', f.created_at
+`
+
+type ListFindingsForWorkOrdersRow struct {
+	ID               int64
+	WorkOrderID      int64
+	Severity         FindingSeverity
+	Description      string
+	CorrectiveAction string
+	Owner            string
+	DueDate          *time.Time
+	Status           FindingStatus
+	ClosedAt         *time.Time
+	CreatedAt        time.Time
+	CriterionCode    string
+	CriterionLabel   string
+	InspectionStage  string
+}
+
+// Findings of several work orders, for printing: open first, then by date.
+func (q *Queries) ListFindingsForWorkOrders(ctx context.Context, ids []int64) ([]ListFindingsForWorkOrdersRow, error) {
+	rows, err := q.db.Query(ctx, listFindingsForWorkOrders, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFindingsForWorkOrdersRow{}
+	for rows.Next() {
+		var i ListFindingsForWorkOrdersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkOrderID,
+			&i.Severity,
+			&i.Description,
+			&i.CorrectiveAction,
+			&i.Owner,
+			&i.DueDate,
+			&i.Status,
+			&i.ClosedAt,
+			&i.CreatedAt,
+			&i.CriterionCode,
+			&i.CriterionLabel,
+			&i.InspectionStage,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reopenFinding = `-- name: ReopenFinding :exec
 UPDATE findings SET status = 'open', closed_at = NULL, closed_by = NULL, updated_at = now()
 WHERE id = $1

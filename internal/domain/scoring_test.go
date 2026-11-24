@@ -123,3 +123,22 @@ func TestValidateSubmit(t *testing.T) {
 		t.Errorf("passing: want ok, got %v", errs)
 	}
 }
+
+func TestWOVerdict(t *testing.T) {
+	tests := []struct {
+		name string
+		in   VerdictInput
+		want string
+	}{
+		{"cancelled wins", VerdictInput{Status: WOCancelled, HasSubmittedAfter: true, LatestAfterPassed: true}, "neutral"},
+		{"accepted", VerdictInput{Status: WOAccepted, HasSubmittedAfter: true, LatestAfterPassed: true}, "good"},
+		{"latest after failed", VerdictInput{Status: WOCompleted, HasSubmittedAfter: true}, "bad"},
+		{"passed, findings open", VerdictInput{Status: WOCompleted, HasSubmittedAfter: true, LatestAfterPassed: true, OpenFindings: 2}, "warn"},
+		{"not inspected after", VerdictInput{Status: WOInProgress}, "neutral"},
+	}
+	for _, tt := range tests {
+		if got := WOVerdict(tt.in); got.Tone != tt.want || got.Label == "" {
+			t.Errorf("%s: got %+v, want tone %s", tt.name, got, tt.want)
+		}
+	}
+}

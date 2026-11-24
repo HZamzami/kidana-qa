@@ -375,6 +375,125 @@ func (q *Queries) ListWorkOrders(ctx context.Context, arg ListWorkOrdersParams) 
 	return items, nil
 }
 
+const listWorkOrdersForPrint = `-- name: ListWorkOrdersForPrint :many
+SELECT w.id, w.ref, w.type, w.site_id, w.location, w.system_id, w.asset_group_id, w.asset, w.contractor_id, w.technician, w.priority, w.description, w.planned_date, w.actual_date, w.status, w.created_by, w.created_at, w.updated_at, s.name AS site_name, sy.name AS system_name, ag.name AS asset_group_name,
+       COALESCE(c.name, '')::text AS contractor_name
+FROM work_orders w
+JOIN sites s ON s.id = w.site_id
+JOIN systems sy ON sy.id = w.system_id
+JOIN asset_groups ag ON ag.id = w.asset_group_id
+LEFT JOIN contractors c ON c.id = w.contractor_id
+WHERE ($1::bigint IS NULL OR w.id = $1)
+  AND ($2::bigint IS NULL OR w.site_id = $2)
+  AND ($3::bigint IS NULL OR w.system_id = $3)
+  AND ($4::bigint IS NULL OR w.asset_group_id = $4)
+  AND ($5::bigint IS NULL OR w.contractor_id = $5)
+  AND ($6::wo_type IS NULL OR w.type = $6)
+  AND ($7::wo_status IS NULL OR w.status = $7)
+  AND ($8::wo_priority IS NULL OR w.priority = $8)
+  AND ($9::text IS NULL
+       OR w.ref ILIKE '%' || $9 || '%'
+       OR w.asset ILIKE '%' || $9 || '%'
+       OR w.location ILIKE '%' || $9 || '%'
+       OR w.technician ILIKE '%' || $9 || '%')
+ORDER BY w.created_at DESC, w.id DESC
+LIMIT $10
+`
+
+type ListWorkOrdersForPrintParams struct {
+	ID           *int64
+	SiteID       *int64
+	SystemID     *int64
+	AssetGroupID *int64
+	ContractorID *int64
+	Type         *WoType
+	Status       *WoStatus
+	Priority     *WoPriority
+	Q            *string
+	Lim          int32
+}
+
+type ListWorkOrdersForPrintRow struct {
+	ID             int64
+	Ref            string
+	Type           WoType
+	SiteID         int64
+	Location       string
+	SystemID       int64
+	AssetGroupID   int64
+	Asset          string
+	ContractorID   *int64
+	Technician     string
+	Priority       WoPriority
+	Description    string
+	PlannedDate    *time.Time
+	ActualDate     *time.Time
+	Status         WoStatus
+	CreatedBy      *int64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	SiteName       string
+	SystemName     string
+	AssetGroupName string
+	ContractorName string
+}
+
+// Work orders for printing: the list filters (or one id), full detail, newest
+// first, capped by lim. Inspections and findings are loaded in batches below.
+func (q *Queries) ListWorkOrdersForPrint(ctx context.Context, arg ListWorkOrdersForPrintParams) ([]ListWorkOrdersForPrintRow, error) {
+	rows, err := q.db.Query(ctx, listWorkOrdersForPrint,
+		arg.ID,
+		arg.SiteID,
+		arg.SystemID,
+		arg.AssetGroupID,
+		arg.ContractorID,
+		arg.Type,
+		arg.Status,
+		arg.Priority,
+		arg.Q,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkOrdersForPrintRow{}
+	for rows.Next() {
+		var i ListWorkOrdersForPrintRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Ref,
+			&i.Type,
+			&i.SiteID,
+			&i.Location,
+			&i.SystemID,
+			&i.AssetGroupID,
+			&i.Asset,
+			&i.ContractorID,
+			&i.Technician,
+			&i.Priority,
+			&i.Description,
+			&i.PlannedDate,
+			&i.ActualDate,
+			&i.Status,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SiteName,
+			&i.SystemName,
+			&i.AssetGroupName,
+			&i.ContractorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setWorkOrderStatus = `-- name: SetWorkOrderStatus :exec
 UPDATE work_orders SET status = $2, updated_at = now() WHERE id = $1
 `

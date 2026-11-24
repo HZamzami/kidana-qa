@@ -1,0 +1,495 @@
+package views
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/HZamzami/kidana-quality/internal/dates"
+	"github.com/HZamzami/kidana-quality/internal/db/gen"
+	"github.com/HZamzami/kidana-quality/internal/domain"
+)
+
+// ---------------------------------------------------------------- data
+
+// PrintItem is one rated criterion on a printed inspection.
+type PrintItem struct {
+	Code, Label, Note string
+	Weight            int
+	Critical          bool
+	Rating            domain.Rating
+}
+
+// PrintAttempt is an earlier attempt of the same stage, listed for traceability.
+type PrintAttempt struct {
+	Attempt int
+	Score   float64
+	Passed  bool
+}
+
+// PrintInspection is the latest submitted attempt of one stage.
+type PrintInspection struct {
+	Stage          domain.Stage
+	Attempt        int
+	Inspector      string
+	Date           time.Time
+	Score          float64
+	Passed         bool
+	CriticalFailed bool
+	Notes          string
+	Items          []PrintItem
+	History        []PrintAttempt // earlier attempts, oldest first
+}
+
+// WOPrintCard is one work order on its own A4 page.
+type WOPrintCard struct {
+	WO           gen.ListWorkOrdersForPrintRow
+	During       *PrintInspection
+	After        *PrintInspection
+	Findings     []gen.ListFindingsForWorkOrdersRow
+	OpenFindings int
+	Verdict      domain.Verdict
+}
+
+// WOPrintData is a print run: one work order, or every work order in a filter.
+type WOPrintData struct {
+	Cards     []WOPrintCard
+	Total     int // matching work orders; more than len(Cards) when capped
+	Scope     string
+	Back      string
+	Printed   time.Time
+	PrintedBy string
+}
+
+func (d WOPrintData) title() string {
+	if len(d.Cards) == 1 {
+		return "أمر العمل " + d.Cards[0].WO.Ref
+	}
+	return "أوامر العمل — " + domain.Count(len(d.Cards), domain.NounWorkOrder)
+}
+
+func (d WOPrintData) today() string { return d.Printed.Format(time.DateOnly) }
+
+// signer is who signs for Kidana: the inspector of the latest after-work
+// inspection, else of the during-work one.
+func (c WOPrintCard) signer() string {
+	if c.After != nil {
+		return c.After.Inspector
+	}
+	if c.During != nil {
+		return c.During.Inspector
+	}
+	return ""
+}
+
+// riyadh returns a timestamp as a Riyadh calendar date, for display.
+func riyadh(t time.Time) *time.Time {
+	r := t.In(dates.Riyadh)
+	return &r
+}
+
+func attemptText(in *PrintInspection) string {
+	return fmt.Sprintf("المحاولة %d من %d", in.Attempt, len(in.History)+1)
+}
+
+// ---------------------------------------------------------------- page
+templ WorkOrdersPrint(d WOPrintData) {
+	@Base(d.title()) {
+		<div class="print-root" x-data="printPage" data-auto={ tern(len(d.Cards) > 0, "1", "0") }>
+			<div class="no-print sticky top-0 z-10 bg-white border-b border-ink-10 shadow-sm">
+				<div class="mx-auto max-w-[210mm] px-4 py-3 flex flex-wrap items-center gap-3">
+					<img src={ asset("/static/img/kidana-logo.png") } alt="كدانة" class="h-8 w-auto"/>
+					<div class="min-w-0">
+						<p class="font-semibold">{ d.title() }</p>
+						<p class="text-xs text-ink-80">
+							if d.Scope != "" {
+								{ d.Scope }
+							} else if len(d.Cards) > 1 {
+								كل أوامر العمل
+							}
+							if len(d.Cards) > 0 {
+								<span class="text-ink-60">{ " · كل أمر عمل في صفحة A4 مستقلة" }</span>
+							}
+						</p>
+					</div>
+					<div class="ms-auto flex gap-2">
+						<a href={ templ.SafeURL(d.Back) } class="btn btn-ghost">رجوع</a>
+						if len(d.Cards) > 0 {
+							<button type="button" class="btn btn-primary" @click="print">طباعة / حفظ PDF</button>
+						}
+					</div>
+				</div>
+				if d.Total > len(d.Cards) {
+					<p class="mx-auto max-w-[210mm] px-4 pb-3 text-xs text-fail">
+						{ fmt.Sprintf("تُعرض أحدث %d من أصل %d أمر عمل مطابق. ضيّق الفلاتر لطباعة الباقي.", len(d.Cards), d.Total) }
+					</p>
+				}
+				if len(d.Cards) > 0 {
+					<p class="mx-auto max-w-[210mm] px-4 pb-3 text-[11px] text-ink-60">للحفظ PDF اختر «حفظ بتنسيق PDF» من نافذة الطباعة، واجعل الهوامش «افتراضية» والمقياس 100%.</p>
+				}
+			</div>
+			if len(d.Cards) == 0 {
+				<div class="mx-auto max-w-[210mm] p-4">
+					<div class="card">
+						@EmptyState("لا توجد أوامر عمل مطابقة للطباعة", "غيّر الفلاتر في قائمة أوامر العمل ثم أعد المحاولة.")
+					</div>
+				</div>
+			}
+			<div class="sheets">
+				for _, c := range d.Cards {
+					@printSheet(d, c)
+				}
+			</div>
+		</div>
+	}
+}
+
+templ printSheet(d WOPrintData, c WOPrintCard) {
+	<article class="sheet" aria-label={ "أمر العمل " + c.WO.Ref }>
+		<!-- header: identity of the record -->
+		<header class="flex items-start gap-4 pb-3 border-b-2 border-gold">
+			<img src={ asset("/static/img/kidana-logo.png") } alt="كدانة" class="h-12 w-auto shrink-0"/>
+			<div class="min-w-0 pt-0.5">
+				<p class="pr-label">إدارة جودة العمليات · قطاع العمليات</p>
+				<h1 class="text-[15pt] font-bold leading-tight">تقرير فحص أمر العمل</h1>
+				<p class="pr-label mt-0.5">فحص أثناء التنفيذ وفحص بعد التنفيذ</p>
+			</div>
+			<div class="ms-auto text-end">
+				<p class="pr-label">{ domain.Label(domain.WOTypeLabels, string(c.WO.Type)) }</p>
+				<p class="text-[19pt] font-bold leading-none num" dir="ltr">{ c.WO.Ref }</p>
+				<div class="mt-1.5 flex justify-end gap-1">
+					@PriorityPill(string(c.WO.Priority))
+					@WOStatusPill(string(c.WO.Status))
+				</div>
+			</div>
+		</header>
+		<!-- results at a glance -->
+		<section class="mt-3 grid grid-cols-[1.35fr_1fr_1fr_0.8fr] gap-2 print-avoid-break" aria-label="النتيجة">
+			<div
+				class={ "rounded-lg border p-2.5",
+					templ.KV("bg-green-10 border-green-50", c.Verdict.Tone == "good"),
+					templ.KV("bg-fail-10 border-fail-20", c.Verdict.Tone == "bad"),
+					templ.KV("bg-gold-10 border-gold-50", c.Verdict.Tone == "warn"),
+					templ.KV("bg-ink-5 border-ink-10", c.Verdict.Tone == "neutral") }
+			>
+				<p class="pr-label">النتيجة النهائية</p>
+				<p
+					class={ "mt-1 text-[12.5pt] font-bold leading-snug",
+						templ.KV("text-green", c.Verdict.Tone == "good"),
+						templ.KV("text-fail", c.Verdict.Tone == "bad") }
+				>
+					@verdictIcon(c.Verdict.Tone)
+					{ c.Verdict.Label }
+				</p>
+				<p class="mt-1 text-[7.5pt] text-ink-80">يُعتمد أمر العمل عند نجاح آخر فحص بعد التنفيذ وإغلاق جميع الملاحظات.</p>
+			</div>
+			@scoreBox(domain.StageDuring, c.During)
+			@scoreBox(domain.StageAfter, c.After)
+			<div class="rounded-lg border border-ink-10 p-2.5">
+				<p class="pr-label">الملاحظات</p>
+				<p class={ "mt-1 text-[17pt] font-bold leading-none num", templ.KV("text-fail", c.OpenFindings > 0) }>{ itoa(c.OpenFindings) }</p>
+				<p class="mt-1 text-[7.5pt] text-ink-80">
+					{ "مفتوحة من أصل " + itoa(len(c.Findings)) }
+				</p>
+			</div>
+		</section>
+		<!-- work order details -->
+		<section class="mt-3 print-avoid-break" aria-label="بيانات أمر العمل">
+			<h2 class="pr-h2">بيانات أمر العمل</h2>
+			<dl class="pr-facts">
+				@printFact("الموقع") {
+					{ c.WO.SiteName }
+				}
+				@printFact("الموقع التفصيلي") {
+					{ orDash(c.WO.Location) }
+				}
+				@printFact("المنظومة") {
+					{ c.WO.SystemName }
+				}
+				@printFact("مجموعة الأصل") {
+					{ c.WO.AssetGroupName }
+				}
+				@printFact("الأصل / المعدة") {
+					<span dir="auto">{ orDash(c.WO.Asset) }</span>
+				}
+				@printFact("المقاول") {
+					{ orDash(c.WO.ContractorName) }
+				}
+				@printFact("الفني") {
+					{ orDash(c.WO.Technician) }
+				}
+				@printFact("الأولوية") {
+					{ domain.Label(domain.PriorityLabels, string(c.WO.Priority)) }
+				}
+				@printFact(tern(c.WO.Type == gen.WoTypeWO, "استحقاق SLA", "التاريخ المجدول")) {
+					@printDate(c.WO.PlannedDate)
+				}
+				@printFact("التنفيذ الفعلي") {
+					@printDate(c.WO.ActualDate)
+				}
+				@printFact("الالتزام بالموعد") {
+					{ delayText(c.WO.PlannedDate, c.WO.ActualDate) }
+				}
+				@printFact("تاريخ التسجيل") {
+					@printDate(riyadh(c.WO.CreatedAt))
+				}
+			</dl>
+			if c.WO.Description != "" {
+				<p class="mt-1.5 rounded-md bg-ink-5 px-2.5 py-1.5"><span class="pr-label me-1">وصف العمل:</span>{ c.WO.Description }</p>
+			}
+		</section>
+		<!-- inspections side by side: during, then after -->
+		<section class="mt-3 grid grid-cols-2 gap-3" aria-label="الفحوصات">
+			@inspectionPanel(domain.StageDuring, c.During)
+			@inspectionPanel(domain.StageAfter, c.After)
+		</section>
+		<!-- findings -->
+		<section class="mt-3" aria-label="الملاحظات والإجراءات التصحيحية">
+			<h2 class="pr-h2">الملاحظات والإجراءات التصحيحية</h2>
+			if len(c.Findings) == 0 {
+				<p class="rounded-md border border-dashed border-ink-30 px-2.5 py-2 text-ink-80">لا توجد ملاحظات مسجلة على أمر العمل.</p>
+			} else {
+				<table class="pr-table">
+					<thead>
+						<tr>
+							<th class="w-6">#</th>
+							<th class="w-20">المرحلة / البند</th>
+							<th>الملاحظة والإجراء التصحيحي</th>
+							<th class="w-24">المسؤول</th>
+							<th class="w-20">الاستحقاق</th>
+							<th class="w-16">الحالة</th>
+						</tr>
+					</thead>
+					<tbody>
+						for i, f := range c.Findings {
+							<tr class="print-avoid-break">
+								<td class="text-center num">{ itoa(i + 1) }</td>
+								<td>
+									if f.InspectionStage != "" {
+										<span class="block">{ domain.Stage(f.InspectionStage).Short() }</span>
+									}
+									if f.CriterionCode != "" {
+										<span class="num text-ink-80">{ f.CriterionCode }</span>
+									}
+								</td>
+								<td>
+									if f.Severity == gen.FindingSeverityCritical {
+										<span class="pr-tag bg-fail-10 text-fail me-1">حرجة</span>
+									}
+									<span class="font-medium">{ f.Description }</span>
+									<span class="block text-ink-80"><span class="text-ink-60">الإجراء: </span>{ f.CorrectiveAction }</span>
+								</td>
+								<td>{ orDash(f.Owner) }</td>
+								<td>
+									@printDate(f.DueDate)
+								</td>
+								<td>
+									@findingState(f, d.today())
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+		</section>
+		<!-- sign-off -->
+		<section class="mt-4 grid grid-cols-3 gap-3 print-avoid-break" aria-label="الاعتماد">
+			@signBox("المفتش", c.signer())
+			@signBox("ممثل المقاول", c.WO.ContractorName)
+			@signBox("اعتماد إدارة الجودة", "")
+		</section>
+		<footer class="mt-auto pt-3">
+			<div class="flex items-center gap-3 border-t border-ink-10 pt-1.5 text-[7pt] text-ink-60">
+				<span>سجل جودة — يُحفظ ضمن سجلات إدارة جودة العمليات</span>
+				<span class="mx-auto">
+					{ "طُبع في " }
+					<span class="num">{ dates.DMYTime(d.Printed) }</span>
+					{ " · " }
+					<span class="num">{ dates.HijriDigits(d.Printed) }</span>
+					{ " هـ" }
+					if d.PrintedBy != "" {
+						{ " · بواسطة " + d.PrintedBy }
+					}
+				</span>
+				<span class="num" dir="ltr">{ c.WO.Ref }</span>
+			</div>
+		</footer>
+	</article>
+}
+
+// ---------------------------------------------------------------- pieces
+templ printFact(label string) {
+	<div class="pr-fact">
+		<dt>{ label }</dt>
+		<dd>
+			{ children... }
+		</dd>
+	</div>
+}
+
+// printDate is dd/mm/yyyy with the Hijri date beneath, sized for print.
+templ printDate(t *time.Time) {
+	if t == nil {
+		<span class="text-ink-60">—</span>
+	} else {
+		<span class="num">{ dmy(*t) }</span>
+		<span class="block text-[7pt] text-ink-60"><span class="num">{ dates.HijriDigits(*t) }</span> هـ</span>
+	}
+}
+
+templ scoreBox(stage domain.Stage, in *PrintInspection) {
+	<div class={ "rounded-lg border p-2.5 border-t-4", templ.KV("border-ink-10 border-t-sky", stage == domain.StageDuring), templ.KV("border-ink-10 border-t-gold", stage == domain.StageAfter) }>
+		<p class="pr-label">{ stage.Label() }</p>
+		if in == nil {
+			<p class="mt-1 text-[11pt] font-medium text-ink-60">لم يُسجَّل</p>
+		} else {
+			<p class="mt-1 flex items-baseline gap-1.5">
+				<span class={ "text-[17pt] font-bold leading-none num", templ.KV("text-green", in.Passed), templ.KV("text-fail", !in.Passed) }>{ scoreVal(in.Score) }</span>
+				<span class="text-[8pt] text-ink-80">{ domain.GradeFor(in.Score) }</span>
+			</p>
+			<p class="mt-1 text-[7.5pt] text-ink-80">
+				@resultWord(in.Passed)
+				{ " · " + attemptText(in) }
+			</p>
+		}
+	</div>
+}
+
+templ inspectionPanel(stage domain.Stage, in *PrintInspection) {
+	<div class="min-w-0 print-avoid-break">
+		<h2 class="pr-h2 flex items-center gap-1.5">
+			<span class={ "inline-block size-2 rounded-full", templ.KV("bg-sky", stage == domain.StageDuring), templ.KV("bg-gold", stage == domain.StageAfter) }></span>
+			{ stage.Label() }
+		</h2>
+		if in == nil {
+			<p class="rounded-md border border-dashed border-ink-30 px-2.5 py-3 text-ink-80">
+				لم يُسجَّل فحص مرسل لهذه المرحلة.
+			</p>
+		} else {
+			<p class="mb-1 text-[7.5pt] text-ink-80">
+				{ "المفتش: " + in.Inspector + " · " }<span class="num">{ dmy(in.Date) }</span>{ " (" }<span class="num">{ dates.HijriDigits(in.Date) }</span>{ " هـ) · " + attemptText(in) }
+			</p>
+			if len(in.History) > 0 {
+				<p class="mb-1 text-[7.5pt] text-ink-60">
+					سبقتها:
+					for i, h := range in.History {
+						if i > 0 {
+							{ "، " }
+						}
+						{ fmt.Sprintf("المحاولة %d ", h.Attempt) }
+						<span class="num">{ "(" + scoreVal(h.Score) + ")" }</span>
+						{ " " + tern(h.Passed, "مطابق", "غير مطابق") }
+					}
+				</p>
+			}
+			if in.CriticalFailed {
+				<p class="mb-1 rounded bg-fail-10 px-2 py-1 text-[8pt] font-medium text-fail">إخفاق في بند حرج: الفحص غير مطابق بصرف النظر عن النتيجة.</p>
+			}
+			<table class="pr-table">
+				<thead>
+					<tr>
+						<th class="w-7">الرمز</th>
+						<th>البند</th>
+						<th class="w-8 text-center">الوزن</th>
+						<th class="w-[5.6rem]">التقييم</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, it := range in.Items {
+						<tr>
+							<td class="num text-ink-80">{ it.Code }</td>
+							<td>
+								{ it.Label }
+								if it.Critical {
+									<span class="pr-tag bg-ink-10 text-ink ms-0.5">حرج</span>
+								}
+								if it.Note != "" {
+									<span class="block text-[7pt] text-ink-80">{ it.Note }</span>
+								}
+							</td>
+							<td class="num text-center">{ itoa(it.Weight) }</td>
+							<td>
+								@ratingCell(it.Rating)
+							</td>
+						</tr>
+					}
+				</tbody>
+				<tfoot>
+					<tr>
+						<td colspan="2" class="font-medium">النتيجة</td>
+						<td colspan="2" class={ "font-bold num", templ.KV("text-green", in.Passed), templ.KV("text-fail", !in.Passed) }>
+							{ scoreVal(in.Score) + " · " + domain.GradeFor(in.Score) }
+						</td>
+					</tr>
+				</tfoot>
+			</table>
+			if in.Notes != "" {
+				<p class="mt-1 text-[7.5pt] text-ink-80"><span class="text-ink-60">ملاحظات المفتش: </span>{ in.Notes }</p>
+			}
+		}
+	</div>
+}
+
+// ratingCell pairs the label with a shape, so the result reads in black and
+// white too: check, half, cross, dash.
+templ ratingCell(r domain.Rating) {
+	<span
+		class={ "pr-rating",
+			templ.KV("bg-green-10 text-green", r == domain.RatingCompliant),
+			templ.KV("bg-gold-10 text-ink", r == domain.RatingPartial),
+			templ.KV("bg-fail-10 text-fail", r == domain.RatingNonCompliant),
+			templ.KV("bg-ink-5 text-ink-80", r == domain.RatingNA || r == "") }
+	>
+		switch r {
+			case domain.RatingCompliant:
+				<svg viewBox="0 0 12 12" class="size-[9px] shrink-0" aria-hidden="true"><path d="M2 6.5 5 9.2 10 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+			case domain.RatingPartial:
+				<svg viewBox="0 0 12 12" class="size-[9px] shrink-0" aria-hidden="true"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="1.4"></circle><path d="M6 1.4a4.6 4.6 0 0 1 0 9.2z" fill="currentColor"></path></svg>
+			case domain.RatingNonCompliant:
+				<svg viewBox="0 0 12 12" class="size-[9px] shrink-0" aria-hidden="true"><path d="M3 3l6 6M9 3 3 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+			default:
+				<svg viewBox="0 0 12 12" class="size-[9px] shrink-0" aria-hidden="true"><path d="M3 6h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+		}
+		if r == "" {
+			غير مقيّم
+		} else {
+			{ r.ShortLabel() }
+		}
+	</span>
+}
+
+templ resultWord(passed bool) {
+	if passed {
+		<span class="font-medium text-green">مطابق</span>
+	} else {
+		<span class="font-medium text-fail">غير مطابق</span>
+	}
+}
+
+templ verdictIcon(tone string) {
+	switch tone {
+		case "good":
+			<svg viewBox="0 0 12 12" class="inline-block size-[11px] me-1 align-[-1px]" aria-hidden="true"><path d="M2 6.5 5 9.2 10 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+		case "bad":
+			<svg viewBox="0 0 12 12" class="inline-block size-[11px] me-1 align-[-1px]" aria-hidden="true"><path d="M3 3l6 6M9 3 3 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+	}
+}
+
+templ findingState(f gen.ListFindingsForWorkOrdersRow, today string) {
+	<span class="block">{ domain.Label(domain.FindingStatusLabels, string(f.Status)) }</span>
+	if f.Status == gen.FindingStatusClosed && f.ClosedAt != nil {
+		<span class="block text-[7pt] text-ink-60 num">{ dmy(f.ClosedAt.In(dates.Riyadh)) }</span>
+	} else if f.Status != gen.FindingStatusClosed && f.DueDate != nil && isoDate(f.DueDate) < today {
+		<span class="pr-tag bg-fail-10 text-fail">متأخرة</span>
+	}
+}
+
+templ signBox(role, name string) {
+	<div class="rounded-lg border border-ink-10 p-2.5">
+		<p class="pr-label">{ role }</p>
+		<p class="mt-1 min-h-[1.5em] font-medium">{ name }</p>
+		<div class="mt-5 grid grid-cols-2 gap-3 text-[7.5pt] text-ink-60">
+			<span class="border-t border-ink-30 pt-0.5">التوقيع</span>
+			<span class="border-t border-ink-30 pt-0.5">التاريخ</span>
+		</div>
+	</div>
+}

@@ -93,3 +93,29 @@ WHERE (sqlc.narg(site_id)::bigint IS NULL OR w.site_id = sqlc.narg(site_id))
 -- Deletes a work order with its inspections, findings and attachments (cascade).
 -- name: DeleteWorkOrder :exec
 DELETE FROM work_orders WHERE id = $1;
+
+-- Work orders for printing: the list filters (or one id), full detail, newest
+-- first, capped by lim. Inspections and findings are loaded in batches below.
+-- name: ListWorkOrdersForPrint :many
+SELECT w.*, s.name AS site_name, sy.name AS system_name, ag.name AS asset_group_name,
+       COALESCE(c.name, '')::text AS contractor_name
+FROM work_orders w
+JOIN sites s ON s.id = w.site_id
+JOIN systems sy ON sy.id = w.system_id
+JOIN asset_groups ag ON ag.id = w.asset_group_id
+LEFT JOIN contractors c ON c.id = w.contractor_id
+WHERE (sqlc.narg(id)::bigint IS NULL OR w.id = sqlc.narg(id))
+  AND (sqlc.narg(site_id)::bigint IS NULL OR w.site_id = sqlc.narg(site_id))
+  AND (sqlc.narg(system_id)::bigint IS NULL OR w.system_id = sqlc.narg(system_id))
+  AND (sqlc.narg(asset_group_id)::bigint IS NULL OR w.asset_group_id = sqlc.narg(asset_group_id))
+  AND (sqlc.narg(contractor_id)::bigint IS NULL OR w.contractor_id = sqlc.narg(contractor_id))
+  AND (sqlc.narg(type)::wo_type IS NULL OR w.type = sqlc.narg(type))
+  AND (sqlc.narg(status)::wo_status IS NULL OR w.status = sqlc.narg(status))
+  AND (sqlc.narg(priority)::wo_priority IS NULL OR w.priority = sqlc.narg(priority))
+  AND (sqlc.narg(q)::text IS NULL
+       OR w.ref ILIKE '%' || sqlc.narg(q) || '%'
+       OR w.asset ILIKE '%' || sqlc.narg(q) || '%'
+       OR w.location ILIKE '%' || sqlc.narg(q) || '%'
+       OR w.technician ILIKE '%' || sqlc.narg(q) || '%')
+ORDER BY w.created_at DESC, w.id DESC
+LIMIT sqlc.arg(lim);

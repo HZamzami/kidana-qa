@@ -21,22 +21,7 @@ func (s *Server) workOrdersList(w http.ResponseWriter, r *http.Request) {
 	if page < 1 {
 		page = 1
 	}
-	var typ *gen.WoType
-	if t := gen.WoType(q.Get("type")); t.Valid() {
-		typ = &t
-	}
-	var status *gen.WoStatus
-	if st := gen.WoStatus(q.Get("status")); st.Valid() {
-		status = &st
-	}
-	var priority *gen.WoPriority
-	if p := gen.WoPriority(q.Get("priority")); p.Valid() {
-		priority = &p
-	}
-	filter := gen.CountWorkOrdersParams{
-		SiteID: queryID(r, "site"), SystemID: queryID(r, "system"), AssetGroupID: queryID(r, "group"), ContractorID: queryID(r, "contractor"),
-		Type: typ, Status: status, Priority: priority, Q: queryStr(r, "q"),
-	}
+	filter := woFilter(r)
 	total, err := s.q.CountWorkOrders(ctx, filter)
 	if err != nil {
 		s.serverError(w, r, err)
@@ -62,6 +47,26 @@ func (s *Server) workOrdersList(w http.ResponseWriter, r *http.Request) {
 		Sites: lk.Sites, Systems: lk.Systems, AssetGroups: lk.AssetGroups, Contractors: lk.Contractors, Statuses: woStatusOptions(true), Priorities: priorityOptions(),
 	}
 	s.render(w, r, http.StatusOK, views.WorkOrdersPage(d))
+}
+
+// woFilter reads the work order list filters from the query string. The list
+// and the filtered print share it, so a print always matches the screen.
+func woFilter(r *http.Request) gen.CountWorkOrdersParams {
+	q := r.URL.Query()
+	f := gen.CountWorkOrdersParams{
+		SiteID: queryID(r, "site"), SystemID: queryID(r, "system"), AssetGroupID: queryID(r, "group"),
+		ContractorID: queryID(r, "contractor"), Q: queryStr(r, "q"),
+	}
+	if t := gen.WoType(q.Get("type")); t.Valid() {
+		f.Type = &t
+	}
+	if st := gen.WoStatus(q.Get("status")); st.Valid() {
+		f.Status = &st
+	}
+	if p := gen.WoPriority(q.Get("priority")); p.Valid() {
+		f.Priority = &p
+	}
+	return f
 }
 
 func (s *Server) woFormData(r *http.Request, id int64, v views.WOFormValues, errs map[string]string) (views.WOFormData, error) {

@@ -27,6 +27,14 @@ type WOListData struct {
 
 func (d WOListData) val(k string) string { return d.Query.Get(k) }
 
+// printURL prints every work order matching the current filters (not just this page).
+func (d WOListData) printURL() templ.SafeURL {
+	if enc := d.Query.Encode(); enc != "" {
+		return templ.URL("/work-orders/print?" + enc)
+	}
+	return templ.URL("/work-orders/print")
+}
+
 func (d WOListData) Pages() int {
 	if d.Total == 0 {
 		return 1
@@ -78,6 +86,19 @@ templ WorkOrdersResults(d WOListData) {
 		if len(d.Rows) == 0 {
 			@EmptyState("لا توجد أوامر عمل مطابقة", "غيّر الفلاتر أو أضف أمر عمل جديداً.")
 		} else {
+			<div class="flex flex-wrap items-center gap-3 px-3 py-2.5 border-b border-ink-10">
+				<span class="text-xs text-ink-80">{ domain.Count(int(d.Total), domain.NounWorkOrder) }</span>
+				<a
+					class="btn btn-outline ms-auto py-1.5"
+					href={ d.printURL() }
+					target="_blank"
+					rel="noopener"
+					title="كل أمر عمل مطابق للفلاتر في صفحة A4 مستقلة"
+				>
+					@PrintIcon()
+					{ "طباعة النتائج PDF (" + itoa(int(d.Total)) + ")" }
+				</a>
+			</div>
 			<div class="overflow-x-auto">
 				<table class="table">
 					<thead>
@@ -92,6 +113,7 @@ templ WorkOrdersResults(d WOListData) {
 							<th>بعد التنفيذ</th>
 							<th>ملاحظات مفتوحة</th>
 							<th>الحالة</th>
+							<th class="relative w-0"><span class="sr-only">إجراءات</span></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -134,14 +156,25 @@ templ WorkOrdersResults(d WOListData) {
 								<td>
 									@WOStatusPill(string(w.Status))
 								</td>
+								<td class="py-1">
+									<a
+										class="btn btn-ghost px-2 py-1.5"
+										href={ u("/work-orders/%d/print", w.ID) }
+										target="_blank"
+										rel="noopener"
+										title={ "طباعة " + w.Ref }
+										aria-label={ "طباعة أمر العمل " + w.Ref }
+									>
+										@PrintIcon()
+									</a>
+								</td>
 							</tr>
 						}
 					</tbody>
 				</table>
 			</div>
-			<div class="flex items-center gap-3 px-3 py-2.5 text-xs text-ink-80 border-t border-ink-10">
-				<span>{ domain.Count(int(d.Total), domain.NounWorkOrder) }</span>
-				if d.Pages() > 1 {
+			if d.Pages() > 1 {
+				<div class="flex items-center gap-3 px-3 py-2.5 text-xs text-ink-80 border-t border-ink-10">
 					<span class="ms-auto flex items-center gap-1">
 						if d.Page > 1 {
 							<a class="btn btn-ghost px-2 py-1" href={ templ.URL(withQuery("/work-orders", d.Query, "page", itoa(d.Page-1))) }>السابق</a>
@@ -151,8 +184,8 @@ templ WorkOrdersResults(d WOListData) {
 							<a class="btn btn-ghost px-2 py-1" href={ templ.URL(withQuery("/work-orders", d.Query, "page", itoa(d.Page+1))) }>التالي</a>
 						}
 					</span>
-				}
-			</div>
+				</div>
+			}
 		}
 	</div>
 }
@@ -272,12 +305,16 @@ templ WorkOrderShow(d WOShowData) {
 						<p class="mt-2 text-ink-80 max-w-prose">{ d.WO.Description }</p>
 					}
 				</div>
-				if appctx.CanEdit(ctx) {
-					<div class="ms-auto flex flex-wrap gap-2">
+				<div class="ms-auto flex flex-wrap gap-2">
+					<a href={ u("/work-orders/%d/print", d.WO.ID) } class="btn btn-ghost" target="_blank" rel="noopener">
+						@PrintIcon()
+						طباعة
+					</a>
+					if appctx.CanEdit(ctx) {
 						<a href={ u("/work-orders/new?from=%d", d.WO.ID) } class="btn btn-ghost">نسخ كأمر جديد</a>
 						<a href={ u("/work-orders/%d/edit", d.WO.ID) } class="btn btn-outline">تعديل</a>
-					</div>
-				}
+					}
+				</div>
 			</div>
 			<dl class="mt-5 grid gap-x-6 gap-y-4 grid-cols-2 md:grid-cols-4">
 				@Fact("الموقع") {

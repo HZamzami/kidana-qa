@@ -290,6 +290,109 @@ func (q *Queries) ListInspectionsByWorkOrder(ctx context.Context, workOrderID in
 	return items, nil
 }
 
+const listItemsForPrint = `-- name: ListItemsForPrint :many
+SELECT it.inspection_id, it.rating, it.note, c.code, c.label, c.weight, c.is_critical, c.sort
+FROM inspection_items it
+JOIN template_criteria c ON c.id = it.criterion_id
+WHERE it.inspection_id = ANY($1::bigint[])
+ORDER BY it.inspection_id, c.sort, c.code
+`
+
+type ListItemsForPrintRow struct {
+	InspectionID int64
+	Rating       *Rating
+	Note         string
+	Code         string
+	Label        string
+	Weight       int32
+	IsCritical   bool
+	Sort         int32
+}
+
+// Rated items of several inspections with their criteria, for printing.
+func (q *Queries) ListItemsForPrint(ctx context.Context, ids []int64) ([]ListItemsForPrintRow, error) {
+	rows, err := q.db.Query(ctx, listItemsForPrint, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListItemsForPrintRow{}
+	for rows.Next() {
+		var i ListItemsForPrintRow
+		if err := rows.Scan(
+			&i.InspectionID,
+			&i.Rating,
+			&i.Note,
+			&i.Code,
+			&i.Label,
+			&i.Weight,
+			&i.IsCritical,
+			&i.Sort,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubmittedInspectionsForWorkOrders = `-- name: ListSubmittedInspectionsForWorkOrders :many
+SELECT i.id, i.work_order_id, i.stage, i.attempt, i.inspected_on, i.score, i.passed, i.critical_failed, i.notes,
+       u.name AS inspector_name
+FROM inspections i
+JOIN users u ON u.id = i.inspector_id
+WHERE i.work_order_id = ANY($1::bigint[]) AND i.status = 'submitted'
+ORDER BY i.work_order_id, i.stage, i.attempt
+`
+
+type ListSubmittedInspectionsForWorkOrdersRow struct {
+	ID             int64
+	WorkOrderID    int64
+	Stage          InspectionStage
+	Attempt        int32
+	InspectedOn    time.Time
+	Score          *float64
+	Passed         *bool
+	CriticalFailed bool
+	Notes          string
+	InspectorName  string
+}
+
+// Submitted inspections of several work orders, for printing.
+func (q *Queries) ListSubmittedInspectionsForWorkOrders(ctx context.Context, ids []int64) ([]ListSubmittedInspectionsForWorkOrdersRow, error) {
+	rows, err := q.db.Query(ctx, listSubmittedInspectionsForWorkOrders, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubmittedInspectionsForWorkOrdersRow{}
+	for rows.Next() {
+		var i ListSubmittedInspectionsForWorkOrdersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkOrderID,
+			&i.Stage,
+			&i.Attempt,
+			&i.InspectedOn,
+			&i.Score,
+			&i.Passed,
+			&i.CriticalFailed,
+			&i.Notes,
+			&i.InspectorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nextInspectionAttempt = `-- name: NextInspectionAttempt :one
 SELECT (COALESCE(max(attempt), 0) + 1)::int FROM inspections WHERE work_order_id = $1 AND stage = $2
 `
