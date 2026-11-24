@@ -87,7 +87,10 @@ func run(log *slog.Logger, n int, reset bool) error {
 				return err
 			}
 		}
-		s.q = gen.New(tx)
+		s.tx, s.q = tx, gen.New(tx)
+		if err := ensureAdmin(ctx, tx, cfg); err != nil {
+			return err
+		}
 		return s.seed(ctx, n)
 	})
 	if err != nil {
@@ -97,6 +100,27 @@ func run(log *slog.Logger, n int, reset bool) error {
 		slog.Int("work_orders", n), slog.Int("inspections", s.inspections), slog.Int("findings", s.findings),
 		slog.String("inspector_login", "insp1@"+demoDomain), slog.String("password", demoPassword))
 	return nil
+}
+
+// ensureAdmin creates the ADMIN_* account when no admin exists. The server
+// only does this for an empty users table, which the demo inspectors would
+// otherwise prevent when seeding runs before the first start.
+func ensureAdmin(ctx context.Context, tx pgx.Tx, cfg config.Config) error {
+	var admins int
+	if err := tx.QueryRow(ctx, "SELECT count(*) FROM users WHERE role = 'admin'").Scan(&admins); err != nil || admins > 0 {
+		return err
+	}
+	if cfg.AdminEmail == "" || cfg.AdminPassword == "" {
+		return errors.New("no admin exists: set ADMIN_EMAIL and ADMIN_PASSWORD in .env")
+	}
+	hash, err := auth.HashPassword(cfg.AdminPassword)
+	if err != nil {
+		return err
+	}
+	_, err = gen.New(tx).CreateUser(ctx, gen.CreateUserParams{
+		Email: cfg.AdminEmail, Name: cfg.AdminName, Role: gen.UserRoleAdmin, PasswordHash: hash,
+	})
+	return err
 }
 
 // today is midnight UTC of the current Riyadh date, like DATE values from Postgres.
@@ -122,6 +146,7 @@ type contractor struct {
 }
 
 type seeder struct {
+	tx    pgx.Tx // for backdating timestamps the queries set to now()
 	q     *gen.Queries
 	rng   *rand.Rand
 	today time.Time
@@ -224,16 +249,23 @@ func (s *seeder) createPeople(ctx context.Context) error {
 	return nil
 }
 
-// groupsBySystem pairs each system with plausible asset groups (matched by
-// name prefix, so renamed lists still work and fall back to any group).
+// groupsBySystem pairs systems with plausible asset groups: a system whose
+// name contains the key draws from those groups (matched by name prefix, so
+// edited lists still work); any other system draws from every group.
 var groupsBySystem = map[string][]string{
-	"التكييف":  {"المبردات", "وحدات مناولة الهواء", "وحدات التكييف المنفصلة", "المضخات"},
-	"الكهرباء": {"لوحات التوزيع", "المولدات", "الإنارة"},
-	"السباكة":  {"المضخات", "خزانات المياه"},
-	"مكافحة":   {"شبكات الرشاشات", "لوحات إنذار الحريق", "المضخات"},
-	"المصاعد":  {"المصاعد"},
-	"التيار":   {"كاميرات المراقبة", "لوحات إنذار الحريق"},
-	"الأعمال":  {"الأبواب والنوافذ", "خزانات المياه"},
+	"المصاعد":       {"المصاعد"},
+	"الحريق":        {"شبكات الرشاشات", "لوحات إنذار الحريق", "المضخات"},
+	"مياه الشرب":    {"المضخات", "خزانات المياه"},
+	"دورات المياه":  {"المضخات", "خزانات المياه", "الإنارة", "الأبواب والنوافذ"},
+	"الجهد الحراري": {"المضخات", "وحدات مناولة الهواء", "وحدات التكييف المنفصلة"},
+	"تظليل":         {"الإنارة", "المضخات"},
+	"مخيمات":        {"وحدات التكييف المنفصلة", "الإنارة", "لوحات التوزيع", "شبكات الرشاشات"},
+	"أبراج":         {"المبردات", "وحدات مناولة الهواء", "المصاعد", "لوحات التوزيع", "الإنارة"},
+	"مباني":         {"المبردات", "وحدات مناولة الهواء", "وحدات التكييف المنفصلة", "لوحات التوزيع"},
+	"امن":           {"كاميرات المراقبة", "لوحات إنذار الحريق"},
+	"قطار":          {"لوحات التوزيع", "المولدات", "كاميرات المراقبة"},
+	"الجمرات":       {"المصاعد", "الإنارة", "وحدات مناولة الهواء", "كاميرات المراقبة"},
+	"محطة":          {"المضخات", "المولدات", "لوحات التوزيع"},
 }
 
 var assetPrefix = map[string]string{
@@ -262,8 +294,8 @@ var technicians = []string{"محمد علي", "رامي حسن", "عمر خان"
 func (s *seeder) pick(xs []lookup) lookup { return xs[s.rng.IntN(len(xs))] }
 
 func (s *seeder) groupFor(system string) lookup {
-	for prefix, names := range groupsBySystem {
-		if !strings.HasPrefix(system, prefix) {
+	for key, names := range groupsBySystem {
+		if !strings.Contains(system, key) {
 			continue
 		}
 		var match []lookup
@@ -345,6 +377,11 @@ func (s *seeder) workOrder(ctx context.Context, planned time.Time, seq map[gen.W
 		Description: task, PlannedDate: &planned, ActualDate: actual,
 	})
 	if err != nil {
+		return err
+	}
+	// Registered a few days before it was due, as it would be in the CMMS.
+	registered := planned.AddDate(0, 0, -1-s.rng.IntN(6)).Add(8*time.Hour + time.Duration(s.rng.IntN(9*60))*time.Minute)
+	if _, err := s.tx.Exec(ctx, "UPDATE work_orders SET created_at = $2, updated_at = $2 WHERE id = $1", wo.ID, registered); err != nil {
 		return err
 	}
 
@@ -527,7 +564,11 @@ func (s *seeder) finding(ctx context.Context, woID, inID int64, cr gen.TemplateC
 	age := int(s.today.Sub(day).Hours() / 24)
 	switch {
 	case age > 30 && s.chance(0.8), age > 10 && s.chance(0.45):
-		return s.q.CloseFinding(ctx, gen.CloseFindingParams{ID: f.ID, ClosureNote: "تم التحقق من تنفيذ الإجراء التصحيحي في الموقع", ClosedBy: &by})
+		if err := s.q.CloseFinding(ctx, gen.CloseFindingParams{ID: f.ID, ClosureNote: "تم التحقق من تنفيذ الإجراء التصحيحي في الموقع", ClosedBy: &by}); err != nil {
+			return err
+		}
+		closed := minDate(day.AddDate(0, 0, 1+s.rng.IntN(9)), s.today).Add(10 * time.Hour)
+		_, err = s.tx.Exec(ctx, "UPDATE findings SET closed_at = $2, created_at = $3, updated_at = $2 WHERE id = $1", f.ID, closed, day.Add(9*time.Hour))
 	case s.chance(0.3):
 		_, err = s.q.UpdateFinding(ctx, gen.UpdateFindingParams{
 			ID: f.ID, Description: f.Description, CorrectiveAction: f.CorrectiveAction, Owner: f.Owner,
