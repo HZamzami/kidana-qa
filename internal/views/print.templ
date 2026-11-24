@@ -3,8 +3,10 @@ package views
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
+	"github.com/HZamzami/kidana-quality/internal/appctx"
 	"github.com/HZamzami/kidana-quality/internal/dates"
 	"github.com/HZamzami/kidana-quality/internal/db/gen"
 	"github.com/HZamzami/kidana-quality/internal/domain"
@@ -40,16 +42,20 @@ type PrintInspection struct {
 	Notes          string
 	Items          []PrintItem
 	History        []PrintAttempt // earlier attempts, oldest first
+	Lat, Lng       *float64       // where the inspector was
+	Photos         []gen.Attachment
+	Signatures     map[string]gen.Attachment // by signer role: inspector, contractor_rep
 }
 
 // WOPrintCard is one work order on its own A4 page.
 type WOPrintCard struct {
-	WO           gen.ListWorkOrdersForPrintRow
-	During       *PrintInspection
-	After        *PrintInspection
-	Findings     []gen.ListFindingsForWorkOrdersRow
-	OpenFindings int
-	Verdict      domain.Verdict
+	WO            gen.ListWorkOrdersForPrintRow
+	During        *PrintInspection
+	After         *PrintInspection
+	Findings      []gen.ListFindingsForWorkOrdersRow
+	OpenFindings  int
+	Verdict       domain.Verdict
+	FindingPhotos map[int64][]gen.Attachment
 }
 
 // WOPrintData is a print run: one work order, or every work order in a filter.
@@ -60,6 +66,33 @@ type WOPrintData struct {
 	Back      string
 	Printed   time.Time
 	PrintedBy string
+	Photos    bool   // include evidence photos
+	Query     string // the print's own query, to toggle photos
+}
+
+// photosURL toggles evidence photos in the print.
+func (d WOPrintData) photosURL(path string) templ.SafeURL {
+	q, _ := url.ParseQuery(d.Query)
+	if d.Photos {
+		q.Del("photos")
+	} else {
+		q.Set("photos", "1")
+	}
+	return templ.URL(path + "?" + q.Encode())
+}
+
+// signature is the signature for a sign box, from the latest after-work
+// inspection, else the during-work one.
+func (c WOPrintCard) signature(role string) (gen.Attachment, bool) {
+	for _, in := range []*PrintInspection{c.After, c.During} {
+		if in == nil {
+			continue
+		}
+		if a, ok := in.Signatures[role]; ok {
+			return a, true
+		}
+	}
+	return gen.Attachment{}, false
 }
 
 func (d WOPrintData) title(ctx context.Context) string {
@@ -115,6 +148,9 @@ templ WorkOrdersPrint(d WOPrintData) {
 					</div>
 					<div class="ms-auto flex gap-2">
 						<a href={ templ.SafeURL(d.Back) } class="btn btn-ghost">{ t(ctx, "رجوع") }</a>
+						if len(d.Cards) > 0 {
+							<a href={ d.photosURL(appctx.Path(ctx)) } class="btn btn-outline">{ tern(d.Photos, t(ctx, "بدون صور"), t(ctx, "تضمين الصور")) }</a>
+						}
 						if len(d.Cards) > 0 {
 							<button type="button" class="btn btn-primary" @click="print">{ t(ctx, "طباعة / حفظ PDF") }</button>
 						}
@@ -279,6 +315,7 @@ templ printSheet(d WOPrintData, c WOPrintCard) {
 									}
 									<span class="font-medium">{ f.Description }</span>
 									<span class="block text-ink-80"><span class="text-ink-60">{ t(ctx, "الإجراء:") } </span>{ f.CorrectiveAction }</span>
+									@printPhotos(c.FindingPhotos[f.ID], 4)
 								</td>
 								<td>{ orDash(f.Owner) }</td>
 								<td>
@@ -295,9 +332,9 @@ templ printSheet(d WOPrintData, c WOPrintCard) {
 		</section>
 		<!-- sign-off -->
 		<section class="mt-4 grid grid-cols-3 gap-3 print-avoid-break" aria-label={ t(ctx, "الاعتماد") }>
-			@signBox(t(ctx, "المفتش"), c.signer())
-			@signBox(t(ctx, "ممثل المقاول"), nm(ctx, c.WO.ContractorName, c.WO.ContractorNameEn))
-			@signBox(t(ctx, "اعتماد إدارة الجودة"), "")
+			@signBox(t(ctx, "المفتش"), c.signer(), sigOf(c, "inspector"))
+			@signBox(t(ctx, "ممثل المقاول"), repName(ctx, c), sigOf(c, "contractor_rep"))
+			@signBox(t(ctx, "اعتماد إدارة الجودة"), "", nil)
 		</section>
 		<footer class="mt-auto pt-3">
 			<div class="flex items-center gap-3 border-t border-ink-10 pt-1.5 text-[7pt] text-ink-60">
@@ -427,6 +464,10 @@ templ inspectionPanel(stage domain.Stage, in *PrintInspection) {
 			if in.Notes != "" {
 				<p class="mt-1 text-[7.5pt] text-ink-80"><span class="text-ink-60">{ t(ctx, "ملاحظات المفتش:") } </span>{ in.Notes }</p>
 			}
+			if in.Lat != nil && in.Lng != nil {
+				<p class="mt-1 text-[7pt] text-ink-60">{ t(ctx, "موقع المفتش عند الفحص:") } <span class="num">{ fmt.Sprintf("%.5f, %.5f", *in.Lat, *in.Lng) }</span></p>
+			}
+			@printPhotos(in.Photos, 6)
 		}
 	</div>
 }
@@ -485,15 +526,57 @@ templ findingState(f gen.ListFindingsForWorkOrdersRow, today string) {
 	}
 }
 
-templ signBox(role, name string) {
+templ signBox(role, name string, sig *gen.Attachment) {
 	<div class="rounded-lg border border-ink-10 p-2.5">
 		<p class="pr-label">{ role }</p>
 		<p class="mt-1 min-h-[1.5em] font-medium">{ name }</p>
-		<div class="mt-5 grid grid-cols-2 gap-3 text-[7.5pt] text-ink-60">
-			<span class="border-t border-ink-30 pt-0.5">{ t(ctx, "التوقيع") }</span>
-			<span class="border-t border-ink-30 pt-0.5">{ t(ctx, "التاريخ") }</span>
+		<div class="grid grid-cols-2 gap-3 text-[7.5pt] text-ink-60 items-end">
+			<div>
+				if sig != nil {
+					<img src={ path("/attachments/%d", sig.ID) } alt={ t(ctx, "التوقيع") } class="h-10 w-auto"/>
+				} else {
+					<div class="h-10"></div>
+				}
+				<span class="block border-t border-ink-30 pt-0.5">{ t(ctx, "التوقيع") }</span>
+			</div>
+			<div>
+				if sig != nil {
+					<p class="h-10 flex items-end num text-ink">{ dmy(sig.CreatedAt.In(dates.Riyadh)) }</p>
+				} else {
+					<div class="h-10"></div>
+				}
+				<span class="block border-t border-ink-30 pt-0.5">{ t(ctx, "التاريخ") }</span>
+			</div>
 		</div>
 	</div>
+}
+
+func sigOf(c WOPrintCard, role string) *gen.Attachment {
+	if a, ok := c.signature(role); ok {
+		return &a
+	}
+	return nil
+}
+
+// repName is the contractor representative who signed, else the contractor.
+func repName(ctx context.Context, c WOPrintCard) string {
+	if a, ok := c.signature("contractor_rep"); ok && a.SignerName != "" {
+		return a.SignerName
+	}
+	return nm(ctx, c.WO.ContractorName, c.WO.ContractorNameEn)
+}
+
+// printPhotos shows evidence photos as small thumbnails.
+templ printPhotos(photos []gen.Attachment, max int) {
+	if len(photos) > 0 {
+		<div class="mt-1.5 flex flex-wrap gap-1.5">
+			for i, p := range photos {
+				if i < max {
+					<img src={ path("/attachments/%d", p.ID) } alt="" class="h-[22mm] w-[22mm] object-cover rounded border border-ink-10"/>
+				}
+			}
+		</div>
+	}
 }
 
 // ---------------------------------------------------------------- findings list (A4 landscape)

@@ -22,3 +22,11 @@ SELECT a.* FROM attachments a
 LEFT JOIN inspections i ON i.id = a.inspection_id
 LEFT JOIN findings f ON f.id = a.finding_id
 WHERE i.work_order_id = $1 OR f.work_order_id = $1;
+
+-- Photos and signatures of several inspections, for printing.
+-- name: ListAttachmentsForInspections :many
+SELECT * FROM attachments WHERE inspection_id = ANY(sqlc.arg(ids)::bigint[]) ORDER BY inspection_id, created_at;
+
+-- Evidence photos of several findings, for printing.
+-- name: ListAttachmentsForFindings :many
+SELECT * FROM attachments WHERE finding_id = ANY(sqlc.arg(ids)::bigint[]) ORDER BY finding_id, created_at;

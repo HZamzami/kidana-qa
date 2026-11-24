@@ -84,7 +84,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "same-origin")
 		h.Set("X-Frame-Options", "DENY")
-		h.Set("Permissions-Policy", "camera=(self), geolocation=(), microphone=()")
+		h.Set("Permissions-Policy", "camera=(self), geolocation=(self), microphone=()") // location stamps inspections and photos
 		next.ServeHTTP(w, r)
 	})
 }

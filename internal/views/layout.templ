@@ -18,6 +18,8 @@ templ Base(title string) {
 			<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false}'/>
 			<title>{ title } { t(ctx, "· نظام جودة الصيانة") }</title>
 			<link rel="icon" type="image/png" href={ asset("/static/img/favicon.png") }/>
+			<link rel="manifest" href="/manifest.webmanifest"/>
+			<link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png"/>
 			<link rel="preload" href="/static/fonts/avenir-next-arabic-400.woff2" as="font" type="font/woff2" crossorigin/>
 			<link rel="stylesheet" href={ asset("/static/css/app.css") }/>
 			<script defer src={ asset("/static/js/htmx.min.js") }></script>
@@ -203,4 +205,17 @@ templ errorBody(status int, message string) {
 		<p class="mt-3 text-ink-80">{ t(ctx, message) }</p>
 		<a href="/" class="btn btn-outline mt-6">{ t(ctx, "العودة للرئيسية") }</a>
 	</div>
+}
+
+templ OfflinePage() {
+	@Base(t(ctx, "غير متصل")) {
+		<main class="mx-auto max-w-md px-4 py-16">
+			<div class="card p-8 text-center">
+				<img src="/static/img/icon-192.png" alt="" class="size-16 mx-auto"/>
+				<h1 class="mt-4 text-lg font-semibold">{ t(ctx, "لا يوجد اتصال") }</h1>
+				<p class="mt-2 text-ink-80">{ t(ctx, "هذه الصفحة غير محفوظة على الجوال. الصفحات التي فتحتها من قبل (مهامي، أوامر العمل، الفحوصات) تعمل دون اتصال، وتُرسل تعديلاتك عند عودة الاتصال.") }</p>
+				<a href="/my/tasks" class="btn btn-primary mt-6">{ t(ctx, "مهامي") }</a>
+			</div>
+		</main>
+	}
 }

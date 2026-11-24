@@ -24,7 +24,7 @@ type InspectionData struct {
 func (d InspectionData) photosFor(cid int64) []gen.Attachment {
 	var out []gen.Attachment
 	for _, p := range d.Photos {
-		if p.CriterionID != nil && *p.CriterionID == cid {
+		if p.Kind == "photo" && p.CriterionID != nil && *p.CriterionID == cid {
 			out = append(out, p)
 		}
 	}
@@ -34,7 +34,18 @@ func (d InspectionData) photosFor(cid int64) []gen.Attachment {
 func (d InspectionData) generalPhotos() []gen.Attachment {
 	var out []gen.Attachment
 	for _, p := range d.Photos {
-		if p.CriterionID == nil {
+		if p.Kind == "photo" && p.CriterionID == nil {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// signatures are the signatures drawn when the inspection was submitted.
+func (d InspectionData) signatures() []gen.Attachment {
+	var out []gen.Attachment
+	for _, p := range d.Photos {
+		if p.Kind == "signature" {
 			out = append(out, p)
 		}
 	}
@@ -73,6 +84,8 @@ templ InspectionPage(d InspectionData) {
 // ---------------------------------------------------------------- editable flow (phone first)
 templ inspectionFlow(d InspectionData) {
 	<div class="mx-auto max-w-2xl" x-data="inspection" data-criteria={ d.CriteriaJSON }>
+		<span x-data="geoStamp" data-url={ path("/inspections/%d/location", d.I.ID) } data-done={ tern(d.I.Lat != nil, "1", "0") } class="hidden"></span>
+		@offlineBanner()
 		<div class="sticky top-0 z-20 -mx-4 sm:mx-0 px-4 sm:px-0 pt-2 pb-3 bg-ink-5/95 backdrop-blur">
 			<div class="card p-3">
 				<div class="flex items-center gap-3">
@@ -231,6 +244,15 @@ templ PhotoStrip(inspectionID int64, criterionID *int64, photos []gen.Attachment
 						hx-target={ "#" + photoStripID(inspectionID, criterionID) }
 						hx-swap="outerHTML"
 					>✕</button>
+					<a href={ u("/attachments/%d/annotate", p.ID) } class="absolute -bottom-1.5 -start-1.5 size-6 rounded-full bg-white border border-ink-30 grid place-items-center" aria-label={ t(ctx, "الرسم على الصورة") } title={ t(ctx, "الرسم على الصورة") }>
+						<svg viewBox="0 0 20 20" class="size-3.5" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 17l3.5-1L16 6.5 13.5 4 4 13.5z"></path></svg>
+					</a>
+				}
+				if p.AnnotatedOf != nil {
+					<span class="absolute top-1 end-1 rounded bg-fail text-white text-[9px] px-1">{ t(ctx, "مرسومة") }</span>
+				}
+				if p.Lat != nil {
+					<span class="absolute bottom-1 end-1 rounded bg-white/90 text-[9px] px-1" title={ t(ctx, "الصورة تحمل الموقع والوقت") }>📍</span>
 				}
 			</figure>
 		}
@@ -388,8 +410,17 @@ templ ReviewBody(d InspectionData) {
 				</ul>
 			</div>
 		}
-		<form method="post" action={ u("/inspections/%d/submit", d.I.ID) } class="mt-5">
-			<button type="submit" class="btn btn-gold btn-lg w-full">{ t(ctx, "إرسال الفحص") }</button>
+		<form method="post" action={ u("/inspections/%d/submit", d.I.ID) } class="mt-5" x-data="offlineGuard">
+			<fieldset class="mb-4 grid gap-3 sm:grid-cols-2">
+				<legend class="label mb-2">{ t(ctx, "التوقيعات (اختياري)") }</legend>
+				@signaturePad("signature_inspector", t(ctx, "توقيع المفتش"), "")
+				<div class="space-y-2">
+					<input class="input h-10" name="rep_name" maxlength="80" placeholder={ t(ctx, "اسم ممثل المقاول") } aria-label={ t(ctx, "اسم ممثل المقاول") }/>
+					@signaturePad("signature_rep", t(ctx, "توقيع ممثل المقاول"), "")
+				</div>
+			</fieldset>
+			<p class="mb-2 text-sm text-fail" x-show="blocked" x-cloak x-text="blockedText"></p>
+			<button type="submit" class="btn btn-gold btn-lg w-full" x-bind:disabled="blocked">{ t(ctx, "إرسال الفحص") }</button>
 			<p class="text-xs text-ink-60 mt-2 text-center">{ t(ctx, "بعد الإرسال لا يمكن تعديل الفحص إلا بإعادة فتحه من مدير النظام.") }</p>
 		</form>
 		<div class="mt-4 border-t border-ink-10 pt-3" x-data="confirmAction">
@@ -452,6 +483,10 @@ templ inspectionSummary(d InspectionData) {
 				<p class="text-sm text-ink-80 mt-1">
 					@DateInline(d.I.InspectedOn)
 					{ " · " + d.I.InspectorName } · { checklistName(ctx, d.I.TemplateName) }
+					if d.I.Lat != nil && d.I.Lng != nil {
+						{ " · " }
+						@mapLink(*d.I.Lat, *d.I.Lng)
+					}
 				</p>
 			</div>
 			<div class="ms-auto">
@@ -533,4 +568,47 @@ templ inspectionSummary(d InspectionData) {
 			</ul>
 		}
 	</section>
+}
+
+// signaturePad is a canvas to sign on; the drawing goes into a hidden field.
+templ signaturePad(name, label, value string) {
+	<div x-data="signaturePad" class="rounded-lg border border-ink-30 bg-white p-2">
+		<div class="flex items-center gap-2 mb-1">
+			<span class="text-xs text-ink-80">{ label }</span>
+			<button type="button" class="ms-auto text-xs text-ink-60 hover:text-ink" x-on:click="clear">{ t(ctx, "مسح") }</button>
+		</div>
+		<canvas class="w-full h-28 touch-none rounded bg-ink-5" x-ref="pad" aria-label={ label }></canvas>
+		<input type="hidden" name={ name } value={ value } x-ref="out"/>
+	</div>
+}
+
+// mapLink opens a location on OpenStreetMap.
+templ mapLink(lat, lng float64) {
+	<a class="underline" target="_blank" rel="noopener" href={ templ.URL(fmt.Sprintf("https://www.openstreetmap.org/?mlat=%.6f&mlon=%.6f#map=18/%.6f/%.6f", lat, lng, lat, lng)) }>{ t(ctx, "الموقع على الخريطة") }</a>
+}
+
+// offlineBanner tells the inspector saves are waiting for a connection.
+templ offlineBanner() {
+	<div x-data="offlineStatus" x-show="visible" x-cloak role="status" class="mb-3 rounded-lg border border-gold-50 bg-gold-10 px-3 py-2 text-sm">
+		<span x-text="text"></span>
+	</div>
+}
+
+// AnnotatePage lets the inspector draw on a photo before keeping it.
+templ AnnotatePage(a gen.Attachment, inspectionID int64) {
+	@App(t(ctx, "الرسم على الصورة")) {
+		<div class="mx-auto max-w-2xl" x-data="photoAnnotate" data-src={ path("/attachments/%d", a.ID) } data-url={ path("/attachments/%d/annotate", a.ID) } data-back={ path("/inspections/%d", inspectionID) }>
+			@PageHeader(t(ctx, "الرسم على الصورة"), t(ctx, "حدّد موضع الملاحظة بدائرة أو سهم. تبقى الصورة الأصلية محفوظة.")) {
+				<a href={ u("/inspections/%d", inspectionID) } class="btn btn-ghost">{ t(ctx, "رجوع") }</a>
+			}
+			<div class="card p-2">
+				<canvas class="w-full touch-none rounded" x-ref="canvas" aria-label={ t(ctx, "الصورة") }></canvas>
+			</div>
+			<div class="mt-3 flex flex-wrap gap-2">
+				<button type="button" class="btn btn-outline" x-on:click="undo">{ t(ctx, "تراجع عن آخر خط") }</button>
+				<button type="button" class="btn btn-gold ms-auto" x-on:click="save" x-bind:disabled="saving">{ t(ctx, "حفظ النسخة المرسومة") }</button>
+			</div>
+			<p class="mt-2 text-sm text-fail" x-show="error" x-cloak>{ t(ctx, "تعذّر الحفظ. تحقق من الاتصال وحاول مرة أخرى.") }</p>
+		</div>
+	}
 }

@@ -66,14 +66,15 @@ func (s *Server) workOrdersPrint(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) renderPrint(w http.ResponseWriter, r *http.Request, rows []gen.ListWorkOrdersForPrintRow, total int, back string) {
 	ctx := r.Context()
-	cards, err := s.loadPrintCards(ctx, rows)
+	photos := r.URL.Query().Get("photos") == "1"
+	cards, err := s.loadPrintCards(ctx, rows, photos)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
 	d := views.WOPrintData{
 		Cards: cards, Total: total, Back: back, Printed: time.Now().In(dates.Riyadh),
-		Scope: s.describeWOFilter(ctx, r.URL.Query()),
+		Scope: s.describeWOFilter(ctx, r.URL.Query()), Photos: photos, Query: r.URL.RawQuery,
 	}
 	if u := appctx.User(ctx); u != nil {
 		d.PrintedBy = u.Name
@@ -83,7 +84,7 @@ func (s *Server) renderPrint(w http.ResponseWriter, r *http.Request, rows []gen.
 
 // loadPrintCards loads inspections, items and findings for the work orders in
 // three batch queries and assembles one card per work order.
-func (s *Server) loadPrintCards(ctx context.Context, rows []gen.ListWorkOrdersForPrintRow) ([]views.WOPrintCard, error) {
+func (s *Server) loadPrintCards(ctx context.Context, rows []gen.ListWorkOrdersForPrintRow, withPhotos bool) ([]views.WOPrintCard, error) {
 	ids := make([]int64, len(rows))
 	for i, wo := range rows {
 		ids[i] = wo.ID
@@ -103,6 +104,44 @@ func (s *Server) loadPrintCards(ctx context.Context, rows []gen.ListWorkOrdersFo
 	fs, err := s.q.ListFindingsForWorkOrders(ctx, ids)
 	if err != nil {
 		return nil, err
+	}
+	// Signatures always print; photos only when asked for. Annotated copies
+	// replace their originals.
+	atts, err := s.q.ListAttachmentsForInspections(ctx, inIDs)
+	if err != nil {
+		return nil, err
+	}
+	annotated := map[int64]bool{}
+	for _, a := range atts {
+		if a.AnnotatedOf != nil {
+			annotated[*a.AnnotatedOf] = true
+		}
+	}
+	photosBy, sigsBy := map[int64][]gen.Attachment{}, map[int64]map[string]gen.Attachment{}
+	for _, a := range atts {
+		switch {
+		case a.Kind == "signature":
+			if sigsBy[*a.InspectionID] == nil {
+				sigsBy[*a.InspectionID] = map[string]gen.Attachment{}
+			}
+			sigsBy[*a.InspectionID][a.SignerRole] = a
+		case withPhotos && !annotated[a.ID]:
+			photosBy[*a.InspectionID] = append(photosBy[*a.InspectionID], a)
+		}
+	}
+	findingPhotos := map[int64][]gen.Attachment{}
+	if withPhotos {
+		fids := make([]int64, len(fs))
+		for i, f := range fs {
+			fids[i] = f.ID
+		}
+		fatts, err := s.q.ListAttachmentsForFindings(ctx, fids)
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range fatts {
+			findingPhotos[*a.FindingID] = append(findingPhotos[*a.FindingID], a)
+		}
 	}
 
 	itemsBy := map[int64][]views.PrintItem{}
@@ -124,6 +163,7 @@ func (s *Server) loadPrintCards(ctx context.Context, rows []gen.ListWorkOrdersFo
 		pi := &views.PrintInspection{
 			Stage: domain.Stage(in.Stage), Attempt: int(in.Attempt), Inspector: in.InspectorName,
 			Date: in.InspectedOn, CriticalFailed: in.CriticalFailed, Notes: in.Notes, Items: itemsBy[in.ID],
+			Lat: in.Lat, Lng: in.Lng, Photos: photosBy[in.ID], Signatures: sigsBy[in.ID],
 		}
 		if in.Score != nil {
 			pi.Score = *in.Score
@@ -147,7 +187,7 @@ func (s *Server) loadPrintCards(ctx context.Context, rows []gen.ListWorkOrdersFo
 			WO:       wo,
 			During:   latest[key{wo.ID, gen.InspectionStageDuring}],
 			After:    latest[key{wo.ID, gen.InspectionStageAfter}],
-			Findings: findingsBy[wo.ID],
+			Findings: findingsBy[wo.ID], FindingPhotos: findingPhotos,
 		}
 		open := 0
 		for _, f := range c.Findings {

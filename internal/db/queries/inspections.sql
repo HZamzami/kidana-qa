@@ -79,7 +79,7 @@ WHERE w.id = $1;
 -- Submitted inspections of several work orders, for printing.
 -- name: ListSubmittedInspectionsForWorkOrders :many
 SELECT i.id, i.work_order_id, i.stage, i.attempt, i.inspected_on, i.score, i.passed, i.critical_failed, i.notes,
-       u.name AS inspector_name
+       i.lat, i.lng, u.name AS inspector_name
 FROM inspections i
 JOIN users u ON u.id = i.inspector_id
 WHERE i.work_order_id = ANY(sqlc.arg(ids)::bigint[]) AND i.status = 'submitted'

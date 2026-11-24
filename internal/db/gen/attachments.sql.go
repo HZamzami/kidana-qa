@@ -257,3 +257,93 @@ func (q *Queries) ListAttachmentsByWorkOrder(ctx context.Context, workOrderID in
 	}
 	return items, nil
 }
+
+const listAttachmentsForFindings = `-- name: ListAttachmentsForFindings :many
+SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose, kind, signer_name, signer_role, lat, lng, accuracy, captured_at, annotated_of FROM attachments WHERE finding_id = ANY($1::bigint[]) ORDER BY finding_id, created_at
+`
+
+// Evidence photos of several findings, for printing.
+func (q *Queries) ListAttachmentsForFindings(ctx context.Context, ids []int64) ([]Attachment, error) {
+	rows, err := q.db.Query(ctx, listAttachmentsForFindings, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Attachment{}
+	for rows.Next() {
+		var i Attachment
+		if err := rows.Scan(
+			&i.ID,
+			&i.InspectionID,
+			&i.CriterionID,
+			&i.FindingID,
+			&i.StorageKey,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.UploadedBy,
+			&i.CreatedAt,
+			&i.Purpose,
+			&i.Kind,
+			&i.SignerName,
+			&i.SignerRole,
+			&i.Lat,
+			&i.Lng,
+			&i.Accuracy,
+			&i.CapturedAt,
+			&i.AnnotatedOf,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAttachmentsForInspections = `-- name: ListAttachmentsForInspections :many
+SELECT id, inspection_id, criterion_id, finding_id, storage_key, filename, content_type, size_bytes, uploaded_by, created_at, purpose, kind, signer_name, signer_role, lat, lng, accuracy, captured_at, annotated_of FROM attachments WHERE inspection_id = ANY($1::bigint[]) ORDER BY inspection_id, created_at
+`
+
+// Photos and signatures of several inspections, for printing.
+func (q *Queries) ListAttachmentsForInspections(ctx context.Context, ids []int64) ([]Attachment, error) {
+	rows, err := q.db.Query(ctx, listAttachmentsForInspections, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Attachment{}
+	for rows.Next() {
+		var i Attachment
+		if err := rows.Scan(
+			&i.ID,
+			&i.InspectionID,
+			&i.CriterionID,
+			&i.FindingID,
+			&i.StorageKey,
+			&i.Filename,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.UploadedBy,
+			&i.CreatedAt,
+			&i.Purpose,
+			&i.Kind,
+			&i.SignerName,
+			&i.SignerRole,
+			&i.Lat,
+			&i.Lng,
+			&i.Accuracy,
+			&i.CapturedAt,
+			&i.AnnotatedOf,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

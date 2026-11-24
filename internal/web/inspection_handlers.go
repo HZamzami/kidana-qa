@@ -413,9 +413,11 @@ func (s *Server) inspectionPhotoUpload(w http.ResponseWriter, r *http.Request) {
 		if len(name) > 200 {
 			name = name[:200]
 		}
+		lat, lng, acc, at := geoFields(r)
 		a, err := s.q.CreateAttachment(ctx, gen.CreateAttachmentParams{Kind: "photo",
 			InspectionID: &in.ID, CriterionID: cid, StorageKey: key, Filename: name,
 			ContentType: ctype, SizeBytes: size, UploadedBy: currentUserID(ctx),
+			Lat: lat, Lng: lng, Accuracy: acc, CapturedAt: at,
 		})
 		if err != nil {
 			_ = s.store.Delete(ctx, key)
@@ -435,6 +437,9 @@ func (s *Server) renderPhotoStrip(w http.ResponseWriter, r *http.Request, inspec
 	}
 	var mine []gen.Attachment
 	for _, p := range photos {
+		if p.Kind != "photo" {
+			continue
+		}
 		if (cid == nil && p.CriterionID == nil) || (cid != nil && p.CriterionID != nil && *p.CriterionID == *cid) {
 			mine = append(mine, p)
 		}
@@ -467,6 +472,10 @@ func (s *Server) inspectionSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := s.saveSignatures(ctx, r, in); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	err = db.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		score, passed := d.Result.Score, d.Result.Passed

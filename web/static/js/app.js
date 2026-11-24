@@ -137,6 +137,102 @@ document.addEventListener("alpine:init", () => {
     get selectedText() { return (document.documentElement.lang === "en" ? "Selected: " : "المحدد: ") + this.count; },
   }));
 
+  // ---------------------------------------------------------------- field work
+  // Proof of presence: asks for the location once when an inspection opens,
+  // stores it on the inspection, and keeps it for photos taken afterwards.
+  Alpine.data("geoStamp", () => ({
+    init() {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const c = pos.coords;
+        window.__geo = { lat: c.latitude, lng: c.longitude, accuracy: Math.round(c.accuracy) };
+        if (this.$el.dataset.done === "1") return;
+        const body = new FormData();
+        body.append("lat", c.latitude); body.append("lng", c.longitude); body.append("accuracy", Math.round(c.accuracy));
+        fetch(this.$el.dataset.url, { method: "POST", body, credentials: "same-origin" }).catch(() => {});
+      }, () => {}, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+    },
+  }));
+
+  // A canvas to sign on with a finger or mouse; the PNG goes into a hidden input.
+  Alpine.data("signaturePad", () => ({
+    drawing: false,
+    init() {
+      const c = this.$refs.pad;
+      const fit = () => { const r = c.getBoundingClientRect(); c.width = r.width * 2; c.height = r.height * 2; this.ctx2d(); };
+      requestAnimationFrame(fit);
+      const at = (e) => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * 2, (e.clientY - r.top) * 2]; };
+      c.addEventListener("pointerdown", (e) => { this.drawing = true; c.setPointerCapture(e.pointerId); const [x, y] = at(e); this.g.beginPath(); this.g.moveTo(x, y); });
+      c.addEventListener("pointermove", (e) => { if (!this.drawing) return; const [x, y] = at(e); this.g.lineTo(x, y); this.g.stroke(); });
+      c.addEventListener("pointerup", () => { this.drawing = false; this.$refs.out.value = c.toDataURL("image/png"); });
+    },
+    ctx2d() { this.g = this.$refs.pad.getContext("2d"); this.g.lineWidth = 4; this.g.lineCap = "round"; this.g.lineJoin = "round"; this.g.strokeStyle = "#4C4F53"; },
+    clear() { const c = this.$refs.pad; this.g.clearRect(0, 0, c.width, c.height); this.$refs.out.value = ""; },
+  }));
+
+  // Draw on a photo (circles, arrows) and save the drawn copy; the original stays.
+  Alpine.data("photoAnnotate", () => ({
+    saving: false, error: false, strokes: [],
+    init() {
+      const c = this.$refs.canvas;
+      this.img = new Image();
+      this.img.onload = () => { c.width = this.img.naturalWidth; c.height = this.img.naturalHeight; this.redraw(); };
+      this.img.src = this.$el.dataset.src;
+      const at = (e) => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+      let cur = null;
+      c.addEventListener("pointerdown", (e) => { c.setPointerCapture(e.pointerId); cur = [at(e)]; this.strokes.push(cur); });
+      c.addEventListener("pointermove", (e) => { if (!cur) return; cur.push(at(e)); this.redraw(); });
+      c.addEventListener("pointerup", () => { cur = null; });
+    },
+    redraw() {
+      const c = this.$refs.canvas, g = c.getContext("2d");
+      g.drawImage(this.img, 0, 0);
+      g.strokeStyle = "#A65A4E"; g.lineWidth = Math.max(4, c.width / 150); g.lineCap = "round"; g.lineJoin = "round";
+      for (const s of this.strokes) { g.beginPath(); s.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke(); }
+    },
+    undo() { this.strokes.pop(); this.redraw(); },
+    save() {
+      this.saving = true; this.error = false;
+      this.$refs.canvas.toBlob((blob) => {
+        const body = new FormData();
+        body.append("image", blob, "annotated.jpg");
+        fetch(this.$el.dataset.url, { method: "POST", body, credentials: "same-origin" })
+          .then((r) => { if (!r.ok) throw new Error(r.status); window.location.href = this.$el.dataset.back; })
+          .catch(() => { this.error = true; this.saving = false; });
+      }, "image/jpeg", 0.88);
+    },
+  }));
+
+  // Offline: banner with the number of saves waiting, and the submit guard.
+  Alpine.data("offlineStatus", () => ({
+    pending: 0, online: navigator.onLine,
+    init() {
+      const sync = () => { this.pending = window.kqQueue ? window.kqQueue.count : 0; this.online = navigator.onLine; };
+      window.addEventListener("kq:queue", sync); window.addEventListener("online", sync); window.addEventListener("offline", sync);
+      sync();
+    },
+    get visible() { return !this.online || this.pending > 0; },
+    get text() {
+      const en = document.documentElement.lang === "en";
+      if (!this.online) return en ? `Offline — saves are kept on this phone and sent when the connection returns (${this.pending})` : `غير متصل — تُحفظ التعديلات على الجوال وتُرسل عند عودة الاتصال (${this.pending})`;
+      return en ? `Sending saved changes… (${this.pending})` : `جارٍ إرسال التعديلات المحفوظة… (${this.pending})`;
+    },
+  }));
+  Alpine.data("offlineGuard", () => ({
+    pending: 0, online: navigator.onLine,
+    init() {
+      const sync = () => { this.pending = window.kqQueue ? window.kqQueue.count : 0; this.online = navigator.onLine; };
+      window.addEventListener("kq:queue", sync); window.addEventListener("online", sync); window.addEventListener("offline", sync);
+      sync();
+    },
+    get blocked() { return !this.online || this.pending > 0; },
+    get blockedText() {
+      return document.documentElement.lang === "en"
+        ? "Submit is available once you're online and every change has been sent."
+        : "يتاح الإرسال عند عودة الاتصال وإرسال كل التعديلات المحفوظة.";
+    },
+  }));
+
   // Confirmation step built into the page (no window.confirm in the flow).
   Alpine.data("confirmAction", () => ({
     asking: false,
@@ -165,3 +261,69 @@ document.body.addEventListener("htmx:beforeSwap", (e) => {
     e.detail.isError = false;
   }
 });
+
+// ------------------------------------------------------------------ offline queue
+// Inspection saves (ratings, notes, photos) that fail for lack of a
+// connection are kept in IndexedDB and replayed in order when it returns.
+(() => {
+  const DB = "kidana-queue", STORE = "requests";
+  const open = () => new Promise((ok, fail) => {
+    const req = indexedDB.open(DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+    req.onsuccess = () => ok(req.result); req.onerror = () => fail(req.error);
+  });
+  const tx = async (mode, fn) => { const db = await open(); return new Promise((ok, fail) => {
+    const t = db.transaction(STORE, mode); const r = fn(t.objectStore(STORE)); t.oncomplete = () => ok(r && r.result); t.onerror = () => fail(t.error);
+  }); };
+  const queue = window.kqQueue = { count: 0 };
+  const announce = async () => { queue.count = await tx("readonly", (s) => s.count()) || 0; window.dispatchEvent(new Event("kq:queue")); };
+  const queueable = (path) => /^\/inspections\/\d+\/(items\/\d+|header|photos)$/.test(path);
+
+  queue.add = async (path, form) => {
+    const entries = [];
+    for (const [k, v] of form.entries()) entries.push([k, v]); // File/Blob values store natively
+    await tx("readwrite", (s) => s.add({ path, entries, at: Date.now() }));
+    announce();
+  };
+  let replaying = false;
+  queue.replay = async () => {
+    if (replaying || !navigator.onLine) return;
+    replaying = true;
+    try {
+      const all = await tx("readonly", (s) => s.getAll()) || [];
+      for (const item of all) {
+        const body = new FormData();
+        for (const [k, v] of item.entries) body.append(k, v);
+        let res;
+        try { res = await fetch(item.path, { method: "POST", body, credentials: "same-origin" }); } catch { break; } // still offline
+        if (res.ok || (res.status >= 400 && res.status < 500)) await tx("readwrite", (s) => s.delete(item.id)); // 4xx: drop, it can never succeed
+        else break;
+      }
+    } finally { replaying = false; announce(); }
+  };
+
+  // Catch htmx saves that never reached the server.
+  document.body.addEventListener("htmx:sendError", (e) => {
+    const cfg = e.detail.requestConfig || {};
+    if (cfg.verb !== "post" || !queueable(cfg.path)) return;
+    const form = cfg.formData instanceof FormData ? cfg.formData : new FormData(e.detail.elt.closest("form") || undefined);
+    queue.add(cfg.path, form);
+  });
+  // Photos carry the location and device time when known.
+  document.body.addEventListener("htmx:configRequest", (e) => {
+    if (!/\/photos$/.test(e.detail.path)) return;
+    const p = e.detail.parameters;
+    p.captured_at = String(Date.now());
+    if (window.__geo) { p.lat = window.__geo.lat; p.lng = window.__geo.lng; p.accuracy = window.__geo.accuracy; }
+  });
+  window.addEventListener("online", () => queue.replay());
+  setInterval(() => queue.replay(), 20000);
+  announce().then(() => queue.replay());
+
+  // Installable app + offline pages.
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  // Signing out clears pages kept for offline use on this device.
+  document.addEventListener("submit", (e) => {
+    if (e.target.matches('form[action="/logout"]') && window.caches) caches.keys().then((ks) => ks.forEach((k) => caches.delete(k)));
+  });
+})();

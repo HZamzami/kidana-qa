@@ -367,7 +367,7 @@ func (q *Queries) ListItemsForPrint(ctx context.Context, ids []int64) ([]ListIte
 
 const listSubmittedInspectionsForWorkOrders = `-- name: ListSubmittedInspectionsForWorkOrders :many
 SELECT i.id, i.work_order_id, i.stage, i.attempt, i.inspected_on, i.score, i.passed, i.critical_failed, i.notes,
-       u.name AS inspector_name
+       i.lat, i.lng, u.name AS inspector_name
 FROM inspections i
 JOIN users u ON u.id = i.inspector_id
 WHERE i.work_order_id = ANY($1::bigint[]) AND i.status = 'submitted'
@@ -384,6 +384,8 @@ type ListSubmittedInspectionsForWorkOrdersRow struct {
 	Passed         *bool
 	CriticalFailed bool
 	Notes          string
+	Lat            *float64
+	Lng            *float64
 	InspectorName  string
 }
 
@@ -407,6 +409,8 @@ func (q *Queries) ListSubmittedInspectionsForWorkOrders(ctx context.Context, ids
 			&i.Passed,
 			&i.CriticalFailed,
 			&i.Notes,
+			&i.Lat,
+			&i.Lng,
 			&i.InspectorName,
 		); err != nil {
 			return nil, err
